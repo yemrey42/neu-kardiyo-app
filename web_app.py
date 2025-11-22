@@ -2,58 +2,20 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 
 # --- AYARLAR ---
 SHEET_NAME = "H_Type_HT_Verileri"
 CASE_SHEET_NAME = "Vaka_Takip_Notlari"
 
-# BURAYA DRIVE KLASÖR ID'SİNİ YAPIŞTIR (Adres çubuğundaki /folders/ dan sonraki kısım)
-DRIVE_FOLDER_ID = "1a1sWTm0e2Yy6BcE0Isbq9KUUiC_sOiVY" 
-
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
 # --- BAĞLANTILAR ---
-def get_creds():
+def connect_to_gsheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-    return creds
-
-def connect_to_gsheets():
-    creds = get_creds()
     client = gspread.authorize(creds)
     return client
-
-# --- DRIVE'A DOSYA YÜKLEME FONKSİYONU ---
-def upload_file_to_drive(file_obj, filename):
-    if file_obj is None:
-        return ""
-    try:
-        creds = get_creds()
-        service = build('drive', 'v3', credentials=creds)
-        
-        file_metadata = {
-            'name': filename,
-            'parents': [DRIVE_FOLDER_ID]
-        }
-        
-        media = MediaIoBaseUpload(file_obj, mimetype=file_obj.type)
-        
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id, webViewLink'
-        ).execute()
-        
-        # Dosyanın herkes tarafından görüntülenebilmesi için izin ver (Opsiyonel ama önerilir)
-        # service.permissions().create(fileId=file.get('id'), body={'role': 'reader', 'type': 'anyone'}).execute()
-        
-        return file.get('webViewLink')
-    except Exception as e:
-        st.error(f"Upload Hatası: {e}")
-        return "HATA"
 
 # --- VERİ İŞLEMLERİ ---
 def load_data(sheet_name):
@@ -84,11 +46,13 @@ def save_data_row(sheet_name, data_dict, unique_col="Dosya Numarası"):
     all_records = sheet.get_all_records()
     df = pd.DataFrame(all_records)
     
+    # Güncelleme kontrolü (Varsa eskisini sil)
     if not df.empty and str(data_dict[unique_col]) in df[unique_col].astype(str).values:
         cell = sheet.find(str(data_dict[unique_col]))
         sheet.delete_rows(cell.row)
         st.toast(f"{data_dict[unique_col]} güncelleniyor...", icon="🔄")
     
+    # Kayıt
     if df.empty:
         sheet.append_row(list(data_dict.keys()))
         sheet.append_row(list(data_dict.values()))
@@ -130,7 +94,8 @@ if menu == "📝 Vaka Takip (Notlar)":
 elif menu == "🏥 Veri Girişi (H-Type HT)":
     st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
     
-    tab_list, tab_klinik, tab_lab, tab_eko, tab_img = st.tabs(["📋 HASTA LİSTESİ / SİLME", "👤 KLİNİK", "🩸 LABORATUVAR", "🫀 EKO", "🖼️ GÖRÜNTÜ YÜKLE"])
+    # Görüntü sekmesi kaldırıldı
+    tab_list, tab_klinik, tab_lab, tab_eko = st.tabs(["📋 HASTA LİSTESİ / SİLME", "👤 KLİNİK", "🩸 LABORATUVAR", "🫀 EKO"])
 
     with tab_list:
         c_list1, c_list2 = st.columns([3, 1])
@@ -150,11 +115,12 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 del_list = df["Dosya Numarası"].astype(str).tolist()
                 del_select = st.selectbox("Silinecek Dosya No", del_list)
                 if st.button("🗑️ HASTAYI SİL"):
-                    if delete_patient(SHEET_NAME, del_select):
-                        st.success("Hasta Silindi!")
-                        st.rerun()
-                    else:
-                        st.error("Silinemedi.")
+                    with st.spinner("Siliniyor..."):
+                        if delete_patient(SHEET_NAME, del_select):
+                            st.success("Hasta Silindi!")
+                            st.rerun()
+                        else:
+                            st.error("Silinemedi.")
 
     with st.form("main_form"):
         st.caption("Verileri girdikten sonra EN ALTTAKİ 'KAYDET' butonuna basınız.")
@@ -185,12 +151,14 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 ta_dia = ct2.number_input("TA Diyastol", step=1)
             
             st.divider()
-            ekg = st.selectbox("EKG Bulgusu", ["NSR", "AF", "LBBB", "RBBB", "VPB", "SVT", "Diğer"])
+            # AF kaldırıldı
+            ekg = st.selectbox("EKG Bulgusu", ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]) 
             ci1, ci2 = st.columns(2)
             ilaclar = ci1.text_area("Kullandığı İlaçlar")
             baslanan = ci2.text_area("Başlanan İlaçlar")
             
-            st.markdown("##### Ek Hastalıklar (KY Çıkarıldı)")
+            # KY ve AF çıkarıldı
+            st.markdown("##### Ek Hastalıklar")
             cc1, cc2, cc3, cc5 = st.columns(4)
             dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc5.checkbox("İnme")
             diger_hst = st.text_input("Diğer Hastalıklar")
@@ -236,52 +204,36 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 tapse = st.number_input("TAPSE"); rv_sm = st.number_input("RV Sm"); spap = st.number_input("sPAP"); rvot_vti = st.number_input("RVOT VTI"); rvot_acct = st.number_input("RVOT accT")
                 if rv_sm>0: st.caption(f"TAPSE/Sm: {tapse/rv_sm:.2f}")
 
-        # 4. OTOMATİK UPLOAD
-        with tab_img:
-            st.info("Dosyaları seçtiğinizde otomatik olarak Google Drive'a yüklenecek ve linki eklenecektir.")
-            u_ekg = st.file_uploader("EKG Yükle", type=["jpg", "png", "pdf", "jpeg"])
-            u_bull = st.file_uploader("Bull-eye Yükle", type=["jpg", "png", "pdf", "jpeg"])
-            u_holter = st.file_uploader("Holter Raporu Yükle", type=["jpg", "png", "pdf", "jpeg"])
-
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         
         if submitted:
             if not dosya_no:
                 st.error("Dosya No Zorunlu!")
             else:
-                with st.spinner("Dosyalar Drive'a yükleniyor ve veri kaydediliyor..."):
-                    # Drive Upload İşlemleri
-                    link_ekg = upload_file_to_drive(u_ekg, f"{dosya_no}_EKG")
-                    link_bull = upload_file_to_drive(u_bull, f"{dosya_no}_BullEye")
-                    link_holter = upload_file_to_drive(u_holter, f"{dosya_no}_Holter")
-                    
-                    # Hesaplamalar
-                    mit_ea = mit_e/mit_a if mit_a>0 else ""
-                    mit_ee = mit_e/sept_e if sept_e>0 else ""
-                    laci = laedv/lvedv if lvedv>0 else ""
-                    tapse_sm = tapse/rv_sm if rv_sm>0 else ""
-                    
-                    data_row = {
-                        "Dosya Numarası": dosya_no, "Adı Soyadı": ad_soyad, "Tarih": str(basvuru), "Hekim": hekim,
-                        "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi,
-                        "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
-                        "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
-                        "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Diğer Hast": diger_hst,
-                        # LAB
-                        "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
-                        "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
-                        "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
-                        "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, "Lp(a)": lpa,
-                        "Homosistein": homosis, "CRP": crp, "Folik Asit": folik, "B12": b12,
-                        # EKO
-                        "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, "LV Mass": mass_idx, "Ao Asc": ao_asc,
-                        "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
-                        "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
-                        "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                        "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct,
-                        # LINKLER
-                        "Link_EKG": link_ekg, "Link_BullEye": link_bull, "Link_Holter": link_holter
-                    }
-                    
-                    save_data_row(SHEET_NAME, data_row)
-                    st.success(f"✅ {dosya_no} kaydedildi ve dosyalar yüklendi!")
+                mit_ea = mit_e/mit_a if mit_a>0 else ""
+                mit_ee = mit_e/sept_e if sept_e>0 else ""
+                laci = laedv/lvedv if lvedv>0 else ""
+                tapse_sm = tapse/rv_sm if rv_sm>0 else ""
+                
+                data_row = {
+                    "Dosya Numarası": dosya_no, "Adı Soyadı": ad_soyad, "Tarih": str(basvuru), "Hekim": hekim,
+                    "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi,
+                    "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
+                    "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
+                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Diğer Hast": diger_hst,
+                    # LAB
+                    "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
+                    "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
+                    "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
+                    "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, "Lp(a)": lpa,
+                    "Homosistein": homosis, "CRP": crp, "Folik Asit": folik, "B12": b12,
+                    # EKO
+                    "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, "LV Mass": mass_idx, "Ao Asc": ao_asc,
+                    "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
+                    "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
+                    "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
+                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
+                }
+                
+                save_data_row(SHEET_NAME, data_row)
+                st.success(f"✅ {dosya_no} nolu hasta başarıyla kaydedildi!")
