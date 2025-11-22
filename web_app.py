@@ -92,6 +92,17 @@ if menu == "📝 Vaka Takip (Notlar)":
 
 # --- MOD 2: VERİ GİRİŞİ ---
 elif menu == "🏥 Veri Girişi (H-Type HT)":
+    
+    # --- EKG RİTMİ ANİMASYONU ---
+    st.markdown(
+        """
+        <div style="display: flex; justify-content: center; margin-bottom: 0px;">
+            <img src="https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif" alt="EKG" style="width: 100%; max-height: 100px; object-fit: cover; opacity: 0.8;">
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
     st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
     
     tab_list, tab_klinik, tab_lab, tab_eko = st.tabs(["📋 HASTA LİSTESİ / SİLME", "👤 KLİNİK", "🩸 LABORATUVAR", "🫀 EKO"])
@@ -122,8 +133,6 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                             st.error("Silinemedi.")
 
     with st.form("main_form"):
-        st.caption("Verileri girdikten sonra EN ALTTAKİ 'KAYDET' butonuna basınız.")
-        
         # 1. KLİNİK
         with tab_klinik:
             c1, c2 = st.columns(2)
@@ -143,10 +152,10 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 boy = cb1.number_input("Boy (cm)")
                 kilo = cb2.number_input("Kilo (kg)")
                 bmi = 0
-                bsa = 0 # Body Surface Area (LVMi için gerekli)
+                bsa = 0
                 if boy > 0 and kilo > 0: 
                     bmi = kilo/((boy/100)**2)
-                    bsa = (boy * kilo / 3600) ** 0.5 # Mosteller Formülü
+                    bsa = (boy * kilo / 3600) ** 0.5 
                 
                 cb3.metric("BMI", f"{bmi:.2f}")
                 
@@ -186,7 +195,13 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
 
         # 3. EKO
         with tab_eko:
-            st.info("ℹ️ LVMi ve RWT hesaplanması için Boy, Kilo, LVEDD, IVS ve PW girilmelidir.")
+            # GÜNCELLENEN BİLGİ KUTUSU
+            st.info("ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**\n"
+                    "Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:\n"
+                    "🔹 **Klinik:** BMI, BSA\n"
+                    "🔹 **Yapısal:** LV Mass, LVMi, RWT, LACi\n"
+                    "🔹 **Fonksiyonel:** E/A, E/e', TAPSE/Sm")
+
             e1, e2, e3, e4 = st.columns(4)
             with e1:
                 st.markdown("**1. LV Yapı (Mass & RWT)**")
@@ -196,33 +211,23 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 pw = st.number_input("PW (mm)")
                 lvedv = st.number_input("LVEDV (mL)")
                 lvesv = st.number_input("LVESV (mL)")
+                ao_asc = st.number_input("Ao Asc (mm)")
                 
                 # --- OTOMATİK HESAPLAMALAR ---
-                lv_mass = 0
-                lvmi = 0
-                rwt = 0
+                lv_mass = 0.0; lvmi = 0.0; rwt = 0.0
                 
-                # Devereux Formülü (LVEDD, IVS, PW mm cinsinden girilir, formülde cm'ye çevrilir)
                 if lvedd > 0 and ivs > 0 and pw > 0:
-                    # mm -> cm çevrimi (x/10)
-                    lvedd_cm = lvedd / 10
-                    ivs_cm = ivs / 10
-                    pw_cm = pw / 10
-                    # Devereux Formula: 0.8 * (1.04 * ((LVEDD + IVS + PW)^3 - LVEDD^3)) + 0.6
+                    lvedd_cm = lvedd / 10; ivs_cm = ivs / 10; pw_cm = pw / 10
                     lv_mass = 0.8 * (1.04 * ((lvedd_cm + ivs_cm + pw_cm)**3 - lvedd_cm**3)) + 0.6
-                    
-                    # LVMi Hesaplama (LV Mass / BSA)
-                    if bsa > 0:
-                        lvmi = lv_mass / bsa
+                    if bsa > 0: lvmi = lv_mass / bsa
                 
-                # RWT Hesaplama: (2 * PW) / LVEDD
                 if lvedd > 0 and pw > 0:
                     rwt = (2 * pw) / lvedd
                 
-                # Ekrana Yazdırma
-                if lv_mass > 0: st.caption(f"🔵 LV Mass: {lv_mass:.1f} g")
-                if lvmi > 0: st.caption(f"🔵 LVMi: {lvmi:.1f} g/m²")
-                if rwt > 0: st.caption(f"🔵 RWT: {rwt:.2f}")
+                # Mavi İkonlu Sabit Gösterim
+                st.markdown(f"🔵 **LV Mass:** {lv_mass:.1f} g")
+                st.markdown(f"🔵 **LVMi:** {lvmi:.1f} g/m²")
+                st.markdown(f"🔵 **RWT:** {rwt:.2f}")
 
             with e2:
                 st.markdown("**2. Sistolik**")
@@ -231,14 +236,36 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 st.markdown("**3. Diyastolik**")
                 mit_e = st.number_input("Mitral E"); mit_a = st.number_input("Mitral A"); sept_e = st.number_input("Septal e'"); lat_e = st.number_input("Lateral e'")
                 laedv = st.number_input("LAEDV"); laesv = st.number_input("LAESV"); la_strain = st.number_input("LA Strain")
-                if mit_a>0: st.caption(f"E/A: {mit_e/mit_a:.2f}")
-                if sept_e>0: st.caption(f"E/e': {mit_e/sept_e:.2f}")
-                if lvedv>0: st.caption(f"LACi: {laedv/lvedv:.2f}")
+                
+                # Hesaplamalar
+                mit_ea = mit_e/mit_a if mit_a > 0 else 0.0
+                mit_ee = mit_e/sept_e if sept_e > 0 else 0.0
+                laci = laedv/lvedv if lvedv > 0 else 0.0
+                
+                # Mavi İkonlu Sabit Gösterim
+                st.markdown(f"🔵 **E/A:** {mit_ea:.2f}")
+                st.markdown(f"🔵 **E/e':** {mit_ee:.2f}")
+                st.markdown(f"🔵 **LACi:** {laci:.2f}")
+
             with e4:
                 st.markdown("**4. Sağ Kalp**")
                 tapse = st.number_input("TAPSE"); rv_sm = st.number_input("RV Sm"); spap = st.number_input("sPAP"); rvot_vti = st.number_input("RVOT VTI"); rvot_acct = st.number_input("RVOT accT")
-                if rv_sm>0: st.caption(f"TAPSE/Sm: {tapse/rv_sm:.2f}")
+                
+                tapse_sm = tapse/rv_sm if rv_sm > 0 else 0.0
+                
+                # Mavi İkonlu Sabit Gösterim
+                st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
 
+        # 4. MANUEL LINK GİRİŞİ
+        st.divider()
+        st.markdown("### 🖼️ Görüntü Linkleri")
+        st.caption("Google Drive'a yüklediğiniz resimlerin linklerini buraya yapıştırınız.")
+        col_img1, col_img2, col_img3 = st.columns(3)
+        link_ekg = col_img1.text_input("EKG Linki")
+        link_bull = col_img2.text_input("Bull-eye Linki")
+        link_holter = col_img3.text_input("Holter Rapor Linki")
+
+        st.write("") # Boşluk
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         
         if submitted:
@@ -264,11 +291,13 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "Homosistein": homosis, "CRP": crp, "Folik Asit": folik, "B12": b12,
                     # EKO (Güncellendi)
                     "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
-                    "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, # Yeni eklenenler
+                    "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao_asc,
                     "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
                     "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
                     "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
+                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct,
+                    # LINKLER
+                    "Link_EKG": link_ekg, "Link_BullEye": link_bull, "Link_Holter": link_holter
                 }
                 
                 save_data_row(SHEET_NAME, data_row)
