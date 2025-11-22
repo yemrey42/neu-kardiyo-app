@@ -3,4 +3,3 @@ pandas
 gspread
 oauth2client
 openpyxl
-google-api-python-client
