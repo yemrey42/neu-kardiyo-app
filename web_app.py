@@ -92,19 +92,9 @@ if menu == "📝 Vaka Takip (Notlar)":
 
 # --- MOD 2: VERİ GİRİŞİ ---
 elif menu == "🏥 Veri Girişi (H-Type HT)":
-    
-    # --- EKG RİTMİ ANİMASYONU ---
-    st.markdown(
-        """
-        <div style="display: flex; justify-content: center; margin-bottom: 0px;">
-            <img src="https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif" alt="EKG" style="width: 100%; max-height: 100px; object-fit: cover; opacity: 0.8;">
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    
     st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
     
+    # Sekmeler (Görüntü sekmesi kaldırıldı)
     tab_list, tab_klinik, tab_lab, tab_eko = st.tabs(["📋 HASTA LİSTESİ / SİLME", "👤 KLİNİK", "🩸 LABORATUVAR", "🫀 EKO"])
 
     with tab_list:
@@ -133,6 +123,8 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                             st.error("Silinemedi.")
 
     with st.form("main_form"):
+        st.caption("Verileri girdikten sonra EN ALTTAKİ 'KAYDET' butonuna basınız.")
+        
         # 1. KLİNİK
         with tab_klinik:
             c1, c2 = st.columns(2)
@@ -188,14 +180,15 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 tot_prot = st.number_input("Total Prot"); albumin = st.number_input("Albümin")
             with l3:
                 st.markdown("🟡 **Lipid**")
-                chol = st.number_input("Kolesterol"); ldl = st.number_input("LDL"); hdl = st.number_input("HDL"); trig = st.number_input("Trig"); lpa = st.number_input("Lp(a)")
+                # Lp(a) buradan çıkarıldı
+                chol = st.number_input("Kolesterol"); ldl = st.number_input("LDL"); hdl = st.number_input("HDL"); trig = st.number_input("Trig")
             with l4:
                 st.markdown("⚡ **Spesifik**")
-                homosis = st.number_input("Homosistein"); crp = st.number_input("CRP"); folik = st.number_input("Folik Asit"); b12 = st.number_input("B12")
+                # CRP çıkarıldı, Lp(a) eklendi
+                homosis = st.number_input("Homosistein"); lpa = st.number_input("Lp(a)"); folik = st.number_input("Folik Asit"); b12 = st.number_input("B12")
 
         # 3. EKO
         with tab_eko:
-            # GÜNCELLENEN BİLGİ KUTUSU
             st.info("ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**\n"
                     "Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:\n"
                     "🔹 **Klinik:** BMI, BSA\n"
@@ -242,7 +235,6 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 mit_ee = mit_e/sept_e if sept_e > 0 else 0.0
                 laci = laedv/lvedv if lvedv > 0 else 0.0
                 
-                # Mavi İkonlu Sabit Gösterim
                 st.markdown(f"🔵 **E/A:** {mit_ea:.2f}")
                 st.markdown(f"🔵 **E/e':** {mit_ee:.2f}")
                 st.markdown(f"🔵 **LACi:** {laci:.2f}")
@@ -253,19 +245,8 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 
                 tapse_sm = tapse/rv_sm if rv_sm > 0 else 0.0
                 
-                # Mavi İkonlu Sabit Gösterim
                 st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
 
-        # 4. MANUEL LINK GİRİŞİ
-        st.divider()
-        st.markdown("### 🖼️ Görüntü Linkleri")
-        st.caption("Google Drive'a yüklediğiniz resimlerin linklerini buraya yapıştırınız.")
-        col_img1, col_img2, col_img3 = st.columns(3)
-        link_ekg = col_img1.text_input("EKG Linki")
-        link_bull = col_img2.text_input("Bull-eye Linki")
-        link_holter = col_img3.text_input("Holter Rapor Linki")
-
-        st.write("") # Boşluk
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         
         if submitted:
@@ -287,17 +268,15 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
                     "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
                     "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
-                    "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, "Lp(a)": lpa,
-                    "Homosistein": homosis, "CRP": crp, "Folik Asit": folik, "B12": b12,
-                    # EKO (Güncellendi)
+                    "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, 
+                    "Lp(a)": lpa, "Homosistein": homosis, "Folik Asit": folik, "B12": b12, # CRP çıkarıldı
+                    # EKO
                     "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
                     "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao_asc,
                     "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
                     "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
                     "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct,
-                    # LINKLER
-                    "Link_EKG": link_ekg, "Link_BullEye": link_bull, "Link_Holter": link_holter
+                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
                 }
                 
                 save_data_row(SHEET_NAME, data_row)
