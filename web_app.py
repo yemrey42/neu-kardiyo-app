@@ -46,7 +46,7 @@ def save_data_row(sheet_name, data_dict, unique_col="Dosya Numarası"):
     all_records = sheet.get_all_records()
     df = pd.DataFrame(all_records)
     
-    # Güncelleme kontrolü (Varsa eskisini sil)
+    # Güncelleme kontrolü
     if not df.empty and str(data_dict[unique_col]) in df[unique_col].astype(str).values:
         cell = sheet.find(str(data_dict[unique_col]))
         sheet.delete_rows(cell.row)
@@ -94,7 +94,6 @@ if menu == "📝 Vaka Takip (Notlar)":
 elif menu == "🏥 Veri Girişi (H-Type HT)":
     st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
     
-    # Görüntü sekmesi kaldırıldı
     tab_list, tab_klinik, tab_lab, tab_eko = st.tabs(["📋 HASTA LİSTESİ / SİLME", "👤 KLİNİK", "🩸 LABORATUVAR", "🫀 EKO"])
 
     with tab_list:
@@ -144,20 +143,23 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 boy = cb1.number_input("Boy (cm)")
                 kilo = cb2.number_input("Kilo (kg)")
                 bmi = 0
-                if boy > 0: bmi = kilo/((boy/100)**2)
+                bsa = 0 # Body Surface Area (LVMi için gerekli)
+                if boy > 0 and kilo > 0: 
+                    bmi = kilo/((boy/100)**2)
+                    bsa = (boy * kilo / 3600) ** 0.5 # Mosteller Formülü
+                
                 cb3.metric("BMI", f"{bmi:.2f}")
+                
                 ct1, ct2 = st.columns(2)
                 ta_sis = ct1.number_input("TA Sistol", step=1)
                 ta_dia = ct2.number_input("TA Diyastol", step=1)
             
             st.divider()
-            # AF kaldırıldı
             ekg = st.selectbox("EKG Bulgusu", ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]) 
             ci1, ci2 = st.columns(2)
             ilaclar = ci1.text_area("Kullandığı İlaçlar")
             baslanan = ci2.text_area("Başlanan İlaçlar")
             
-            # KY ve AF çıkarıldı
             st.markdown("##### Ek Hastalıklar")
             cc1, cc2, cc3, cc5 = st.columns(4)
             dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc5.checkbox("İnme")
@@ -184,11 +186,44 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
 
         # 3. EKO
         with tab_eko:
+            st.info("ℹ️ LVMi ve RWT hesaplanması için Boy, Kilo, LVEDD, IVS ve PW girilmelidir.")
             e1, e2, e3, e4 = st.columns(4)
             with e1:
-                st.markdown("**1. LV Yapı**")
-                lvedd = st.number_input("LVEDD"); lvesd = st.number_input("LVESD"); ivs = st.number_input("IVS"); pw = st.number_input("PW")
-                lvedv = st.number_input("LVEDV"); lvesv = st.number_input("LVESV"); mass_idx = st.number_input("LV Kütle İ"); ao_asc = st.number_input("Ao Asc")
+                st.markdown("**1. LV Yapı (Mass & RWT)**")
+                lvedd = st.number_input("LVEDD (mm)")
+                lvesd = st.number_input("LVESD (mm)")
+                ivs = st.number_input("IVS (mm)")
+                pw = st.number_input("PW (mm)")
+                lvedv = st.number_input("LVEDV (mL)")
+                lvesv = st.number_input("LVESV (mL)")
+                
+                # --- OTOMATİK HESAPLAMALAR ---
+                lv_mass = 0
+                lvmi = 0
+                rwt = 0
+                
+                # Devereux Formülü (LVEDD, IVS, PW mm cinsinden girilir, formülde cm'ye çevrilir)
+                if lvedd > 0 and ivs > 0 and pw > 0:
+                    # mm -> cm çevrimi (x/10)
+                    lvedd_cm = lvedd / 10
+                    ivs_cm = ivs / 10
+                    pw_cm = pw / 10
+                    # Devereux Formula: 0.8 * (1.04 * ((LVEDD + IVS + PW)^3 - LVEDD^3)) + 0.6
+                    lv_mass = 0.8 * (1.04 * ((lvedd_cm + ivs_cm + pw_cm)**3 - lvedd_cm**3)) + 0.6
+                    
+                    # LVMi Hesaplama (LV Mass / BSA)
+                    if bsa > 0:
+                        lvmi = lv_mass / bsa
+                
+                # RWT Hesaplama: (2 * PW) / LVEDD
+                if lvedd > 0 and pw > 0:
+                    rwt = (2 * pw) / lvedd
+                
+                # Ekrana Yazdırma
+                if lv_mass > 0: st.caption(f"🔵 LV Mass: {lv_mass:.1f} g")
+                if lvmi > 0: st.caption(f"🔵 LVMi: {lvmi:.1f} g/m²")
+                if rwt > 0: st.caption(f"🔵 RWT: {rwt:.2f}")
+
             with e2:
                 st.markdown("**2. Sistolik**")
                 lvef = st.number_input("LVEF"); sv = st.number_input("SV"); lvot_vti = st.number_input("LVOT VTI"); gls = st.number_input("GLS"); gcs = st.number_input("GCS"); sd_ls = st.number_input("SD-LS")
@@ -217,7 +252,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 
                 data_row = {
                     "Dosya Numarası": dosya_no, "Adı Soyadı": ad_soyad, "Tarih": str(basvuru), "Hekim": hekim,
-                    "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi,
+                    "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
                     "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
                     "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
                     "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Diğer Hast": diger_hst,
@@ -227,8 +262,9 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
                     "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, "Lp(a)": lpa,
                     "Homosistein": homosis, "CRP": crp, "Folik Asit": folik, "B12": b12,
-                    # EKO
-                    "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, "LV Mass": mass_idx, "Ao Asc": ao_asc,
+                    # EKO (Güncellendi)
+                    "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
+                    "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, # Yeni eklenenler
                     "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
                     "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
                     "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
