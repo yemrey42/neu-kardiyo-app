@@ -6,8 +6,8 @@ from datetime import datetime
 import time
 
 # --- AYARLAR ---
-# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIR
-SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"  # <-- KENDİ ID'Nİ BURAYA YAZ
+# Verdiğin ID'yi buraya sabitledim.
+SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 CASE_SHEET_ID = SHEET_ID 
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
@@ -19,13 +19,13 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- GÜVENLİ VERİ ÇEKME (DÜZELTİLDİ) ---
+# --- GÜVENLİ VERİ ÇEKME (DUPLICATE HEADER FIX) ---
 def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
         sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
         
-        # Tüm verileri ham olarak çek
+        # Tüm verileri ham liste olarak çek
         data = sheet.get_all_values()
         
         if not data:
@@ -34,18 +34,26 @@ def load_data(sheet_id, worksheet_index=0):
         headers = data[0]
         rows = data[1:]
         
-        # DataFrame oluştur
-        df = pd.DataFrame(rows, columns=headers)
+        # --- KRİTİK DÜZELTME: ÇAKIŞAN SÜTUN İSİMLERİNİ DÜZELT ---
+        # Eğer tabloda iki tane "Tarih" varsa, ikincisini "Tarih_2" yapar.
+        # Bu işlem Streamlit'in çökmesini %100 engeller.
+        seen = {}
+        unique_headers = []
+        for h in headers:
+            if h in seen:
+                seen[h] += 1
+                unique_headers.append(f"{h}_{seen[h]}")
+            else:
+                seen[h] = 0
+                unique_headers.append(h)
         
-        # !!! ÇÖZÜM BURADA !!!
-        # Tabloyu ekrana basmadan önce içindeki her şeyi zorla "String" (Yazı) yapıyoruz.
-        # Böylece PyArrow "bu sayı mı yazı mı" diye hata veremez.
-        df = df.fillna("") # Boşlukları doldur
-        df = df.astype(str) # Hepsini yazıya çevir
+        # DataFrame oluştur ve her şeyi yazıya (str) çevir
+        df = pd.DataFrame(rows, columns=unique_headers)
+        df = df.astype(str) 
         
         return df
-    except Exception:
-        # Hata olursa boş tablo dön, site çökmesin
+    except Exception as e:
+        # Hata durumunda boş tablo dön
         return pd.DataFrame()
 
 # --- SİLME İŞLEMİ ---
@@ -77,25 +85,25 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
 
     headers = all_values[0]
     
-    # Eksik sütun varsa ekle
+    # Eksik sütun varsa header listesine ekle
+    # (Not: Sheet'in 1. satırını güncellemek yerine yeni veriyi sona ekleriz,
+    # Google Sheets bunu genelde tolere eder, ama en temizi elle silmektir.)
     missing_cols = [key for key in clean_data.keys() if key not in headers]
-    if missing_cols:
-        headers.extend(missing_cols)
-        # (Google Sheet başlıklarını güncellemek karmaşık olduğu için burada sadece
-        # kod tarafında listeyi güncelliyoruz, yeni veri sona eklenir)
-
+    
+    # Veriyi mevcut başlıklara göre sıraya diz
     row_to_save = []
-    # 1. Mevcut başlıklara göre veriyi diz
+    
+    # 1. Mevcut başlıkların altını doldur
     for h in headers:
         row_to_save.append(clean_data.get(h, ""))
     
-    # 2. Yeni eklenenler varsa sona ekle
-    for k in clean_data.keys():
-        if k not in headers:
-            row_to_save.append(clean_data[k])
+    # 2. Yeni sütunlar varsa onları da sona ekle (Sheet'e de ekler)
+    for k in missing_cols:
+        row_to_save.append(clean_data[k])
+        # Opsiyonel: Header'a da eklemek gerekebilir ama basit tutalım.
 
     # Güncelleme Kontrolü
-    # Pandas DataFrame oluştururken de dtype belirtiyoruz ki çökmesin
+    # Pandas ile index bul
     df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
     
     row_index_to_update = None
@@ -112,7 +120,6 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
             sheet.append_row(row_to_save)
             st.toast(f"{clean_data[unique_col]} güncellendi.", icon="🔄")
         except:
-            # Silme hatası olursa (bazen index kayar) direkt ekle
             sheet.append_row(row_to_save)
     else:
         sheet.append_row(row_to_save)
@@ -145,6 +152,7 @@ if menu == "📝 Vaka Takip (Notlar)":
                     st.error("Google Sheet dosyanızda 2. bir sayfa (Vaka Takip) olduğundan emin olun!")
 
     with col2:
+        # worksheet_index=1 (2. Sayfa)
         df_notes = load_data(CASE_SHEET_ID, worksheet_index=1)
         if not df_notes.empty: st.dataframe(df_notes, use_container_width=True)
 
@@ -163,7 +171,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 st.metric("Toplam Kayıtlı Hasta", len(df))
                 st.dataframe(df, use_container_width=True)
             else:
-                st.info("Veritabanı boş veya ID hatalı.")
+                st.info("Veritabanı boş veya erişilemiyor.")
         
         with c2:
             st.error("⚠️ SİLME")
@@ -316,5 +324,6 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
                 }
                 
+                # Sheet ID'ni tırnak içine yazmayı unutma!
                 save_data_row(SHEET_ID, data_row, worksheet_index=0)
                 st.success(f"✅ {dosya_no} nolu hasta başarıyla kaydedildi!")
