@@ -47,12 +47,14 @@ def load_data(sheet_id, worksheet_index=0):
 
         rows = data[1:]
         
+        # Header Düzeltme
         seen = {}; unique_headers = []
         for h in headers:
             h = str(h).strip()
             if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
             else: seen[h]=0; unique_headers.append(h)
 
+        # Satır Dengeleme
         num_cols = len(unique_headers)
         fixed_rows = []
         for row in rows:
@@ -119,6 +121,7 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
 
 # ================= ARAYÜZ =================
 
+# --- EKG ANİMASYONU ---
 st.markdown("""
 <style>
 .ecg-container {
@@ -165,34 +168,52 @@ st.markdown("""
 
 st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
 
+# --- ANA VERİ ÇEKME ---
 df = load_data(SHEET_ID, 0)
 
-with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        if st.button("🔄 Yenile"): st.rerun()
+# --- YENİ DÜZEN (SOL: SEÇİM / SAĞ: LİSTE) ---
+col_left, col_right = st.columns([2, 3])
+
+# SOL KOLON: İŞLEM SEÇİMİ
+with col_left:
+    st.markdown("##### ⚙️ İşlem Seçimi")
+    mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed")
+    
+    current = {}
+    if mode == "Düzenleme":
         if not df.empty:
-            cols = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim"]
-            final = [c for c in cols if c in df.columns]
-            st.dataframe(df[final] if final else df, use_container_width=True)
-        else: st.info("Kayıt yok.")
-    with c2:
-        if not df.empty:
-            del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique())
-            if st.button("🗑️ SİL"):
-                if delete_patient(SHEET_ID, del_id):
-                    st.success("Silindi!"); time.sleep(1); st.rerun()
-                else: st.error("Hata!")
+            edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique())
+            if edit_id:
+                current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
+                st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
+        else:
+            st.warning("Düzenlenecek kayıt yok.")
+
+# SAĞ KOLON: LİSTE & SİLME (EXPANDER İÇİNDE)
+with col_right:
+    with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
+        c_list1, c_list2 = st.columns([3, 1])
+        with c_list1:
+            if st.button("🔄 Listeyi Yenile"): st.rerun()
+            if not df.empty:
+                cols_show = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim"]
+                final_cols = [c for c in cols_show if c in df.columns]
+                st.dataframe(df[final_cols] if final_cols else df, use_container_width=True)
+            else:
+                st.info("Kayıt yok.")
+        
+        with c_list2:
+            if not df.empty:
+                del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique(), key="del_box")
+                if st.button("🗑️ SİL"):
+                    if delete_patient(SHEET_ID, del_id):
+                        st.success("Silindi!"); time.sleep(1); st.rerun()
+                    else: st.error("Hata!")
 
 st.divider()
-mode = st.radio("İşlem:", ["Yeni Kayıt", "Düzenleme"], horizontal=True)
 
-current = {}
-if mode == "Düzenleme" and not df.empty:
-    edit_id = st.selectbox("Hasta Seç (Dosya No):", df["Dosya Numarası"].unique())
-    if edit_id:
-        current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
-
+# --- FORM BAŞLANGICI ---
+# Değerleri almak için kısa fonksiyonlar
 def gs(k): return str(current.get(k, ""))
 def gf(k): 
     try: return float(current.get(k, 0))
@@ -225,6 +246,7 @@ with st.form("main_form"):
         cb1, cb2, cb3 = st.columns(3)
         boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
         kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
+        
         bmi = kilo/((boy/100)**2) if boy>0 else 0
         bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
         cb3.metric("BMI", f"{bmi:.1f}")
@@ -337,8 +359,8 @@ with st.form("main_form"):
         rvot = st.number_input("RVOT VTI (cm)", value=gf("RVOT VTI"))
         rvota = st.number_input("RVOT accT (ms)", value=gf("RVOT accT"))
         
-        tsm = tapse/rvsm if rvsm>0 else 0.0
-        tspap = tapse/spap if spap>0 else 0.0
+        tsm = tapse/rvsm if rvsm>0 else 0
+        tspap = tapse/spap if spap>0 else 0
         st.caption(f"🔵 TAPSE/Sm: {tsm:.2f} | TAPSE/sPAP: {tspap:.2f}")
 
     st.write("")
@@ -363,7 +385,7 @@ with st.form("main_form"):
                 "Mitral E": mite, "Mitral A": mita, "Mitral E/A": ea, "Septal e'": septe, "Lateral e'": late, "Mitral E/e'": ee,
                 "LAEDV": laedv, "LAESV": laesv, "LA Strain": lastr, "LACi": laci,
                 "TAPSE": tapse, "RV Sm": rvsm, "TAPSE/Sm": tsm, "sPAP": spap, 
-                "TY vel.": tyvel, "TAPSE/sPAP": tspap, # Yeni eklenenler
+                "TY vel.": tyvel, "TAPSE/sPAP": tspap,
                 "RVOT VTI": rvot, "RVOT accT": rvota
             }
             save_data_row(SHEET_ID, final_data, worksheet_index=0)
