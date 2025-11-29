@@ -19,7 +19,7 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- YARDIMCI FONKSİYONLAR ---
+# --- YARDIMCI DÖNÜŞTÜRÜCÜLER ---
 def safe_float(val):
     try: return float(val)
     except: return 0.0
@@ -42,20 +42,19 @@ def load_data(sheet_id, worksheet_index=0):
             return pd.DataFrame()
             
         headers = data[0]
-        # Eğer başlık satırı bozuksa boş dön
         if "Dosya Numarası" not in headers:
             return pd.DataFrame()
 
         rows = data[1:]
         
-        # Header Düzeltme (Çakışma önleyici)
+        # Header Düzeltme
         seen = {}; unique_headers = []
         for h in headers:
             h = str(h).strip()
             if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
             else: seen[h]=0; unique_headers.append(h)
 
-        # Satır Dengeleme (Çökme önleyici)
+        # Satır Dengeleme
         num_cols = len(unique_headers)
         fixed_rows = []
         for row in rows:
@@ -85,7 +84,6 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
     clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
     all_values = sheet.get_all_values()
     
-    # Dosya boşsa başlıkları yaz
     if not all_values or "Dosya Numarası" not in all_values[0]:
         sheet.clear()
         sheet.append_row(list(clean_data.keys()))
@@ -93,18 +91,15 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
         return
 
     headers = all_values[0]
-    # Eksik sütun varsa listeye ekle (Sheet'e yansıtmak için)
     missing_cols = [k for k in clean_data.keys() if k not in headers]
     if missing_cols: headers.extend(missing_cols)
 
     row_to_save = []
-    # Mevcut başlık sırasına göre veriyi diz
     for h in headers: row_to_save.append(clean_data.get(h, ""))
     
-    # Yeni eklenen parametreler varsa onları da ekle
-    for k in missing_cols: row_to_save.append(clean_data[k])
+    for k in clean_data.keys():
+        if k not in headers: row_to_save.append(clean_data[k])
 
-    # Güncelleme Kontrolü
     df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
     row_index_to_update = None
     
@@ -126,35 +121,62 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
 
 # ================= ARAYÜZ =================
 
-# --- ÖZEL EKG ANİMASYONU (İSİMLİ & SARI RENKLİ) ---
+# --- GELİŞMİŞ EKG ANİMASYONU (ZIPLAYAN & RENK DEĞİŞTİREN) ---
 st.markdown("""
 <style>
 .ecg-container {
-    background: #000; height: 80px; width: 100%; overflow: hidden; position: relative; 
-    border-radius: 8px; border: 2px solid #333; margin-bottom: 20px; display: flex; align-items: center;
+    background: #000; height: 90px; width: 100%; overflow: hidden; position: relative; 
+    border-radius: 10px; border: 2px solid #444; margin-bottom: 20px; display: flex; align-items: center;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
 }
 .ecg-line {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80" viewBox="0 0 300 80"><path d="M0 45 L20 45 L25 40 L30 45 L40 45 L42 50 L45 15 L48 75 L52 45 L60 45 L65 35 L75 35 L80 45 L300 45" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
-    background-repeat: repeat-x; animation: scroll-bg 3s linear infinite; z-index: 1;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="90" viewBox="0 0 300 90"><path d="M0 50 L20 50 L25 45 L30 50 L40 50 L42 55 L45 10 L48 85 L52 50 L60 50 L65 40 L75 40 L80 50 L300 50" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
+    background-repeat: repeat-x; animation: scroll-bg 3s linear infinite; z-index: 1; opacity: 0.6;
 }
 .ecg-text-track {
-    display: flex; position: absolute; top: 32px; left: 0; white-space: nowrap;
+    display: flex; position: absolute; top: 30px; left: 0; white-space: nowrap;
     animation: scroll-text 12s linear infinite; z-index: 2;
 }
 .ecg-name {
-    display: inline-block; width: 300px; color: #FFFF00; font-family: 'Courier New', monospace;
-    font-weight: bold; font-size: 16px; text-align: right; padding-right: 60px;
+    display: inline-block; width: 300px; 
+    font-family: 'Courier New', monospace; font-weight: 900; font-size: 20px; text-align: center;
+    text-shadow: 2px 2px 0px #000;
+    animation: bounce 1s infinite alternate, color-shift 5s infinite linear;
 }
+
+/* Her isme farklı başlangıç rengi veriyoruz, sonra hepsi dönecek */
+.ecg-name:nth-child(1) { color: #FFFF00; animation-delay: 0s, 0s; } /* Sarı */
+.ecg-name:nth-child(2) { color: #00FFFF; animation-delay: 0.2s, 1s; } /* Cyan */
+.ecg-name:nth-child(3) { color: #FF00FF; animation-delay: 0.4s, 2s; } /* Magenta */
+.ecg-name:nth-child(4) { color: #FFA500; animation-delay: 0.6s, 3s; } /* Turuncu */
+.ecg-name:nth-child(5) { color: #FFFF00; animation-delay: 0s, 0s; }
+.ecg-name:nth-child(6) { color: #00FFFF; animation-delay: 0.2s, 1s; }
+.ecg-name:nth-child(7) { color: #FF00FF; animation-delay: 0.4s, 2s; }
+.ecg-name:nth-child(8) { color: #FFA500; animation-delay: 0.6s, 3s; }
+
 @keyframes scroll-bg { 0% { background-position: 0 0; } 100% { background-position: -300px 0; } }
 @keyframes scroll-text { 0% { transform: translateX(0); } 100% { transform: translateX(-1200px); } }
+@keyframes bounce { 
+    0% { transform: translateY(0); } 
+    100% { transform: translateY(-8px); } 
+}
+@keyframes color-shift {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
 </style>
 <div class="ecg-container">
     <div class="ecg-line"></div>
     <div class="ecg-text-track">
-        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
-        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
-        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">FATİH</div>
+        <div class="ecg-name">ZEYNEP</div>
+        <div class="ecg-name">NURAY</div>
+        <div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">FATİH</div>
+        <div class="ecg-name">ZEYNEP</div>
+        <div class="ecg-name">NURAY</div>
+        <div class="ecg-name">LEYLA</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
