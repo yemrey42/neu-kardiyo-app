@@ -1,8 +1,11 @@
 diff --git a/web_app.py b/web_app.py
-index db26dddf28c3f8c8d464b954d8fa9000826211dd..80756ae4cd29915e35347447180525d0f5709d94 100644
+index db26dddf28c3f8c8d464b954d8fa9000826211dd..fcda1f0610fb1f34e5ff756bed463a850cc3b652 100644
 --- a/web_app.py
 +++ b/web_app.py
-@@ -1,89 +1,179 @@
+@@ -1,111 +1,210 @@
++#!/usr/bin/env python3
++# -*- coding: utf-8 -*-
++
  import streamlit as st
  import pandas as pd
  import gspread
@@ -202,11 +205,40 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..80756ae4cd29915e35347447180525d0
              n_dr = st.text_input("Sorumlu Doktor")
              n_plan = st.text_area("Not / Plan")
              if st.form_submit_button("Notu Kaydet"):
-                 note_data = {"Tarih": str(datetime.now().date()), "Dosya No": n_dosya, "Hasta": n_ad, "Doktor": n_dr, "Not": n_plan}
+-                note_data = {"Tarih": str(datetime.now().date()), "Dosya No": n_dosya, "Hasta": n_ad, "Doktor": n_dr, "Not": n_plan}
++                note_data = {
++                    "Tarih": str(datetime.now().date()),
++                    "Dosya No": n_dosya,
++                    "Hasta": n_ad,
++                    "Doktor": n_dr,
++                    "Not": n_plan,
++                }
                  save_data_row(CASE_SHEET_NAME, note_data, unique_col="Dosya No")
                  st.success("Kaydedildi")
      with col2:
-@@ -143,198 +233,276 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
+         df_notes = load_data(CASE_SHEET_NAME)
+         if not df_notes.empty: st.dataframe(df_notes, use_container_width=True)
+ 
+ # --- MOD 2: VERİ GİRİŞİ ---
+ elif menu == "🏥 Veri Girişi (H-Type HT)":
+     
+     # --- CSS İLE SENTETİK EKG ANİMASYONU ---
+     # Bu HTML bloğu, SVG formatında çizilmiş P-QRS-T dalgasını
+     # CSS ile kaydırarak (marquee efekti) monitör görüntüsü oluşturur.
+     ecg_monitor_html = """
+     <style>
+     .monitor-container {
+         background-color: #000; /* Monitör Siyahı */
+         border: 2px solid #333;
+         border-radius: 8px;
+         padding: 0;
+         margin-bottom: 15px;
+         overflow: hidden;
+         position: relative;
+         height: 80px; /* Şerit Yüksekliği */
+         width: 100%;
+     }
+@@ -143,198 +242,276 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
          z-index: 2;
      }
      </style>
