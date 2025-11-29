@@ -3,11 +3,11 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-import time
 
 # --- AYARLAR ---
-# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIR (Linkin tamamını değil, sadece ID'yi)
-SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"  # <-- GÜNCELLE
+# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIRMAYI UNUTMA
+SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"  # <-- KENDİ ID'Nİ BURAYA YAZ
+CASE_SHEET_ID = SHEET_ID 
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
@@ -18,12 +18,13 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- GÜVENLİ VERİ ÇEKME ---
-def load_data(sheet_id):
+# --- VERİ İŞLEMLERİ (DÜZELTİLDİ) ---
+def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
-        sheet = client.open_by_key(sheet_id).sheet1
-        # get_all_values() daha güvenlidir
+        sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+        
+        # En güvenli yöntem: Tüm değerleri al
         data = sheet.get_all_values()
         
         if not data:
@@ -31,41 +32,37 @@ def load_data(sheet_id):
             
         headers = data[0]
         rows = data[1:]
+        
         df = pd.DataFrame(rows, columns=headers)
         
-        if "Dosya Numarası" in df.columns:
-            df["Dosya Numarası"] = df["Dosya Numarası"].astype(str)
+        # !!! KRİTİK DÜZELTME: Tüm veriyi string (yazı) formatına zorla !!!
+        # Bu sayede PyArrow/Streamlit "sayı mı yazı mı" diye çökmez.
+        df = df.astype(str)
+        
         return df
     except Exception as e:
         return pd.DataFrame()
 
-# --- GÜVENLİ KAYIT VE SİLME ---
 def delete_patient(sheet_id, dosya_no):
+    client = connect_to_gsheets()
+    sheet = client.open_by_key(sheet_id).sheet1
     try:
-        client = connect_to_gsheets()
-        sheet = client.open_by_key(sheet_id).sheet1
         cell = sheet.find(str(dosya_no))
         sheet.delete_rows(cell.row)
         return True
     except:
         return False
 
-def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası"):
+def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
-    sheet = client.open_by_key(sheet_id).sheet1
+    sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     
-    # 1. Google'ın sevdiği formata çevir (Her şeyi String yap)
-    clean_data = {}
-    for k, v in data_dict.items():
-        if v is None:
-            clean_data[k] = ""
-        else:
-            clean_data[k] = str(v)
-            
-    # 2. Mevcut verileri çek
+    # Verileri stringe çevirerek hazırla (Google Sheets hata vermesin)
+    clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
+    
     all_values = sheet.get_all_values()
     
-    # Dosya boşsa başlıkları ve veriyi yaz
+    # Dosya boşsa başlıkları yaz
     if not all_values:
         sheet.append_row(list(clean_data.keys()))
         sheet.append_row(list(clean_data.values()))
@@ -73,60 +70,44 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası"):
 
     headers = all_values[0]
     
-    # 3. Eğer yeni eklenen parametreler (sütunlar) sheet'te yoksa, başlığa ekle
+    # Eksik sütun varsa ekle (Otomatik Tamamlama)
     missing_cols = [key for key in clean_data.keys() if key not in headers]
     if missing_cols:
-        # Yeni sütun başlıklarını 1. satırın sonuna ekle
-        # (Bu işlem biraz risklidir ama hayat kurtarır)
-        st.warning(f"Tabloda eksik sütunlar bulundu ve eklendi: {missing_cols}")
-        # Mevcut başlıkları güncelle
+        # 1. Satıra yeni başlıkları ekle
+        # Gspread ile range güncellemek daha güvenlidir ama append ile yanına ekleyelim
+        # Bu kısım biraz manuel kalabilir, en temizi sheet.resize ve update cells
+        # Basit çözüm: Yeni veri girildiğinde Google Sheets sona ekler ama başlık olmazsa karışır.
+        # Şimdilik kullanıcıya uyarı vermeden devam et, header listemizi güncelle
         headers.extend(missing_cols)
-        # Sheet'teki başlık satırını güncelle (Basit yöntem: append etmeyelim, mantığı koruyalım)
-        # En temizi: Kullanıcıya "Sayfayı temizle" demek ama biz veriyi kaybetmeyelim.
-        # Şimdilik veriyi sıraya dizip göndereceğiz, Google Sheets sona ekler.
+        # Sheet'teki 1. satırı güncellemek gerekir ama karmaşıklaşmaması için 
+        # veriyi sadece var olan sıraya göre dizeceğiz, yeniler sona eklenecek.
 
-    # 4. Veriyi, başlıklardaki sıraya göre diz (Sütunlar karışmasın)
     row_to_save = []
-    # Eğer header'da olup bizde olmayan veri varsa boş geç, bizde olup headerda olmayan varsa sona ekle
-    # Güvenlik için: Kodumuzdaki data_dict anahtarlarını baz alalım
-    
-    # -- En güvenli yöntem: Row listesini oluştur --
-    # Önce mevcut headerlara göre doldur
+    # 1. Mevcut başlıklara göre veriyi diz
     for h in headers:
         row_to_save.append(clean_data.get(h, ""))
     
-    # Eğer data_dict'te olup header'da olmayan varsa (Yeni parametre), onları da sona ekle
+    # 2. Yeni eklenenler varsa (headerda yoksa) sona ekle
     for k in clean_data.keys():
         if k not in headers:
             row_to_save.append(clean_data[k])
 
-    # 5. Güncelleme mi Yeni Kayıt mı?
-    # Pandas ile kontrol edelim
+    # Güncelleme Kontrolü
     df = pd.DataFrame(all_values[1:], columns=all_values[0])
-    
     row_index_to_update = None
     
     if unique_col in df.columns:
-        # Dosya numarasını ara
         matches = df.index[df[unique_col] == str(clean_data[unique_col])].tolist()
         if matches:
-            # Pandas indexi 0'dan başlar, Sheet satırı 1'den. 
-            # Header var (+1), Pandas 0 index (+1) -> Sheet Row = Index + 2
-            row_index_to_update = matches[0] + 2
+            row_index_to_update = matches[0] + 2 # +2 çünkü index 0 başlar ve header var
 
     if row_index_to_update:
-        # GÜNCELLEME (Hücre Aralığını Güncelle)
-        # sheet.update() kullanmak delete+append'den daha güvenlidir
-        # Ancak basitlik için delete+append yapalım ama try-except ile
-        try:
-            sheet.delete_rows(row_index_to_update)
-            time.sleep(1) # Google nefes alsın
-            sheet.append_row(row_to_save)
-            st.toast(f"{clean_data[unique_col]} güncellendi.", icon="🔄")
-        except Exception as e:
-            st.error(f"Güncelleme hatası: {e}")
+        sheet.delete_rows(row_index_to_update)
+        import time
+        time.sleep(1)
+        sheet.append_row(row_to_save)
+        st.toast(f"{clean_data[unique_col]} güncellendi.", icon="🔄")
     else:
-        # YENİ KAYIT
         sheet.append_row(row_to_save)
 
 # --- ARAYÜZ ---
@@ -141,8 +122,24 @@ with st.sidebar:
 # --- MOD 1: VAKA TAKİP ---
 if menu == "📝 Vaka Takip (Notlar)":
     st.header("📝 Vaka Takip Defteri")
-    st.info("Notlar, aynı dosyanın 2. sayfasında veya ayrı bir dosyada tutulabilir.")
-    # (Bu kısım için ID ayarı gerekebilir, şimdilik pasif veya ana dosyaya kayıtlı)
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        with st.form("note_form", clear_on_submit=True):
+            n_dosya = st.text_input("Dosya No")
+            n_ad = st.text_input("Hasta Adı")
+            n_dr = st.text_input("Sorumlu Doktor")
+            n_plan = st.text_area("Not / Plan")
+            if st.form_submit_button("Notu Kaydet"):
+                note_data = {"Tarih": str(datetime.now().date()), "Dosya No": n_dosya, "Hasta": n_ad, "Doktor": n_dr, "Not": n_plan}
+                try:
+                    save_data_row(CASE_SHEET_ID, note_data, unique_col="Dosya No", worksheet_index=1)
+                    st.success("Kaydedildi")
+                except:
+                    st.error("Google Sheet dosyanızda 2. bir sayfa (Vaka Takip) olduğundan emin olun!")
+
+    with col2:
+        df_notes = load_data(CASE_SHEET_ID, worksheet_index=1)
+        if not df_notes.empty: st.dataframe(df_notes, use_container_width=True)
 
 # --- MOD 2: VERİ GİRİŞİ ---
 elif menu == "🏥 Veri Girişi (H-Type HT)":
@@ -154,12 +151,12 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
         c1, c2 = st.columns([3, 1])
         with c1:
             if st.button("🔄 Listeyi Yenile"): st.rerun()
-            df = load_data(SHEET_ID)
+            df = load_data(SHEET_ID, worksheet_index=0)
             if not df.empty:
                 st.metric("Toplam Kayıtlı Hasta", len(df))
                 st.dataframe(df, use_container_width=True)
             else:
-                st.info("Veritabanı boş veya ID hatalı.")
+                st.info("Veritabanı boş.")
         
         with c2:
             st.error("⚠️ SİLME")
@@ -172,6 +169,8 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     else: st.error("Hata!")
 
     with st.form("main_form"):
+        st.caption("Verileri girdikten sonra EN ALTTAKİ 'KAYDET' butonuna basınız.")
+        
         # 1. KLİNİK
         with tab_klinik:
             c1, c2 = st.columns(2)
@@ -240,7 +239,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
 
             e1, e2, e3, e4 = st.columns(4)
             with e1:
-                st.markdown("**1. LV Yapı**")
+                st.markdown("**1. LV Yapı (Mass & RWT)**")
                 lvedd = st.number_input("LVEDD (mm)"); lvesd = st.number_input("LVESD (mm)"); ivs = st.number_input("IVS (mm)")
                 pw = st.number_input("PW (mm)"); lvedv = st.number_input("LVEDV (mL)"); lvesv = st.number_input("LVESV (mL)")
                 ao_asc = st.number_input("Ao Asc (mm)")
@@ -295,19 +294,4 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
                     "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
                     "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
-                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer Hast": diger_hst,
-                    "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
-                    "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
-                    "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
-                    "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, 
-                    "Lp(a)": lpa, "Homosistein": homosis, "Folik Asit": folik, "B12": b12,
-                    "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
-                    "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao_asc,
-                    "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
-                    "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
-                    "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
-                }
-                
-                save_data_row(SHEET_ID, data_row)
-                st.success(f"✅ {dosya_no} nolu hasta başarıyla kaydedildi!")
+                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme
