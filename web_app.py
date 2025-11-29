@@ -4,9 +4,14 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# --- AYARLAR ---
-SHEET_NAME = "H_Type_HT_Verileri"
-CASE_SHEET_NAME = "Vaka_Takip_Notlari"
+# --- AYARLAR (BURAYI DOLDUR!) ---
+# Google Sheet linkindeki /d/ ve /edit arasındaki uzun kod:
+SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4" 
+
+# Vaka Takip için olan dosyanın ID'si (Eğer ayrı dosyaysa onun ID'si, aynıysa sayfa adı gerekir)
+# Şimdilik basitlik için aynı dosyada 'Vaka_Takip_Notlari' diye bir sayfa açtığını varsayıyoruz.
+# Eğer ayrı dosya ise onun da ID'sini buraya yaz:
+CASE_SHEET_ID = SHEET_ID 
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
@@ -18,10 +23,12 @@ def connect_to_gsheets():
     return client
 
 # --- VERİ İŞLEMLERİ ---
-def load_data(sheet_name):
+def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
-        sheet = client.open(sheet_name).sheet1
+        # İSİM YERİNE ID İLE AÇIYORUZ (DAHA GÜVENLİ)
+        sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+        
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         if "Dosya Numarası" in df.columns:
@@ -30,9 +37,9 @@ def load_data(sheet_name):
     except Exception as e:
         return pd.DataFrame()
 
-def delete_patient(sheet_name, dosya_no):
+def delete_patient(sheet_id, dosya_no):
     client = connect_to_gsheets()
-    sheet = client.open(sheet_name).sheet1
+    sheet = client.open_by_key(sheet_id).sheet1
     try:
         cell = sheet.find(str(dosya_no))
         sheet.delete_rows(cell.row)
@@ -40,9 +47,10 @@ def delete_patient(sheet_name, dosya_no):
     except:
         return False
 
-def save_data_row(sheet_name, data_dict, unique_col="Dosya Numarası"):
+def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
-    sheet = client.open(sheet_name).sheet1
+    sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+    
     all_records = sheet.get_all_records()
     df = pd.DataFrame(all_records)
     
@@ -84,10 +92,18 @@ if menu == "📝 Vaka Takip (Notlar)":
             n_plan = st.text_area("Not / Plan")
             if st.form_submit_button("Notu Kaydet"):
                 note_data = {"Tarih": str(datetime.now().date()), "Dosya No": n_dosya, "Hasta": n_ad, "Doktor": n_dr, "Not": n_plan}
-                save_data_row(CASE_SHEET_NAME, note_data, unique_col="Dosya No")
-                st.success("Kaydedildi")
+                # Vaka takibi 2. sayfaya (index 1) kaydedelim veya ayrı dosyaya.
+                # Burada aynı dosyanın 2. sekmesini varsayıyorum. 
+                # EĞER HATA ALIRSAN: Google Sheet'te alttan (+) ile yeni sayfa aç.
+                try:
+                    save_data_row(CASE_SHEET_ID, note_data, unique_col="Dosya No", worksheet_index=1)
+                    st.success("Kaydedildi")
+                except:
+                    st.error("Google Sheet dosyanızda 2. bir sayfa (sekme) olduğundan emin olun!")
+
     with col2:
-        df_notes = load_data(CASE_SHEET_NAME)
+        # 2. Sayfadan (index 1) veriyi çek
+        df_notes = load_data(CASE_SHEET_ID, worksheet_index=1)
         if not df_notes.empty: st.dataframe(df_notes, use_container_width=True)
 
 # --- MOD 2: VERİ GİRİŞİ ---
@@ -100,7 +116,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
         c_list1, c_list2 = st.columns([3, 1])
         with c_list1:
             if st.button("🔄 Listeyi Yenile"): st.rerun()
-            df = load_data(SHEET_NAME)
+            df = load_data(SHEET_ID, worksheet_index=0) # Ana sayfa (index 0)
             if not df.empty:
                 st.metric("Toplam Kayıtlı Hasta", len(df))
                 st.dataframe(df, use_container_width=True)
@@ -115,7 +131,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 del_select = st.selectbox("Silinecek Dosya No", del_list)
                 if st.button("🗑️ HASTAYI SİL"):
                     with st.spinner("Siliniyor..."):
-                        if delete_patient(SHEET_NAME, del_select):
+                        if delete_patient(SHEET_ID, del_select):
                             st.success("Hasta Silindi!")
                             st.rerun()
                         else:
@@ -165,7 +181,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
             dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc4.checkbox("İnme"); sigara = cc5.checkbox("Sigara")
             diger_hst = st.text_input("Diğer Hastalıklar")
 
-        # 2. LAB (BİRİMLER EKLENDİ)
+        # 2. LAB
         with tab_lab:
             l1, l2, l3, l4 = st.columns(4)
             with l1:
@@ -259,8 +275,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 
                 st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
 
-        # BOŞLUK
-        st.write("") 
+        st.write("") # Boşluk
 
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         
@@ -295,5 +310,6 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
                 }
                 
-                save_data_row(SHEET_NAME, data_row)
+                # ANA SAYFAYA (INDEX 0) KAYDET
+                save_data_row(SHEET_ID, data_row, worksheet_index=0)
                 st.success(f"✅ {dosya_no} nolu hasta başarıyla kaydedildi!")
