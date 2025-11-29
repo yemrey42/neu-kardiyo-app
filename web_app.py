@@ -6,279 +6,233 @@ from datetime import datetime
 import time
 
 # --- AYARLAR ---
-# ID'niz koda gömüldü
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 CASE_SHEET_ID = SHEET_ID 
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
 # --- BAĞLANTILAR ---
+@st.cache_resource
 def connect_to_gsheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
     return client
 
-# --- VERİ ÇEKME (HATA KORUMALI) ---
+# --- GÜVENLİ VERİ ÇEKME ---
 def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
         sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
         data = sheet.get_all_values()
-        
-        # Eğer veri yoksa veya sadece başlık yoksa boş dön
-        if not data or len(data) < 1:
-            return pd.DataFrame()
-            
+        if not data: return pd.DataFrame()
         headers = data[0]
-        # Eğer başlık satırı bozuksa (Dosya Numarası sütunu yoksa) boş dön ki yeniden oluştursun
-        if "Dosya Numarası" not in headers:
-            return pd.DataFrame()
-
         rows = data[1:]
-        df = pd.DataFrame(rows, columns=headers)
-        return df.astype(str) # Hepsini yazı yap (Çökme önleyici)
-    except:
-        return pd.DataFrame()
+        # Header düzeltme (Duplicate prevention)
+        seen = {}; unique_headers = []
+        for h in headers:
+            h = str(h).strip()
+            if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
+            else: seen[h]=0; unique_headers.append(h)
+        
+        # Satır Dengeleme
+        num_cols = len(unique_headers)
+        fixed_rows = []
+        for row in rows:
+            if len(row) < num_cols: row += [""] * (num_cols - len(row))
+            fixed_rows.append(row)
 
-# --- SİLME ---
-def delete_patient(sheet_id, dosya_no):
-    try:
-        client = connect_to_gsheets()
-        sheet = client.open_by_key(sheet_id).sheet1
-        cell = sheet.find(str(dosya_no))
-        sheet.delete_rows(cell.row)
-        return True
-    except:
-        return False
+        df = pd.DataFrame(fixed_rows, columns=unique_headers)
+        return df.astype(str)
+    except: return pd.DataFrame()
 
-# --- KAYIT VE GÜNCELLEME ---
+# --- YARDIMCI: SAYI ÇEVİRME (HATA ÖNLEYİCİ) ---
+def safe_float(val):
+    try: return float(val)
+    except: return 0.0
+
+def safe_int(val):
+    try: return int(float(val))
+    except: return 0
+
+# --- KAYIT ---
 def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
     sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     
-    # Veri Temizliği
     clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
-    
     all_values = sheet.get_all_values()
     
-    # EĞER DOSYA BOŞSA VEYA BAŞLIKLAR BOZUKSA -> BAŞTAN YAZ
-    if not all_values or "Dosya Numarası" not in all_values[0]:
-        sheet.clear() # Temizle
-        sheet.append_row(list(clean_data.keys())) # Başlıkları yaz
-        sheet.append_row(list(clean_data.values())) # İlk veriyi yaz
+    if not all_values:
+        sheet.append_row(list(clean_data.keys())); sheet.append_row(list(clean_data.values()))
         return
 
     headers = all_values[0]
-    
-    # Eksik sütun kontrolü
-    missing_cols = [k for k in clean_data.keys() if k not in headers]
-    if missing_cols:
-        headers.extend(missing_cols)
-        # Sütun ekleme işi karmaşık olduğu için burada basitçe devam ediyoruz,
-        # Google Sheets sona eklenen veriyi kabul eder.
-
-    # Veriyi başlık sırasına göre diz
-    row_to_save = []
-    for h in headers:
-        row_to_save.append(clean_data.get(h, ""))
-    
-    # Yeni eklenen parametreler varsa sona ekle
+    # Eksik sütun varsa ekle
     for k in clean_data.keys():
-        if k not in headers:
-            row_to_save.append(clean_data[k])
+        if k not in headers: headers.append(k) # Basitçe listeye ekle, sheet'e yansımaz ama kod çalışır
 
-    # GÜNCELLEME KONTROLÜ
+    row_to_save = []
+    for h in headers: row_to_save.append(clean_data.get(h, ""))
+
+    # Güncelleme Kontrolü
+    row_index = None
+    # Pandas ile bul
     df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
-    row_index_to_update = None
-    
     if unique_col in df.columns:
         matches = df.index[df[unique_col] == str(clean_data[unique_col])].tolist()
-        if matches:
-            row_index_to_update = matches[0] + 2
+        if matches: row_index = matches[0] + 2
 
-    if row_index_to_update:
-        try:
-            sheet.delete_rows(row_index_to_update)
-            time.sleep(1)
-            sheet.append_row(row_to_save)
-            st.toast(f"✅ {clean_data[unique_col]} güncellendi.", icon="🔄")
-        except:
-            sheet.append_row(row_to_save)
+    if row_index:
+        sheet.delete_rows(row_index)
+        time.sleep(1)
+        sheet.append_row(row_to_save)
+        st.toast(f"✅ {clean_data[unique_col]} GÜNCELLENDİ", icon="🔄")
     else:
         sheet.append_row(row_to_save)
+        st.toast(f"✅ {clean_data[unique_col]} KAYDEDİLDİ", icon="💾")
 
-# --- ARAYÜZ ---
-with st.sidebar:
-    st.title("❤️ NEÜ-KARDİYO")
-    menu = st.radio("Menü", ["🏥 Veri Girişi (H-Type HT)", "📝 Vaka Takip (Notlar)"])
-    st.divider()
-    with st.expander("📋 ÇALIŞMA KRİTERLERİ", expanded=True):
-        st.success("**✅ DAHİL:** Son 6 ayda yeni tanı esansiyel HT")
-        st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
+# --- SİLME ---
+def delete_patient(sheet_id, dosya_no):
+    client = connect_to_gsheets()
+    sheet = client.open_by_key(sheet_id).sheet1
+    try:
+        cell = sheet.find(str(dosya_no))
+        sheet.delete_rows(cell.row)
+        return True
+    except: return False
 
-# --- MOD 1: VAKA TAKİP ---
-if menu == "📝 Vaka Takip (Notlar)":
-    st.header("📝 Vaka Takip Defteri")
-    c1, c2 = st.columns([1, 2])
+# ================= ARAYÜZ BAŞLANGICI =================
+
+# --- 1. EKG ANİMASYONU ---
+st.markdown("""
+<style>
+.ecg-container { background: #000; height: 70px; width: 100%; overflow: hidden; position: relative; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
+.ecg-line {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="70" viewBox="0 0 300 70"><path d="M0 35 L20 35 L25 30 L30 35 L40 35 L42 40 L45 5 L48 65 L52 35 L60 35 L65 25 L75 25 L80 35 L300 35" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
+    width: 200%; height: 100%; position: absolute; animation: slide 3s linear infinite; background-repeat: repeat-x;
+}
+@keyframes slide { from { transform: translateX(0); } to { transform: translateX(-300px); } }
+</style>
+<div class="ecg-container"><div class="ecg-line"></div></div>
+""", unsafe_allow_html=True)
+
+st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
+
+# --- 2. VERİ ÇEKME & LİSTELEME ---
+df = load_data(SHEET_ID, 0)
+
+with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME İŞLEMİ", expanded=False):
+    c1, c2 = st.columns([3, 1])
     with c1:
-        with st.form("note"):
-            n_dosya = st.text_input("Dosya No")
-            n_ad = st.text_input("Hasta")
-            n_not = st.text_area("Not")
-            if st.form_submit_button("Kaydet"):
-                try:
-                    save_data_row(CASE_SHEET_ID, {"Tarih":str(datetime.now().date()), "Dosya No":n_dosya, "Hasta":n_ad, "Not":n_not}, "Dosya No", 1)
-                    st.success("Kaydedildi")
-                except: st.error("Google Sheet'te 2. Sayfa Yok!")
-    with c2:
-        dfn = load_data(CASE_SHEET_ID, 1)
-        if not dfn.empty: st.dataframe(dfn, use_container_width=True)
-
-# --- MOD 2: VERİ GİRİŞİ ---
-elif menu == "🏥 Veri Girişi (H-Type HT)":
-    st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
+        if st.button("🔄 Listeyi Yenile"): st.rerun()
+        if not df.empty:
+            # Sadece önemli sütunları göster
+            cols_show = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "Yaş", "Cinsiyet"]
+            final_cols = [c for c in cols_show if c in df.columns]
+            st.dataframe(df[final_cols] if final_cols else df, use_container_width=True)
+        else:
+            st.info("Kayıt yok.")
     
-    tab_list, tab_form = st.tabs(["📋 LİSTE / SİLME", "✍️ VERİ GİRİŞ / DÜZENLE"])
+    with c2:
+        if not df.empty:
+            st.error("HASTA SİL")
+            del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique())
+            if st.button("🗑️ SİL"):
+                if delete_patient(SHEET_ID, del_id):
+                    st.success("Silindi!"); time.sleep(1); st.rerun()
+                else: st.error("Hata!")
 
-    # LİSTE VE SİLME EKRANI
-    with tab_list:
-        col_L1, col_L2 = st.columns([3, 1])
-        with col_L1:
-            if st.button("🔄 Listeyi Yenile"): st.rerun()
-            df = load_data(SHEET_ID, 0)
-            if not df.empty:
-                st.metric("Toplam Kayıt", len(df))
-                st.dataframe(df, use_container_width=True)
-            else:
-                st.info("Henüz kayıt yok veya Google Sheet boş.")
+# --- 3. DÜZENLEME MODU SEÇİMİ ---
+st.divider()
+col_mode1, col_mode2 = st.columns([1, 3])
+with col_mode1:
+    mode = st.radio("İşlem Türü:", ["Yeni Kayıt", "Düzenleme"], horizontal=True)
+
+# Düzenleme için değişkenleri hazırla
+current_data = {}
+
+if mode == "Düzenleme":
+    if not df.empty:
+        with col_mode2:
+            edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique())
+            # Seçilen hastanın verilerini çek
+            if edit_id:
+                current_data = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
+                st.success(f"Seçilen Hasta: {current_data.get('Adı Soyadı', '')}")
+    else:
+        st.warning("Düzenlenecek kayıt bulunamadı.")
+
+# --- 4. VERİ GİRİŞ FORMU ---
+with st.form("main_form"):
+    
+    # --- KLİNİK ---
+    st.markdown("### 👤 Klinik Bilgiler")
+    c1, c2 = st.columns(2)
+    with c1:
+        # Value değerlerini current_data'dan alıyoruz (Varsa dolu gelir, yoksa boş)
+        dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=current_data.get("Dosya Numarası", ""))
+        ad_soyad = st.text_input("Adı Soyadı", value=current_data.get("Adı Soyadı", ""))
         
-        with col_L2:
-            st.warning("⚠️ HASTA SİLME")
-            if not df.empty:
-                del_list = df["Dosya Numarası"].astype(str).tolist()
-                del_select = st.selectbox("Silinecek Dosya", del_list)
-                if st.button("🗑️ SİL"):
-                    if delete_patient(SHEET_ID, del_select):
-                        st.success("Silindi!")
-                        time.sleep(1)
-                        st.rerun()
-                    else: st.error("Hata!")
-
-    # VERİ GİRİŞ EKRANI
-    with tab_form:
-        st.info("💡 **DÜZENLEME:** Var olan bir 'Dosya Numarası'nı girip kaydederseniz, eski kayıt güncellenir.")
+        # Tarih işleme
+        try:
+            def_date = datetime.strptime(current_data.get("Tarih", str(datetime.now().date())), "%Y-%m-%d")
+        except:
+            def_date = datetime.now()
+        basvuru = st.date_input("Başvuru Tarihi", value=def_date)
         
-        with st.form("main"):
-            # KLİNİK
-            st.markdown("### 👤 Klinik Bilgiler")
-            c1, c2 = st.columns(2)
-            with c1:
-                dosya_no = st.text_input("Dosya Numarası (Zorunlu)")
-                ad_soyad = st.text_input("Adı Soyadı")
-                basvuru = st.date_input("Başvuru Tarihi")
-                hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)")
-                iletisim = st.text_input("İletişim")
-            with c2:
-                col_y, col_c = st.columns(2)
-                yas = col_y.number_input("Yaş", step=1)
-                cinsiyet = col_c.radio("Cinsiyet", ["Erkek", "Kadın"], horizontal=True)
-                cb1, cb2, cb3 = st.columns(3)
-                boy = cb1.number_input("Boy (cm)")
-                kilo = cb2.number_input("Kilo (kg)")
-                bmi = kilo/((boy/100)**2) if boy>0 else 0
-                bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
-                cb3.metric("BMI", f"{bmi:.1f}")
-                
-                ct1, ct2 = st.columns(2)
-                ta_sis = ct1.number_input("TA Sistol", step=1)
-                ta_dia = ct2.number_input("TA Diyastol", step=1)
-            
-            st.divider()
-            ekg = st.selectbox("EKG", ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"])
-            ilaclar = st.text_area("Kullandığı İlaçlar", height=60)
-            baslanan = st.text_area("Başlanan İlaçlar", height=60)
-            
-            cc1, cc2, cc3, cc4, cc5 = st.columns(5)
-            dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc4.checkbox("İnme"); sigara = cc5.checkbox("Sigara")
-            diger_hst = st.text_input("Diğer Hastalık")
+        hekim = st.text_input("Veriyi Giren Hekim", value=current_data.get("Hekim", ""))
+        iletisim = st.text_input("İletişim", value=current_data.get("İletişim", ""))
+    
+    with c2:
+        col_y, col_c = st.columns(2)
+        yas = col_y.number_input("Yaş", step=1, value=safe_int(current_data.get("Yaş", 0)))
+        
+        # Cinsiyet Index Bulma
+        sex_opts = ["Erkek", "Kadın"]
+        try: sex_idx = sex_opts.index(current_data.get("Cinsiyet", "Erkek"))
+        except: sex_idx = 0
+        cinsiyet = col_c.radio("Cinsiyet", sex_opts, index=sex_idx, horizontal=True)
+        
+        cb1, cb2, cb3 = st.columns(3)
+        boy = cb1.number_input("Boy (cm)", value=safe_float(current_data.get("Boy", 0)))
+        kilo = cb2.number_input("Kilo (kg)", value=safe_float(current_data.get("Kilo", 0)))
+        
+        # BMI/BSA Anlık Hesap
+        bmi = kilo/((boy/100)**2) if boy>0 else 0
+        bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
+        cb3.metric("BMI", f"{bmi:.1f}")
 
-            # LAB
-            st.markdown("### 🩸 Laboratuvar")
-            l1, l2, l3, l4 = st.columns(4)
-            hgb = l1.number_input("Hgb"); hct = l1.number_input("Hct"); wbc = l1.number_input("WBC"); plt = l1.number_input("PLT")
-            neu = l1.number_input("Nötrofil"); lym = l1.number_input("Lenfosit"); mpv = l1.number_input("MPV"); rdw = l1.number_input("RDW")
-            
-            glukoz = l2.number_input("Glukoz"); ure = l2.number_input("Üre"); krea = l2.number_input("Kreatinin"); uric = l2.number_input("Ürik Asit")
-            na = l2.number_input("Na"); k_val = l2.number_input("K"); alt = l2.number_input("ALT"); ast = l2.number_input("AST")
-            tot_prot = l2.number_input("Tot Prot"); albumin = l2.number_input("Albümin")
-            
-            chol = l3.number_input("Chol"); ldl = l3.number_input("LDL"); hdl = l3.number_input("HDL"); trig = l3.number_input("Trig")
-            
-            homosis = l4.number_input("Homosistein"); lpa = l4.number_input("Lp(a)"); folik = l4.number_input("Folik Asit"); b12 = l4.number_input("B12")
+        ct1, ct2 = st.columns(2)
+        ta_sis = ct1.number_input("TA Sistol (mmHg)", value=safe_int(current_data.get("TA Sistol", 0)))
+        ta_dia = ct2.number_input("TA Diyastol (mmHg)", value=safe_int(current_data.get("TA Diyastol", 0)))
 
-            # EKO
-            st.markdown("### 🫀 Eko")
-            e1, e2, e3, e4 = st.columns(4)
-            with e1:
-                st.caption("Yapısal")
-                lvedd = st.number_input("LVEDD"); lvesd = st.number_input("LVESD"); ivs = st.number_input("IVS"); pw = st.number_input("PW")
-                lvedv = st.number_input("LVEDV"); lvesv = st.number_input("LVESV"); ao_asc = st.number_input("Ao Asc")
-                
-                lv_mass = 0.0; lvmi = 0.0; rwt = 0.0
-                if lvedd>0 and ivs>0 and pw>0:
-                    lvedd_c=lvedd/10; ivs_c=ivs/10; pw_c=pw/10
-                    lv_mass = 0.8*(1.04*((lvedd_c+ivs_c+pw_c)**3 - lvedd_c**3))+0.6
-                    if bsa>0: lvmi = lv_mass/bsa
-                if lvedd>0 and pw>0: rwt = (2*pw)/lvedd
-                st.markdown(f"🔵 **Mass:** {lv_mass:.0f} | **LVMi:** {lvmi:.0f} | **RWT:** {rwt:.2f}")
+    st.markdown("---")
+    
+    # EKG Index
+    ekg_opts = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
+    try: ekg_idx = ekg_opts.index(current_data.get("EKG", "NSR"))
+    except: ekg_idx = 0
+    ekg = st.selectbox("EKG Bulgusu", ekg_opts, index=ekg_idx)
+    
+    ci1, ci2 = st.columns(2)
+    ilaclar = ci1.text_area("Kullandığı İlaçlar", value=current_data.get("İlaçlar", ""))
+    baslanan = ci2.text_area("Başlanan İlaçlar", value=current_data.get("Başlanan İlaçlar", ""))
 
-            with e2:
-                st.caption("Sistolik")
-                lvef = st.number_input("LVEF"); sv = st.number_input("SV"); lvot_vti = st.number_input("LVOT VTI")
-                gls = st.number_input("GLS"); gcs = st.number_input("GCS"); sd_ls = st.number_input("SD-LS")
+    st.markdown("##### Ek Hastalıklar")
+    cc1, cc2, cc3, cc4, cc5 = st.columns(5)
+    # Checkbox değerleri string "True" ise True yap
+    def is_checked(key): return str(current_data.get(key, "")).lower() == "true"
+    
+    dm = cc1.checkbox("DM", value=is_checked("DM"))
+    kah = cc2.checkbox("KAH", value=is_checked("KAH"))
+    hpl = cc3.checkbox("HPL", value=is_checked("HPL"))
+    inme = cc4.checkbox("İnme", value=is_checked("İnme"))
+    sigara = cc5.checkbox("Sigara", value=is_checked("Sigara"))
+    diger_hst = st.text_input("Diğer Hastalıklar", value=current_data.get("Diğer Hast", ""))
 
-            with e3:
-                st.caption("Diyastolik")
-                mit_e = st.number_input("Mitral E"); mit_a = st.number_input("Mitral A")
-                sept_e = st.number_input("Septal e'"); lat_e = st.number_input("Lateral e'")
-                laedv = st.number_input("LAEDV"); laesv = st.number_input("LAESV"); la_strain = st.number_input("LA Strain")
-                mit_ea = mit_e/mit_a if mit_a>0 else 0
-                mit_ee = mit_e/sept_e if sept_e>0 else 0
-                laci = laedv/lvedv if lvedv>0 else 0
-                st.markdown(f"🔵 **E/A:** {mit_ea:.1f} | **E/e':** {mit_ee:.1f} | **LACi:** {laci:.2f}")
-
-            with e4:
-                st.caption("Sağ Kalp")
-                tapse = st.number_input("TAPSE"); rv_sm = st.number_input("RV Sm"); spap = st.number_input("sPAP")
-                rvot_vti = st.number_input("RVOT VTI"); rvot_acct = st.number_input("RVOT accT")
-                tapse_sm = tapse/rv_sm if rv_sm>0 else 0
-                st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
-
-            st.write("")
-            if st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary"):
-                if not dosya_no or not hekim:
-                    st.error("Dosya No ve Hekim Zorunlu!")
-                else:
-                    data = {
-                        "Dosya Numarası": dosya_no, "Adı Soyadı": ad_soyad, "Tarih": str(basvuru), "Hekim": hekim,
-                        "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
-                        "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
-                        "İlaçlar": ilaclar, "Başlanan": baslanan,
-                        "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer": diger_hst,
-                        "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
-                        "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
-                        "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
-                        "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, 
-                        "Lp(a)": lpa, "Homosistein": homosis, "Folik Asit": folik, "B12": b12,
-                        "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
-                        "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao_asc,
-                        "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
-                        "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
-                        "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                        "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
-                    }
-                    save_data_row(SHEET_ID, data, worksheet_index=0)
-                    st.success(f"✅ {dosya_no} başarıyla kaydedildi!")
-                    time.sleep(1)
-                    st.rerun()
+    # --- LAB ---
+    st.markdown("### 🩸 Laboratuvar")
+    l1, l2, l3, l4 = st.columns(4)
+    hgb = l1.number_input("Hgb (g/dL)", value=safe_float(current_data.get("Hgb", 0)))
+    hct = l1.number_input("Hct (%)", value=safe_float(current_data.
