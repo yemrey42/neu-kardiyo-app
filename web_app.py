@@ -184,6 +184,7 @@ with col_left:
         if not df.empty:
             edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique())
             if edit_id:
+                # Seçilen satırı bul ve sözlüğe çevir
                 current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
                 st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
         else:
@@ -209,6 +210,11 @@ with col_right:
                     if delete_patient(SHEET_ID, del_id):
                         st.success("Silindi!"); time.sleep(1); st.rerun()
                     else: st.error("Hata!")
+
+# --- KRİTER UYARILARI (YENİ EKLENEN KISIM) ---
+k1, k2 = st.columns(2)
+k1.success("**✅ DAHİL ETME KRİTERLERİ:**\nSon 6 ay içinde yeni tanı alan esansiyel HT hastaları.")
+k2.error("**⛔ DIŞLAMA KRİTERLERİ:**\nSekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
 
 st.divider()
 
