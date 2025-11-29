@@ -92,65 +92,6 @@ if menu == "📝 Vaka Takip (Notlar)":
 
 # --- MOD 2: VERİ GİRİŞİ ---
 elif menu == "🏥 Veri Girişi (H-Type HT)":
-    
-    # --- CSS İLE SENTETİK EKG ANİMASYONU ---
-    # Bu HTML bloğu, SVG formatında çizilmiş P-QRS-T dalgasını
-    # CSS ile kaydırarak (marquee efekti) monitör görüntüsü oluşturur.
-    ecg_monitor_html = """
-    <style>
-    .monitor-container {
-        background-color: #000; /* Monitör Siyahı */
-        border: 2px solid #333;
-        border-radius: 8px;
-        padding: 0;
-        margin-bottom: 15px;
-        overflow: hidden;
-        position: relative;
-        height: 80px; /* Şerit Yüksekliği */
-        width: 100%;
-    }
-    .ecg-grid {
-        /* Arkaplan Izgarası (Milimetrik kağıt hissi) */
-        background-image: 
-            linear-gradient(#111 1px, transparent 1px),
-            linear-gradient(90deg, #111 1px, transparent 1px);
-        background-size: 20px 20px;
-        width: 100%;
-        height: 100%;
-        position: absolute;
-    }
-    .ecg-wave {
-        /* SVG Dalgası */
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80" viewBox="0 0 300 80"><path d="M0 40 L20 40 L25 35 L30 40 L40 40 L42 45 L45 10 L48 70 L52 40 L60 40 L65 30 L75 30 L80 40 L300 40" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
-        background-repeat: repeat-x;
-        width: 200%; /* Döngü için genişlik */
-        height: 100%;
-        position: absolute;
-        animation: slide-left 3s linear infinite;
-    }
-    @keyframes slide-left {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(-300px); } /* SVG genişliği kadar kaydır */
-    }
-    .monitor-overlay {
-        /* Sağ tarafta silikleşme efekti */
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 50px;
-        height: 100%;
-        background: linear-gradient(to right, transparent, #000);
-        z-index: 2;
-    }
-    </style>
-    <div class="monitor-container">
-        <div class="ecg-grid"></div>
-        <div class="ecg-wave"></div>
-        <div class="monitor-overlay"></div>
-    </div>
-    """
-    st.markdown(ecg_monitor_html, unsafe_allow_html=True)
-    
     st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
     
     tab_list, tab_klinik, tab_lab, tab_eko = st.tabs(["📋 HASTA LİSTESİ / SİLME", "👤 KLİNİK", "🩸 LABORATUVAR", "🫀 EKO"])
@@ -181,6 +122,8 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                             st.error("Silinemedi.")
 
     with st.form("main_form"):
+        st.caption("Verileri girdikten sonra EN ALTTAKİ 'KAYDET' butonuna basınız.")
+        
         # 1. KLİNİK
         with tab_klinik:
             c1, c2 = st.columns(2)
@@ -208,8 +151,8 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 cb3.metric("BMI", f"{bmi:.2f}")
                 
                 ct1, ct2 = st.columns(2)
-                ta_sis = ct1.number_input("TA Sistol", step=1)
-                ta_dia = ct2.number_input("TA Diyastol", step=1)
+                ta_sis = ct1.number_input("TA Sistol (mmHg)", step=1)
+                ta_dia = ct2.number_input("TA Diyastol (mmHg)", step=1)
             
             st.divider()
             ekg = st.selectbox("EKG Bulgusu", ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]) 
@@ -218,8 +161,13 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
             baslanan = ci2.text_area("Başlanan İlaçlar")
             
             st.markdown("##### Ek Hastalıklar")
-            cc1, cc2, cc3, cc5 = st.columns(4)
-            dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc5.checkbox("İnme")
+            cc1, cc2, cc3, cc4, cc5 = st.columns(5)
+            dm = cc1.checkbox("DM")
+            kah = cc2.checkbox("KAH")
+            hpl = cc3.checkbox("HPL")
+            inme = cc4.checkbox("İnme")
+            sigara = cc5.checkbox("Sigara") # Sigara Eklendi
+            
             diger_hst = st.text_input("Diğer Hastalıklar")
 
         # 2. LAB
@@ -227,7 +175,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
             l1, l2, l3, l4 = st.columns(4)
             with l1:
                 st.markdown("🔴 **Hemogram**")
-                hgb = st.number_input("Hgb"); hct = st.number_input("Hct"); wbc = st.number_input("WBC"); plt = st.number_input("PLT")
+                hgb = st.number_input("Hgb (g/dL)"); hct = st.number_input("Hct (%)"); wbc = st.number_input("WBC (10^3)"); plt = st.number_input("PLT (10^3)")
                 neu = st.number_input("Nötrofil"); lym = st.number_input("Lenfosit"); mpv = st.number_input("MPV"); rdw = st.number_input("RDW")
             with l2:
                 st.markdown("🧪 **Biyokimya**")
@@ -241,9 +189,8 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 st.markdown("⚡ **Spesifik**")
                 homosis = st.number_input("Homosistein"); lpa = st.number_input("Lp(a)"); folik = st.number_input("Folik Asit"); b12 = st.number_input("B12")
 
-        # 3. EKO
+        # 3. EKO (BİRİMLER DÜZELTİLDİ)
         with tab_eko:
-            # GÜNCELLENEN BİLGİ KUTUSU
             st.info("ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**\n"
                     "Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:\n"
                     "🔹 **Klinik:** BMI, BSA\n"
@@ -279,30 +226,52 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
 
             with e2:
                 st.markdown("**2. Sistolik**")
-                lvef = st.number_input("LVEF"); sv = st.number_input("SV"); lvot_vti = st.number_input("LVOT VTI"); gls = st.number_input("GLS"); gcs = st.number_input("GCS"); sd_ls = st.number_input("SD-LS")
+                lvef = st.number_input("LVEF (%)")
+                sv = st.number_input("SV (mL)")
+                lvot_vti = st.number_input("LVOT VTI (cm)")
+                gls = st.number_input("GLS Strain (%)")
+                gcs = st.number_input("GCS Strain (%)")
+                sd_ls = st.number_input("SD-LS (%)")
+
             with e3:
                 st.markdown("**3. Diyastolik**")
-                mit_e = st.number_input("Mitral E"); mit_a = st.number_input("Mitral A"); sept_e = st.number_input("Septal e'"); lat_e = st.number_input("Lateral e'")
-                laedv = st.number_input("LAEDV"); laesv = st.number_input("LAESV"); la_strain = st.number_input("LA Strain")
+                mit_e = st.number_input("Mitral E (cm/sn)")
+                mit_a = st.number_input("Mitral A (cm/sn)")
+                sept_e = st.number_input("Septal e' (cm/sn)")
+                lat_e = st.number_input("Lateral e' (cm/sn)")
+                laedv = st.number_input("LAEDV (mL)")
+                laesv = st.number_input("LAESV (mL)")
+                la_strain = st.number_input("LA Strain (%)")
                 
                 # Hesaplamalar
                 mit_ea = mit_e/mit_a if mit_a > 0 else 0.0
                 mit_ee = mit_e/sept_e if sept_e > 0 else 0.0
                 laci = laedv/lvedv if lvedv > 0 else 0.0
                 
-                # Mavi İkonlu Sabit Gösterim
                 st.markdown(f"🔵 **E/A:** {mit_ea:.2f}")
                 st.markdown(f"🔵 **E/e':** {mit_ee:.2f}")
                 st.markdown(f"🔵 **LACi:** {laci:.2f}")
 
             with e4:
                 st.markdown("**4. Sağ Kalp**")
-                tapse = st.number_input("TAPSE"); rv_sm = st.number_input("RV Sm"); spap = st.number_input("sPAP"); rvot_vti = st.number_input("RVOT VTI"); rvot_acct = st.number_input("RVOT accT")
+                tapse = st.number_input("TAPSE (mm)")
+                rv_sm = st.number_input("RV Sm (cm/sn)")
+                spap = st.number_input("sPAP (mmHg)")
+                rvot_vti = st.number_input("RVOT VTI (cm)")
+                rvot_acct = st.number_input("RVOT accT (ms)")
                 
                 tapse_sm = tapse/rv_sm if rv_sm > 0 else 0.0
                 
-                # Mavi İkonlu Sabit Gösterim
                 st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
+
+        # 4. MANUEL LINK GİRİŞİ
+        st.divider()
+        st.markdown("### 🖼️ Görüntü Linkleri")
+        st.caption("Google Drive'a yüklediğiniz resimlerin linklerini buraya yapıştırınız.")
+        col_img1, col_img2, col_img3 = st.columns(3)
+        link_ekg = col_img1.text_input("EKG Linki")
+        link_bull = col_img2.text_input("Bull-eye Linki")
+        link_holter = col_img3.text_input("Holter Rapor Linki")
 
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         
@@ -320,20 +289,22 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
                     "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
                     "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
-                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Diğer Hast": diger_hst,
+                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer Hast": diger_hst,
                     # LAB
                     "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
                     "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
                     "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
                     "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, 
-                    "Lp(a)": lpa, "Homosistein": homosis, "Folik Asit": folik, "B12": b12, # CRP çıkarıldı
+                    "Lp(a)": lpa, "Homosistein": homosis, "Folik Asit": folik, "B12": b12,
                     # EKO
                     "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
                     "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao_asc,
                     "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
                     "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
                     "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
+                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct,
+                    # LINKLER
+                    "Link_EKG": link_ekg, "Link_BullEye": link_bull, "Link_Holter": link_holter
                 }
                 
                 save_data_row(SHEET_NAME, data_row)
