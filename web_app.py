@@ -6,41 +6,34 @@ from datetime import datetime
 import time
 
 # --- AYARLAR ---
-SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
+# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIR
+SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"  # <-- KENDİ ID'Nİ BURAYA YAZ
 CASE_SHEET_ID = SHEET_ID 
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
-# --- BAĞLANTILAR ---
-def connect_to_gsheets():
+# --- BAĞLANTILAR (ÖNBELLEKLİ - HIZLI VE KOPMAZ) ---
+@st.cache_resource
+def get_gspread_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
     return client
 
-# --- GÜVENLİ VERİ ÇEKME (SATIR DENGELEYİCİ EKLENDİ) ---
+# --- GÜVENLİ VERİ ÇEKME ---
 def load_data(sheet_id, worksheet_index=0):
     try:
-        client = connect_to_gsheets()
+        client = get_gspread_client() # Önbellekten çağır
         sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
         
         data = sheet.get_all_values()
         
-        if not data or len(data) < 2:
+        if not data:
             return pd.DataFrame()
             
         headers = data[0]
-        raw_rows = data[1:]
+        rows = data[1:]
         
-        # --- SATIR DENGELEYİCİ (CRASH FIX) ---
-        # Her satırın uzunluğunu başlık uzunluğuna eşitle
-        num_cols = len(headers)
-        fixed_rows = []
-        for row in raw_rows:
-            if len(row) < num_cols:
-                row += [""] * (num_cols - len(row))
-            fixed_rows.append(row)
-            
         # Sütun isimleri çakışmasın
         seen = {}
         unique_headers = []
@@ -52,7 +45,7 @@ def load_data(sheet_id, worksheet_index=0):
                 seen[h] = 0
                 unique_headers.append(h)
         
-        df = pd.DataFrame(fixed_rows, columns=unique_headers)
+        df = pd.DataFrame(rows, columns=unique_headers)
         df = df.astype(str)
         return df
     except Exception:
@@ -61,7 +54,7 @@ def load_data(sheet_id, worksheet_index=0):
 # --- SİLME ---
 def delete_patient(sheet_id, dosya_no):
     try:
-        client = connect_to_gsheets()
+        client = get_gspread_client()
         sheet = client.open_by_key(sheet_id).sheet1
         cell = sheet.find(str(dosya_no))
         sheet.delete_rows(cell.row)
@@ -69,14 +62,27 @@ def delete_patient(sheet_id, dosya_no):
     except:
         return False
 
-# --- KAYIT (SATIR DENGELEYİCİ EKLENDİ) ---
+# --- KAYIT (GÜVENLİ VE HIZLI) ---
 def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
-    client = connect_to_gsheets()
+    client = get_gspread_client() # Önbellekten çağır
     sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     
-    clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
+    # Verileri temizle (Sonsuz sayıları ve boşlukları düzelt)
+    clean_data = {}
+    for k, v in data_dict.items():
+        if v is None:
+            clean_data[k] = ""
+        else:
+            # Sonsuz sayı kontrolü (Hesaplamalardan gelebilir)
+            s_val = str(v)
+            if s_val.lower() in ["inf", "-inf", "nan"]:
+                clean_data[k] = ""
+            else:
+                clean_data[k] = s_val
+    
     all_values = sheet.get_all_values()
     
+    # Dosya boşsa başlıkları yaz
     if not all_values:
         sheet.append_row(list(clean_data.keys()))
         sheet.append_row(list(clean_data.values()))
@@ -84,6 +90,7 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
 
     headers = all_values[0]
     
+    # Eksik sütun varsa ekle
     missing_cols = [key for key in clean_data.keys() if key not in headers]
     if missing_cols:
         headers.extend(missing_cols)
@@ -96,15 +103,7 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
         if k not in headers:
             row_to_save.append(clean_data[k])
 
-    # --- PANDAS İÇİN DENGELEME ---
-    num_cols = len(all_values[0])
-    fixed_rows = []
-    for row in all_values[1:]:
-        if len(row) < num_cols:
-            row += [""] * (num_cols - len(row))
-        fixed_rows.append(row)
-
-    df = pd.DataFrame(fixed_rows, columns=all_values[0]).astype(str)
+    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
     
     row_index_to_update = None
     if unique_col in df.columns:
@@ -117,7 +116,7 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
             sheet.delete_rows(row_index_to_update)
             time.sleep(1)
             sheet.append_row(row_to_save)
-            st.toast(f"{clean_data[unique_col]} güncellendi.", icon="🔄")
+            st.toast(f"✅ {clean_data[unique_col]} güncellendi.", icon="🔄")
         except:
             sheet.append_row(row_to_save)
     else:
@@ -272,7 +271,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     lv_mass = 0.8 * (1.04 * ((lvedd_cm + ivs_cm + pw_cm)**3 - lvedd_cm**3)) + 0.6
                     if bsa > 0: lvmi = lv_mass / bsa
                 if lvedd > 0 and pw > 0: rwt = (2 * pw) / lvedd
-                st.markdown(f"🔵 **Mass:** {lv_mass:.1f} | **LVMi:** {lvmi:.1f} | **RWT:** {rwt:.2f}")
+                st.markdown(f"🔵 **Mass:** {lv_mass:.1f} g | **LVMi:** {lvmi:.1f} | **RWT:** {rwt:.2f}")
 
             with e2:
                 st.markdown("**2. Sistolik**")
