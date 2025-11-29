@@ -47,14 +47,12 @@ def load_data(sheet_id, worksheet_index=0):
 
         rows = data[1:]
         
-        # Header Düzeltme
         seen = {}; unique_headers = []
         for h in headers:
             h = str(h).strip()
             if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
             else: seen[h]=0; unique_headers.append(h)
 
-        # Satır Dengeleme
         num_cols = len(unique_headers)
         fixed_rows = []
         for row in rows:
@@ -121,7 +119,6 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
 
 # ================= ARAYÜZ =================
 
-# --- GELİŞMİŞ EKG ANİMASYONU (ZIPLAYAN & RENK DEĞİŞTİREN) ---
 st.markdown("""
 <style>
 .ecg-container {
@@ -144,46 +141,30 @@ st.markdown("""
     text-shadow: 2px 2px 0px #000;
     animation: bounce 1s infinite alternate, color-shift 5s infinite linear;
 }
-
-/* Her isme farklı başlangıç rengi veriyoruz, sonra hepsi dönecek */
-.ecg-name:nth-child(1) { color: #FFFF00; animation-delay: 0s, 0s; } /* Sarı */
-.ecg-name:nth-child(2) { color: #00FFFF; animation-delay: 0.2s, 1s; } /* Cyan */
-.ecg-name:nth-child(3) { color: #FF00FF; animation-delay: 0.4s, 2s; } /* Magenta */
-.ecg-name:nth-child(4) { color: #FFA500; animation-delay: 0.6s, 3s; } /* Turuncu */
+.ecg-name:nth-child(1) { color: #FFFF00; animation-delay: 0s, 0s; }
+.ecg-name:nth-child(2) { color: #00FFFF; animation-delay: 0.2s, 1s; }
+.ecg-name:nth-child(3) { color: #FF00FF; animation-delay: 0.4s, 2s; }
+.ecg-name:nth-child(4) { color: #FFA500; animation-delay: 0.6s, 3s; }
 .ecg-name:nth-child(5) { color: #FFFF00; animation-delay: 0s, 0s; }
 .ecg-name:nth-child(6) { color: #00FFFF; animation-delay: 0.2s, 1s; }
 .ecg-name:nth-child(7) { color: #FF00FF; animation-delay: 0.4s, 2s; }
 .ecg-name:nth-child(8) { color: #FFA500; animation-delay: 0.6s, 3s; }
-
 @keyframes scroll-bg { 0% { background-position: 0 0; } 100% { background-position: -300px 0; } }
 @keyframes scroll-text { 0% { transform: translateX(0); } 100% { transform: translateX(-1200px); } }
-@keyframes bounce { 
-    0% { transform: translateY(0); } 
-    100% { transform: translateY(-8px); } 
-}
-@keyframes color-shift {
-    0% { filter: hue-rotate(0deg); }
-    100% { filter: hue-rotate(360deg); }
-}
+@keyframes bounce { 0% { transform: translateY(0); } 100% { transform: translateY(-8px); } }
+@keyframes color-shift { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
 </style>
 <div class="ecg-container">
     <div class="ecg-line"></div>
     <div class="ecg-text-track">
-        <div class="ecg-name">FATİH</div>
-        <div class="ecg-name">ZEYNEP</div>
-        <div class="ecg-name">NURAY</div>
-        <div class="ecg-name">LEYLA</div>
-        <div class="ecg-name">FATİH</div>
-        <div class="ecg-name">ZEYNEP</div>
-        <div class="ecg-name">NURAY</div>
-        <div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
 
-# --- LİSTE ÇEKME ---
 df = load_data(SHEET_ID, 0)
 
 with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
@@ -191,12 +172,10 @@ with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
     with c1:
         if st.button("🔄 Yenile"): st.rerun()
         if not df.empty:
-            # Sadece önemli sütunları göster
             cols = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim"]
             final = [c for c in cols if c in df.columns]
             st.dataframe(df[final] if final else df, use_container_width=True)
         else: st.info("Kayıt yok.")
-    
     with c2:
         if not df.empty:
             del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique())
@@ -214,7 +193,6 @@ if mode == "Düzenleme" and not df.empty:
     if edit_id:
         current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
 
-# --- VERİ ALICILAR ---
 def gs(k): return str(current.get(k, ""))
 def gf(k): 
     try: return float(current.get(k, 0))
@@ -247,14 +225,13 @@ with st.form("main_form"):
         cb1, cb2, cb3 = st.columns(3)
         boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
         kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
-        
         bmi = kilo/((boy/100)**2) if boy>0 else 0
         bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
         cb3.metric("BMI", f"{bmi:.1f}")
 
         ct1, ct2 = st.columns(2)
-        ta_sis = ct1.number_input("TA Sistol", value=gi("TA Sistol"))
-        ta_dia = ct2.number_input("TA Diyastol", value=gi("TA Diyastol"))
+        ta_sis = ct1.number_input("TA Sistol (mmHg)", value=gi("TA Sistol"))
+        ta_dia = ct2.number_input("TA Diyastol (mmHg)", value=gi("TA Diyastol"))
 
     st.markdown("---")
     ekg_l = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
@@ -277,47 +254,47 @@ with st.form("main_form"):
 
     st.markdown("### 🩸 Laboratuvar")
     l1, l2, l3, l4 = st.columns(4)
-    hgb = l1.number_input("Hgb", value=gf("Hgb"))
-    hct = l1.number_input("Hct", value=gf("Hct"))
-    wbc = l1.number_input("WBC", value=gf("WBC"))
-    plt = l1.number_input("PLT", value=gf("PLT"))
-    neu = l1.number_input("Nötrofil", value=gf("Neu"))
-    lym = l1.number_input("Lenfosit", value=gf("Lym"))
-    mpv = l1.number_input("MPV", value=gf("MPV"))
-    rdw = l1.number_input("RDW", value=gf("RDW"))
+    hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
+    hct = l1.number_input("Hct (%)", value=gf("Hct"))
+    wbc = l1.number_input("WBC (10³/µL)", value=gf("WBC"))
+    plt = l1.number_input("PLT (10³/µL)", value=gf("PLT"))
+    neu = l1.number_input("Nötrofil (%)", value=gf("Neu"))
+    lym = l1.number_input("Lenfosit (%)", value=gf("Lym"))
+    mpv = l1.number_input("MPV (fL)", value=gf("MPV"))
+    rdw = l1.number_input("RDW (%)", value=gf("RDW"))
 
-    glukoz = l2.number_input("Glukoz", value=gf("Glukoz"))
-    ure = l2.number_input("Üre", value=gf("Üre"))
-    krea = l2.number_input("Kreatinin", value=gf("Kreatinin"))
-    uric = l2.number_input("Ürik Asit", value=gf("Ürik Asit"))
-    na = l2.number_input("Na", value=gf("Na"))
-    k_val = l2.number_input("K", value=gf("K"))
-    alt = l2.number_input("ALT", value=gf("ALT"))
-    ast = l2.number_input("AST", value=gf("AST"))
-    prot = l2.number_input("Tot Prot", value=gf("Tot. Prot"))
-    alb = l2.number_input("Albümin", value=gf("Albümin"))
+    glukoz = l2.number_input("Glukoz (mg/dL)", value=gf("Glukoz"))
+    ure = l2.number_input("Üre (mg/dL)", value=gf("Üre"))
+    krea = l2.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
+    uric = l2.number_input("Ürik Asit (mg/dL)", value=gf("Ürik Asit"))
+    na = l2.number_input("Na (mEq/L)", value=gf("Na"))
+    k_val = l2.number_input("K (mEq/L)", value=gf("K"))
+    alt = l2.number_input("ALT (U/L)", value=gf("ALT"))
+    ast = l2.number_input("AST (U/L)", value=gf("AST"))
+    prot = l2.number_input("Tot Prot (g/dL)", value=gf("Tot. Prot"))
+    alb = l2.number_input("Albümin (g/dL)", value=gf("Albümin"))
 
-    chol = l3.number_input("Chol", value=gf("Chol"))
-    ldl = l3.number_input("LDL", value=gf("LDL"))
-    hdl = l3.number_input("HDL", value=gf("HDL"))
-    trig = l3.number_input("Trig", value=gf("Trig"))
+    chol = l3.number_input("Chol (mg/dL)", value=gf("Chol"))
+    ldl = l3.number_input("LDL (mg/dL)", value=gf("LDL"))
+    hdl = l3.number_input("HDL (mg/dL)", value=gf("HDL"))
+    trig = l3.number_input("Trig (mg/dL)", value=gf("Trig"))
 
-    homo = l4.number_input("Homosistein", value=gf("Homosistein"))
-    lpa = l4.number_input("Lp(a)", value=gf("Lp(a)"))
-    folik = l4.number_input("Folik Asit", value=gf("Folik Asit"))
-    b12 = l4.number_input("B12", value=gf("B12"))
+    homo = l4.number_input("Homosistein (µmol/L)", value=gf("Homosistein"))
+    lpa = l4.number_input("Lp(a) (mg/dL)", value=gf("Lp(a)"))
+    folik = l4.number_input("Folik Asit (ng/mL)", value=gf("Folik Asit"))
+    b12 = l4.number_input("B12 (pg/mL)", value=gf("B12"))
 
     st.markdown("### 🫀 Eko")
     e1, e2, e3, e4 = st.columns(4)
     with e1:
         st.caption("Yapısal")
-        lvedd = st.number_input("LVEDD", value=gf("LVEDD"))
-        lvesd = st.number_input("LVESD", value=gf("LVESD"))
-        ivs = st.number_input("IVS", value=gf("IVS"))
-        pw = st.number_input("PW", value=gf("PW"))
-        lvedv = st.number_input("LVEDV", value=gf("LVEDV"))
-        lvesv = st.number_input("LVESV", value=gf("LVESV"))
-        ao = st.number_input("Ao Asc", value=gf("Ao Asc"))
+        lvedd = st.number_input("LVEDD (mm)", value=gf("LVEDD"))
+        lvesd = st.number_input("LVESD (mm)", value=gf("LVESD"))
+        ivs = st.number_input("IVS (mm)", value=gf("IVS"))
+        pw = st.number_input("PW (mm)", value=gf("PW"))
+        lvedv = st.number_input("LVEDV (mL)", value=gf("LVEDV"))
+        lvesv = st.number_input("LVESV (mL)", value=gf("LVESV"))
+        ao = st.number_input("Ao Asc (mm)", value=gf("Ao Asc"))
         
         lvm = 0.0; lvmi = 0.0; rwt = 0.0
         if lvedd>0 and ivs>0 and pw>0:
@@ -329,22 +306,22 @@ with st.form("main_form"):
 
     with e2:
         st.caption("Sistolik")
-        lvef = st.number_input("LVEF", value=gf("LVEF"))
-        sv = st.number_input("SV", value=gf("SV"))
-        lvot = st.number_input("LVOT VTI", value=gf("LVOT VTI"))
-        gls = st.number_input("GLS", value=gf("GLS"))
-        gcs = st.number_input("GCS", value=gf("GCS"))
-        sdls = st.number_input("SD-LS", value=gf("SD-LS"))
+        lvef = st.number_input("LVEF (%)", value=gf("LVEF"))
+        sv = st.number_input("SV (mL)", value=gf("SV"))
+        lvot = st.number_input("LVOT VTI (cm)", value=gf("LVOT VTI"))
+        gls = st.number_input("GLS (%)", value=gf("GLS"))
+        gcs = st.number_input("GCS (%)", value=gf("GCS"))
+        sdls = st.number_input("SD-LS (%)", value=gf("SD-LS"))
 
     with e3:
         st.caption("Diyastolik")
-        mite = st.number_input("Mitral E", value=gf("Mitral E"))
-        mita = st.number_input("Mitral A", value=gf("Mitral A"))
-        septe = st.number_input("Septal e'", value=gf("Septal e'"))
-        late = st.number_input("Lateral e'", value=gf("Lateral e'"))
-        laedv = st.number_input("LAEDV", value=gf("LAEDV"))
-        laesv = st.number_input("LAESV", value=gf("LAESV"))
-        lastr = st.number_input("LA Strain", value=gf("LA Strain"))
+        mite = st.number_input("Mitral E (cm/sn)", value=gf("Mitral E"))
+        mita = st.number_input("Mitral A (cm/sn)", value=gf("Mitral A"))
+        septe = st.number_input("Septal e' (cm/sn)", value=gf("Septal e'"))
+        late = st.number_input("Lateral e' (cm/sn)", value=gf("Lateral e'"))
+        laedv = st.number_input("LAEDV (mL)", value=gf("LAEDV"))
+        laesv = st.number_input("LAESV (mL)", value=gf("LAESV"))
+        lastr = st.number_input("LA Strain (%)", value=gf("LA Strain"))
         
         ea = mite/mita if mita>0 else 0
         ee = mite/septe if septe>0 else 0
@@ -353,13 +330,16 @@ with st.form("main_form"):
 
     with e4:
         st.caption("Sağ Kalp")
-        tapse = st.number_input("TAPSE", value=gf("TAPSE"))
-        rvsm = st.number_input("RV Sm", value=gf("RV Sm"))
-        spap = st.number_input("sPAP", value=gf("sPAP"))
-        rvot = st.number_input("RVOT VTI", value=gf("RVOT VTI"))
-        rvota = st.number_input("RVOT accT", value=gf("RVOT accT"))
-        tsm = tapse/rvsm if rvsm>0 else 0
-        st.caption(f"🔵 TAPSE/Sm:{tsm:.2f}")
+        tapse = st.number_input("TAPSE (mm)", value=gf("TAPSE"))
+        rvsm = st.number_input("RV Sm (cm/sn)", value=gf("RV Sm"))
+        spap = st.number_input("sPAP (mmHg)", value=gf("sPAP"))
+        tyvel = st.number_input("TY vel. (m/sn)", value=gf("TY vel."))
+        rvot = st.number_input("RVOT VTI (cm)", value=gf("RVOT VTI"))
+        rvota = st.number_input("RVOT accT (ms)", value=gf("RVOT accT"))
+        
+        tsm = tapse/rvsm if rvsm>0 else 0.0
+        tspap = tapse/spap if spap>0 else 0.0
+        st.caption(f"🔵 TAPSE/Sm: {tsm:.2f} | TAPSE/sPAP: {tspap:.2f}")
 
     st.write("")
     if st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary"):
@@ -382,7 +362,9 @@ with st.form("main_form"):
                 "LVEF": lvef, "SV": sv, "LVOT VTI": lvot, "GLS": gls, "GCS": gcs, "SD-LS": sdls,
                 "Mitral E": mite, "Mitral A": mita, "Mitral E/A": ea, "Septal e'": septe, "Lateral e'": late, "Mitral E/e'": ee,
                 "LAEDV": laedv, "LAESV": laesv, "LA Strain": lastr, "LACi": laci,
-                "TAPSE": tapse, "RV Sm": rvsm, "TAPSE/Sm": tsm, "sPAP": spap, "RVOT VTI": rvot, "RVOT accT": rvota
+                "TAPSE": tapse, "RV Sm": rvsm, "TAPSE/Sm": tsm, "sPAP": spap, 
+                "TY vel.": tyvel, "TAPSE/sPAP": tspap, # Yeni eklenenler
+                "RVOT VTI": rvot, "RVOT accT": rvota
             }
             save_data_row(SHEET_ID, final_data, worksheet_index=0)
             st.success(f"✅ {dosya_no} kaydedildi!")
