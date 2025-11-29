@@ -1,8 +1,8 @@
 diff --git a/web_app.py b/web_app.py
-index db26dddf28c3f8c8d464b954d8fa9000826211dd..f13c2816df397b884f9a2c31847285c6b20ae6b0 100644
+index db26dddf28c3f8c8d464b954d8fa9000826211dd..80756ae4cd29915e35347447180525d0f5709d94 100644
 --- a/web_app.py
 +++ b/web_app.py
-@@ -1,90 +1,161 @@
+@@ -1,89 +1,179 @@
  import streamlit as st
  import pandas as pd
  import gspread
@@ -100,6 +100,15 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..f13c2816df397b884f9a2c31847285c6
 +
      try:
          cell = sheet.find(str(dosya_no))
++    except Exception as exc:  # pragma: no cover - dış servis
++        st.error(f"Silme başarısız: {exc}")
++        return False
++
++    if cell is None:
++        st.warning("Silinecek hasta bulunamadı.")
++        return False
++
++    try:
          sheet.delete_rows(cell.row)
          return True
 -    except:
@@ -110,32 +119,50 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..f13c2816df397b884f9a2c31847285c6
  def save_data_row(sheet_name, data_dict, unique_col="Dosya Numarası"):
 -    client = connect_to_gsheets()
 -    sheet = client.open(sheet_name).sheet1
+-    all_records = sheet.get_all_records()
 +    sheet = get_sheet(sheet_name)
 +    if sheet is None:
 +        return
 +
-     all_records = sheet.get_all_records()
++    try:
++        all_records = sheet.get_all_records()
++    except Exception as exc:  # pragma: no cover - dış servis
++        st.error(f"Tablo okunamadı: {exc}")
++        return
++
      df = pd.DataFrame(all_records)
 -    
 +
      # Güncelleme kontrolü
      if not df.empty and str(data_dict[unique_col]) in df[unique_col].astype(str).values:
-         cell = sheet.find(str(data_dict[unique_col]))
-         sheet.delete_rows(cell.row)
-         st.toast(f"{data_dict[unique_col]} güncelleniyor...", icon="🔄")
+-        cell = sheet.find(str(data_dict[unique_col]))
+-        sheet.delete_rows(cell.row)
+-        st.toast(f"{data_dict[unique_col]} güncelleniyor...", icon="🔄")
 -    
++        try:
++            cell = sheet.find(str(data_dict[unique_col]))
++            sheet.delete_rows(cell.row)
++            st.toast(f"{data_dict[unique_col]} güncelleniyor...", icon="🔄")
++        except Exception as exc:  # pragma: no cover - dış servis
++            st.error(f"Güncelleme sırasında hata: {exc}")
++            return
 +
      # Kayıt
-     if df.empty:
-         sheet.append_row(list(data_dict.keys()))
-         sheet.append_row(list(data_dict.values()))
-     else:
-         headers = sheet.row_values(1)
-         row_to_add = []
-         for header in headers:
-             row_to_add.append(str(data_dict.get(header, "")))
-         sheet.append_row(row_to_add)
- 
+-    if df.empty:
+-        sheet.append_row(list(data_dict.keys()))
+-        sheet.append_row(list(data_dict.values()))
+-    else:
++    try:
++        if df.empty:
++            sheet.append_row(list(data_dict.keys()))
++            sheet.append_row(list(data_dict.values()))
++        else:
++            headers = sheet.row_values(1)
++            row_to_add = [str(data_dict.get(header, "")) for header in headers]
++            sheet.append_row(row_to_add)
++    except Exception as exc:  # pragma: no cover - dış servis
++        st.error(f"Kayıt eklenemedi: {exc}")
++
 +
 +def get_patient_by_file_no(sheet_name, dosya_no):
 +    sheet = get_sheet(sheet_name)
@@ -144,13 +171,17 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..f13c2816df397b884f9a2c31847285c6
 +
 +    try:
 +        cell = sheet.find(str(dosya_no))
-+        headers = sheet.row_values(1)
+         headers = sheet.row_values(1)
+-        row_to_add = []
+-        for header in headers:
+-            row_to_add.append(str(data_dict.get(header, "")))
+-        sheet.append_row(row_to_add)
 +        values = sheet.row_values(cell.row)
 +        return dict(zip(headers, values))
 +    except Exception as exc:  # pragma: no cover - dış servis
 +        st.error(f"Hasta bilgisi alınamadı: {exc}")
 +        return None
-+
+ 
  # --- ARAYÜZ ---
  with st.sidebar:
      st.title("❤️ NEÜ-KARDİYO")
@@ -175,8 +206,7 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..f13c2816df397b884f9a2c31847285c6
                  save_data_row(CASE_SHEET_NAME, note_data, unique_col="Dosya No")
                  st.success("Kaydedildi")
      with col2:
-         df_notes = load_data(CASE_SHEET_NAME)
-@@ -143,198 +214,276 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
+@@ -143,198 +233,276 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
          z-index: 2;
      }
      </style>
