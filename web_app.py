@@ -1,5 +1,5 @@
 diff --git a/web_app.py b/web_app.py
-index db26dddf28c3f8c8d464b954d8fa9000826211dd..fcda1f0610fb1f34e5ff756bed463a850cc3b652 100644
+index db26dddf28c3f8c8d464b954d8fa9000826211dd..ff199fbd884ca273285ec661e3dacb630ac6555a 100644
 --- a/web_app.py
 +++ b/web_app.py
 @@ -1,111 +1,210 @@
@@ -238,7 +238,7 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..fcda1f0610fb1f34e5ff756bed463a85
          height: 80px; /* Şerit Yüksekliği */
          width: 100%;
      }
-@@ -143,198 +242,276 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
+@@ -143,198 +242,280 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
          z-index: 2;
      }
      </style>
@@ -429,11 +429,20 @@ index db26dddf28c3f8c8d464b954d8fa9000826211dd..fcda1f0610fb1f34e5ff756bed463a85
          # 3. EKO
          with tab_eko:
              # GÜNCELLENEN BİLGİ KUTUSU
-             st.info("ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**\n"
-                     "Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:\n"
-                     "🔹 **Klinik:** BMI, BSA\n"
-                     "🔹 **Yapısal:** LV Mass, LVMi, RWT, LACi\n"
-                     "🔹 **Fonksiyonel:** E/A, E/e', TAPSE/Sm")
+-            st.info("ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**\n"
+-                    "Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:\n"
+-                    "🔹 **Klinik:** BMI, BSA\n"
+-                    "🔹 **Yapısal:** LV Mass, LVMi, RWT, LACi\n"
+-                    "🔹 **Fonksiyonel:** E/A, E/e', TAPSE/Sm")
++            st.info(
++                """
++ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**
++Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:
++🔹 **Klinik:** BMI, BSA
++🔹 **Yapısal:** LV Mass, LVMi, RWT, LACi
++🔹 **Fonksiyonel:** E/A, E/e', TAPSE/Sm
++"""
++            )
  
              e1, e2, e3, e4 = st.columns(4)
              with e1:
