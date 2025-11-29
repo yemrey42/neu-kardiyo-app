@@ -132,7 +132,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 dosya_no = st.text_input("Dosya Numarası (Zorunlu)")
                 ad_soyad = st.text_input("Adı Soyadı")
                 basvuru = st.date_input("Başvuru Tarihi")
-                hekim = st.text_input("Veriyi Giren Hekim")
+                hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)") # Etiketi güncelledim
                 iletisim = st.text_input("İletişim")
             with c2:
                 st.markdown("##### Fizik Muayene")
@@ -162,12 +162,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
             
             st.markdown("##### Ek Hastalıklar")
             cc1, cc2, cc3, cc4, cc5 = st.columns(5)
-            dm = cc1.checkbox("DM")
-            kah = cc2.checkbox("KAH")
-            hpl = cc3.checkbox("HPL")
-            inme = cc4.checkbox("İnme")
-            sigara = cc5.checkbox("Sigara") # Sigara Eklendi
-            
+            dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc4.checkbox("İnme"); sigara = cc5.checkbox("Sigara")
             diger_hst = st.text_input("Diğer Hastalıklar")
 
         # 2. LAB
@@ -189,7 +184,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 st.markdown("⚡ **Spesifik**")
                 homosis = st.number_input("Homosistein"); lpa = st.number_input("Lp(a)"); folik = st.number_input("Folik Asit"); b12 = st.number_input("B12")
 
-        # 3. EKO (BİRİMLER DÜZELTİLDİ)
+        # 3. EKO
         with tab_eko:
             st.info("ℹ️ **OTOMATİK HESAPLANACAK PARAMETRELER:**\n"
                     "Veri girişi yapıldıkça aşağıdaki değerler sistem tarafından hesaplanıp kaydedilecektir:\n"
@@ -264,20 +259,15 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 
                 st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
 
-        # 4. MANUEL LINK GİRİŞİ
-        st.divider()
-        st.markdown("### 🖼️ Görüntü Linkleri")
-        st.caption("Google Drive'a yüklediğiniz resimlerin linklerini buraya yapıştırınız.")
-        col_img1, col_img2, col_img3 = st.columns(3)
-        link_ekg = col_img1.text_input("EKG Linki")
-        link_bull = col_img2.text_input("Bull-eye Linki")
-        link_holter = col_img3.text_input("Holter Rapor Linki")
+        # BOŞLUK (Linkler tamamen silindi)
+        st.write("") 
 
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         
         if submitted:
-            if not dosya_no:
-                st.error("Dosya No Zorunlu!")
+            # ZORUNLU ALAN KONTROLÜ
+            if not dosya_no or not hekim:
+                st.error("Lütfen 'Dosya Numarası' ve 'Veriyi Giren Hekim' alanlarını doldurunuz!")
             else:
                 mit_ea = mit_e/mit_a if mit_a>0 else ""
                 mit_ee = mit_e/sept_e if sept_e>0 else ""
@@ -302,9 +292,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
                     "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
                     "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
-                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct,
-                    # LINKLER
-                    "Link_EKG": link_ekg, "Link_BullEye": link_bull, "Link_Holter": link_holter
+                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
                 }
                 
                 save_data_row(SHEET_NAME, data_row)
