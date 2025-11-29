@@ -3,9 +3,10 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+import time
 
 # --- AYARLAR ---
-# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIRMAYI UNUTMA
+# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIR (Linkin tamamını değil, sadece ID'yi)
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"  # <-- KENDİ ID'Nİ BURAYA YAZ
 CASE_SHEET_ID = SHEET_ID 
 
@@ -18,7 +19,7 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- VERİ İŞLEMLERİ (DÜZELTİLDİ) ---
+# --- GÜVENLİ VERİ ÇEKME ---
 def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
@@ -43,10 +44,11 @@ def load_data(sheet_id, worksheet_index=0):
     except Exception as e:
         return pd.DataFrame()
 
+# --- GÜVENLİ KAYIT VE SİLME ---
 def delete_patient(sheet_id, dosya_no):
-    client = connect_to_gsheets()
-    sheet = client.open_by_key(sheet_id).sheet1
     try:
+        client = connect_to_gsheets()
+        sheet = client.open_by_key(sheet_id).sheet1
         cell = sheet.find(str(dosya_no))
         sheet.delete_rows(cell.row)
         return True
@@ -73,14 +75,7 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
     # Eksik sütun varsa ekle (Otomatik Tamamlama)
     missing_cols = [key for key in clean_data.keys() if key not in headers]
     if missing_cols:
-        # 1. Satıra yeni başlıkları ekle
-        # Gspread ile range güncellemek daha güvenlidir ama append ile yanına ekleyelim
-        # Bu kısım biraz manuel kalabilir, en temizi sheet.resize ve update cells
-        # Basit çözüm: Yeni veri girildiğinde Google Sheets sona ekler ama başlık olmazsa karışır.
-        # Şimdilik kullanıcıya uyarı vermeden devam et, header listemizi güncelle
         headers.extend(missing_cols)
-        # Sheet'teki 1. satırı güncellemek gerekir ama karmaşıklaşmaması için 
-        # veriyi sadece var olan sıraya göre dizeceğiz, yeniler sona eklenecek.
 
     row_to_save = []
     # 1. Mevcut başlıklara göre veriyi diz
@@ -103,7 +98,6 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
 
     if row_index_to_update:
         sheet.delete_rows(row_index_to_update)
-        import time
         time.sleep(1)
         sheet.append_row(row_to_save)
         st.toast(f"{clean_data[unique_col]} güncellendi.", icon="🔄")
@@ -156,7 +150,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 st.metric("Toplam Kayıtlı Hasta", len(df))
                 st.dataframe(df, use_container_width=True)
             else:
-                st.info("Veritabanı boş.")
+                st.info("Veritabanı boş veya ID hatalı.")
         
         with c2:
             st.error("⚠️ SİLME")
@@ -169,8 +163,6 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     else: st.error("Hata!")
 
     with st.form("main_form"):
-        st.caption("Verileri girdikten sonra EN ALTTAKİ 'KAYDET' butonuna basınız.")
-        
         # 1. KLİNİK
         with tab_klinik:
             c1, c2 = st.columns(2)
@@ -239,7 +231,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
 
             e1, e2, e3, e4 = st.columns(4)
             with e1:
-                st.markdown("**1. LV Yapı (Mass & RWT)**")
+                st.markdown("**1. LV Yapı**")
                 lvedd = st.number_input("LVEDD (mm)"); lvesd = st.number_input("LVESD (mm)"); ivs = st.number_input("IVS (mm)")
                 pw = st.number_input("PW (mm)"); lvedv = st.number_input("LVEDV (mL)"); lvesv = st.number_input("LVESV (mL)")
                 ao_asc = st.number_input("Ao Asc (mm)")
@@ -294,4 +286,20 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
                     "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
                     "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
-                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme
+                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer Hast": diger_hst,
+                    "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
+                    "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
+                    "ALT": alt, "AST": ast, "Tot. Prot": tot_prot, "Albümin": albumin,
+                    "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, 
+                    "Lp(a)": lpa, "Homosistein": homosis, "Folik Asit": folik, "B12": b12,
+                    "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
+                    "LV Mass": lv_mass, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao_asc,
+                    "LVEF": lvef, "SV": sv, "LVOT VTI": lvot_vti, "GLS": gls, "GCS": gcs, "SD-LS": sd_ls,
+                    "Mitral E": mit_e, "Mitral A": mit_a, "Mitral E/A": mit_ea, "Septal e'": sept_e, "Lateral e'": lat_e, "Mitral E/e'": mit_ee,
+                    "LAEDV": laedv, "LAESV": laesv, "LA Strain": la_strain, "LACi": laci,
+                    "TAPSE": tapse, "RV Sm": rv_sm, "TAPSE/Sm": tapse_sm, "sPAP": spap, "RVOT VTI": rvot_vti, "RVOT accT": rvot_acct
+                }
+                
+                # Sheet ID'ni tırnak içine yazmayı unutma!
+                save_data_row(SHEET_ID, data_row, worksheet_index=0)
+                st.success(f"✅ {dosya_no} nolu hasta başarıyla kaydedildi!")
