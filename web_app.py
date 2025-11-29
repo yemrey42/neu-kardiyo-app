@@ -132,7 +132,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 dosya_no = st.text_input("Dosya Numarası (Zorunlu)")
                 ad_soyad = st.text_input("Adı Soyadı")
                 basvuru = st.date_input("Başvuru Tarihi")
-                hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)") # Etiketi güncelledim
+                hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)")
                 iletisim = st.text_input("İletişim")
             with c2:
                 st.markdown("##### Fizik Muayene")
@@ -165,24 +165,24 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
             dm = cc1.checkbox("DM"); kah = cc2.checkbox("KAH"); hpl = cc3.checkbox("HPL"); inme = cc4.checkbox("İnme"); sigara = cc5.checkbox("Sigara")
             diger_hst = st.text_input("Diğer Hastalıklar")
 
-        # 2. LAB
+        # 2. LAB (BİRİMLER EKLENDİ)
         with tab_lab:
             l1, l2, l3, l4 = st.columns(4)
             with l1:
                 st.markdown("🔴 **Hemogram**")
-                hgb = st.number_input("Hgb (g/dL)"); hct = st.number_input("Hct (%)"); wbc = st.number_input("WBC (10^3)"); plt = st.number_input("PLT (10^3)")
-                neu = st.number_input("Nötrofil"); lym = st.number_input("Lenfosit"); mpv = st.number_input("MPV"); rdw = st.number_input("RDW")
+                hgb = st.number_input("Hgb (g/dL)"); hct = st.number_input("Hct (%)"); wbc = st.number_input("WBC (10³/µL)"); plt = st.number_input("PLT (10³/µL)")
+                neu = st.number_input("Nötrofil (%)"); lym = st.number_input("Lenfosit (%)"); mpv = st.number_input("MPV (fL)"); rdw = st.number_input("RDW (%)")
             with l2:
                 st.markdown("🧪 **Biyokimya**")
-                glukoz = st.number_input("Glukoz"); ure = st.number_input("Üre"); krea = st.number_input("Kreatinin"); uric = st.number_input("Ürik Asit")
-                na = st.number_input("Na"); k_val = st.number_input("K"); alt = st.number_input("ALT"); ast = st.number_input("AST")
-                tot_prot = st.number_input("Total Prot"); albumin = st.number_input("Albümin")
+                glukoz = st.number_input("Glukoz (mg/dL)"); ure = st.number_input("Üre (mg/dL)"); krea = st.number_input("Kreatinin (mg/dL)"); uric = st.number_input("Ürik Asit (mg/dL)")
+                na = st.number_input("Na (mEq/L)"); k_val = st.number_input("K (mEq/L)"); alt = st.number_input("ALT (U/L)"); ast = st.number_input("AST (U/L)")
+                tot_prot = st.number_input("Total Prot (g/dL)"); albumin = st.number_input("Albümin (g/dL)")
             with l3:
                 st.markdown("🟡 **Lipid**")
-                chol = st.number_input("Kolesterol"); ldl = st.number_input("LDL"); hdl = st.number_input("HDL"); trig = st.number_input("Trig")
+                chol = st.number_input("Kolesterol (mg/dL)"); ldl = st.number_input("LDL (mg/dL)"); hdl = st.number_input("HDL (mg/dL)"); trig = st.number_input("Trig (mg/dL)")
             with l4:
                 st.markdown("⚡ **Spesifik**")
-                homosis = st.number_input("Homosistein"); lpa = st.number_input("Lp(a)"); folik = st.number_input("Folik Asit"); b12 = st.number_input("B12")
+                homosis = st.number_input("Homosistein (µmol/L)"); lpa = st.number_input("Lp(a) (mg/dL)"); folik = st.number_input("Folik Asit (ng/mL)"); b12 = st.number_input("B12 (pg/mL)")
 
         # 3. EKO
         with tab_eko:
@@ -259,7 +259,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 
                 st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
 
-        # BOŞLUK (Linkler tamamen silindi)
+        # BOŞLUK
         st.write("") 
 
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
