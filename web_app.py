@@ -6,7 +6,6 @@ from datetime import datetime
 import time
 
 # --- AYARLAR ---
-# Senin verdiğin ID buraya sabitlendi
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 CASE_SHEET_ID = SHEET_ID 
 
@@ -19,7 +18,7 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- GÜVENLİ VERİ ÇEKME ---
+# --- GÜVENLİ VERİ ÇEKME (SATIR DENGELEYİCİ EKLENDİ) ---
 def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
@@ -27,12 +26,21 @@ def load_data(sheet_id, worksheet_index=0):
         
         data = sheet.get_all_values()
         
-        if not data:
+        if not data or len(data) < 2:
             return pd.DataFrame()
             
         headers = data[0]
-        rows = data[1:]
+        raw_rows = data[1:]
         
+        # --- SATIR DENGELEYİCİ (CRASH FIX) ---
+        # Her satırın uzunluğunu başlık uzunluğuna eşitle
+        num_cols = len(headers)
+        fixed_rows = []
+        for row in raw_rows:
+            if len(row) < num_cols:
+                row += [""] * (num_cols - len(row))
+            fixed_rows.append(row)
+            
         # Sütun isimleri çakışmasın
         seen = {}
         unique_headers = []
@@ -44,7 +52,7 @@ def load_data(sheet_id, worksheet_index=0):
                 seen[h] = 0
                 unique_headers.append(h)
         
-        df = pd.DataFrame(rows, columns=unique_headers)
+        df = pd.DataFrame(fixed_rows, columns=unique_headers)
         df = df.astype(str)
         return df
     except Exception:
@@ -61,7 +69,7 @@ def delete_patient(sheet_id, dosya_no):
     except:
         return False
 
-# --- KAYIT ---
+# --- KAYIT (SATIR DENGELEYİCİ EKLENDİ) ---
 def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
     sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
@@ -75,6 +83,7 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
         return
 
     headers = all_values[0]
+    
     missing_cols = [key for key in clean_data.keys() if key not in headers]
     if missing_cols:
         headers.extend(missing_cols)
@@ -82,11 +91,20 @@ def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_i
     row_to_save = []
     for h in headers:
         row_to_save.append(clean_data.get(h, ""))
+    
     for k in clean_data.keys():
         if k not in headers:
             row_to_save.append(clean_data[k])
 
-    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
+    # --- PANDAS İÇİN DENGELEME ---
+    num_cols = len(all_values[0])
+    fixed_rows = []
+    for row in all_values[1:]:
+        if len(row) < num_cols:
+            row += [""] * (num_cols - len(row))
+        fixed_rows.append(row)
+
+    df = pd.DataFrame(fixed_rows, columns=all_values[0]).astype(str)
     
     row_index_to_update = None
     if unique_col in df.columns:
@@ -136,7 +154,6 @@ if menu == "📝 Vaka Takip (Notlar)":
 
 elif menu == "🏥 Veri Girişi (H-Type HT)":
     
-    # --- EKG ANİMASYONU ---
     st.markdown("""
     <style>
     .ecg-container { background: #000; height: 80px; width: 100%; overflow: hidden; position: relative; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
@@ -161,16 +178,12 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
             if not df.empty:
                 st.metric("Toplam Kayıtlı Hasta", len(df))
                 
-                # --- SADELEŞTİRİLMİŞ LİSTE GÖRÜNÜMÜ ---
-                # Sadece önemli sütunları seçelim
                 onemli_sutunlar = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "Yaş", "Cinsiyet"]
-                # Eğer veritabanında bu sütunlar varsa, sadece onları göster
                 mevcut_sutunlar = [col for col in onemli_sutunlar if col in df.columns]
                 
                 if mevcut_sutunlar:
                     st.dataframe(df[mevcut_sutunlar], use_container_width=True)
                 else:
-                    # Sütun isimleri uyuşmazsa yine de hepsini göster (Yedek plan)
                     st.dataframe(df, use_container_width=True)
             else:
                 st.info("Veritabanı boş veya ID hatalı.")
@@ -259,7 +272,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                     lv_mass = 0.8 * (1.04 * ((lvedd_cm + ivs_cm + pw_cm)**3 - lvedd_cm**3)) + 0.6
                     if bsa > 0: lvmi = lv_mass / bsa
                 if lvedd > 0 and pw > 0: rwt = (2 * pw) / lvedd
-                st.markdown(f"🔵 **Mass:** {lv_mass:.1f} g | **LVMi:** {lvmi:.1f} | **RWT:** {rwt:.2f}")
+                st.markdown(f"🔵 **Mass:** {lv_mass:.1f} | **LVMi:** {lvmi:.1f} | **RWT:** {rwt:.2f}")
 
             with e2:
                 st.markdown("**2. Sistolik**")
