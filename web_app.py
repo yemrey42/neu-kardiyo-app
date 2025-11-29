@@ -6,8 +6,8 @@ from datetime import datetime
 import time
 
 # --- AYARLAR ---
-# BURAYA KENDİ SHEET ID'Nİ YAPIŞTIR
-SHEET_ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz12345"  # <-- GÜNCELLE
+# Senin verdiğin ID buraya sabitlendi
+SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 CASE_SHEET_ID = SHEET_ID 
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
@@ -19,7 +19,7 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- VERİ ÇEKME (Hata Korumalı) ---
+# --- GÜVENLİ VERİ ÇEKME (TABLO ÇÖKMESİNİ ENGELLEYEN KOD) ---
 def load_data(sheet_id, worksheet_index=0):
     try:
         client = connect_to_gsheets()
@@ -33,17 +33,26 @@ def load_data(sheet_id, worksheet_index=0):
         headers = data[0]
         rows = data[1:]
         
-        df = pd.DataFrame(rows, columns=headers)
+        # AYNI İSİMLİ SÜTUNLARI DÜZELT (Tarih, Tarih_2 gibi)
+        seen = {}
+        unique_headers = []
+        for h in headers:
+            if h in seen:
+                seen[h] += 1
+                unique_headers.append(f"{h}_{seen[h]}")
+            else:
+                seen[h] = 0
+                unique_headers.append(h)
         
-        # Tüm verileri YAZI (String) yap ki çökmesin
-        df = df.fillna("")
+        # TABLOYU OLUŞTUR VE HEPSİNİ YAZIYA ÇEVİR (ÇÖKME KORUMASI)
+        df = pd.DataFrame(rows, columns=unique_headers)
         df = df.astype(str)
         
         return df
     except Exception:
         return pd.DataFrame()
 
-# --- SİLME ---
+# --- SİLME İŞLEMİ ---
 def delete_patient(sheet_id, dosya_no):
     try:
         client = connect_to_gsheets()
@@ -54,78 +63,52 @@ def delete_patient(sheet_id, dosya_no):
     except:
         return False
 
-# --- AKILLI KAYIT (Smart Merge) ---
-def save_data_row(sheet_id, new_data, unique_col="Dosya Numarası", worksheet_index=0):
+# --- KAYIT İŞLEMİ ---
+def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
     sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     
-    # Mevcut verileri çek
+    clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
+    
     all_values = sheet.get_all_values()
     
-    # 1. Dosya Boşsa Başlıkları Yaz
     if not all_values:
-        sheet.append_row(list(new_data.keys()))
-        sheet.append_row(list(new_data.values()))
+        sheet.append_row(list(clean_data.keys()))
+        sheet.append_row(list(clean_data.values()))
         return
 
     headers = all_values[0]
     
-    # 2. Yeni Sütun Varsa Başlığa Ekle
-    missing_cols = [k for k in new_data.keys() if k not in headers]
+    missing_cols = [key for key in clean_data.keys() if key not in headers]
     if missing_cols:
         headers.extend(missing_cols)
-        # Sheet'teki 1. satırı güncelle (Basitçe sona ekliyoruz)
-        # sheet.update('A1', [headers]) # Bu yetki gerektirir, şimdilik append ile idare eder
-        # En doğrusu kullanıcının elle silmesi ama kodun çalışması için devam ediyoruz.
 
-    # 3. Eski Veriyi Bul (Güncelleme mi?)
-    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
-    row_index = None
-    existing_row_data = {}
-
-    if unique_col in df.columns:
-        matches = df.index[df[unique_col] == str(new_data[unique_col])].tolist()
-        if matches:
-            row_index = matches[0] + 2 # Sheet indexi
-            # Eski veriyi sözlük olarak al
-            existing_row_data = df.iloc[matches[0]].to_dict()
-
-    # 4. VERİ BİRLEŞTİRME (MERGE)
-    # Eğer eski kayıt varsa, yeni gelen boş değerleri eskisiyle doldur
-    final_data = {}
+    row_to_save = []
+    for h in headers:
+        row_to_save.append(clean_data.get(h, ""))
     
-    for key in headers:
-        new_val = str(new_data.get(key, ""))
-        old_val = str(existing_row_data.get(key, ""))
-        
-        # Kural: Yeni değer boşsa veya 0 ise ve eski değer doluysa, eskiyi koru.
-        # Ancak kullanıcı bilerek 0 girmiş olabilir, bu yüzden sadece boşlukları koruyalım.
-        # Sayısal 0.0 ve 0 karışıklığı için:
-        is_new_empty = new_val in ["", "None", "0", "0.0", "0.00"]
-        is_old_full = old_val not in ["", "None"]
-        
-        # Eğer bu bir güncelleme işlemiyse ve yeni değer boş/sıfır ise, eskiyi tut
-        if row_index and is_new_empty and is_old_full:
-            final_data[key] = old_val
-        else:
-            # Aksi halde yeni değeri (veya yeni bir kayıt ise mecburen yeniyi) kullan
-            # Eğer key new_data'da yoksa boş geç
-            final_data[key] = str(new_data.get(key, ""))
+    for k in clean_data.keys():
+        if k not in headers:
+            row_to_save.append(clean_data[k])
 
-    # 5. Kaydetme
-    row_to_save = [final_data.get(h, "") for h in headers]
+    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
+    
+    row_index_to_update = None
+    if unique_col in df.columns:
+        matches = df.index[df[unique_col] == str(clean_data[unique_col])].tolist()
+        if matches:
+            row_index_to_update = matches[0] + 2
 
-    if row_index:
+    if row_index_to_update:
         try:
-            sheet.delete_rows(row_index)
+            sheet.delete_rows(row_index_to_update)
             time.sleep(1)
             sheet.append_row(row_to_save)
-            st.toast(f"{new_data[unique_col]} güncellendi (Eski veriler korundu).", icon="✅")
+            st.toast(f"{clean_data[unique_col]} güncellendi.", icon="🔄")
         except:
             sheet.append_row(row_to_save)
     else:
         sheet.append_row(row_to_save)
-        st.toast(f"{new_data[unique_col]} yeni kaydedildi.", icon="✅")
 
 # --- ARAYÜZ ---
 with st.sidebar:
@@ -152,7 +135,7 @@ if menu == "📝 Vaka Takip (Notlar)":
                     save_data_row(CASE_SHEET_ID, note_data, unique_col="Dosya No", worksheet_index=1)
                     st.success("Kaydedildi")
                 except:
-                    st.error("Google Sheet'te 2. sayfa yok!")
+                    st.error("Google Sheet dosyanızda 2. bir sayfa (Vaka Takip) olduğundan emin olun!")
     with col2:
         df_notes = load_data(CASE_SHEET_ID, worksheet_index=1)
         if not df_notes.empty: st.dataframe(df_notes, use_container_width=True)
@@ -173,6 +156,7 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 st.dataframe(df, use_container_width=True)
             else:
                 st.info("Veritabanı boş veya ID hatalı.")
+        
         with c2:
             st.error("⚠️ SİLME")
             if not df.empty:
@@ -252,8 +236,55 @@ elif menu == "🏥 Veri Girişi (H-Type HT)":
                 ao_asc = st.number_input("Ao Asc (mm)")
                 
                 lv_mass = 0.0; lvmi = 0.0; rwt = 0.0
+                
+                # --- HATA DÜZELTİLEN KISIM ---
                 if lvedd > 0 and ivs > 0 and pw > 0:
                     lvedd_cm = lvedd/10; ivs_cm = ivs/10; pw_cm = pw/10
                     lv_mass = 0.8 * (1.04 * ((lvedd_cm + ivs_cm + pw_cm)**3 - lvedd_cm**3)) + 0.6
                     if bsa > 0: lvmi = lv_mass / bsa
-                if lvedd > 0 and
+                
+                if lvedd > 0 and pw > 0: rwt = (2 * pw) / lvedd
+                # -----------------------------
+                
+                st.markdown(f"🔵 **Mass:** {lv_mass:.1f} g"); st.markdown(f"🔵 **LVMi:** {lvmi:.1f} g/m²"); st.markdown(f"🔵 **RWT:** {rwt:.2f}")
+
+            with e2:
+                st.markdown("**2. Sistolik**")
+                lvef = st.number_input("LVEF (%)"); sv = st.number_input("SV (mL)"); lvot_vti = st.number_input("LVOT VTI (cm)")
+                gls = st.number_input("GLS Strain (%)"); gcs = st.number_input("GCS Strain (%)"); sd_ls = st.number_input("SD-LS (%)")
+
+            with e3:
+                st.markdown("**3. Diyastolik**")
+                mit_e = st.number_input("Mitral E (cm/sn)"); mit_a = st.number_input("Mitral A (cm/sn)")
+                sept_e = st.number_input("Septal e' (cm/sn)"); lat_e = st.number_input("Lateral e' (cm/sn)")
+                laedv = st.number_input("LAEDV (mL)"); laesv = st.number_input("LAESV (mL)"); la_strain = st.number_input("LA Strain (%)")
+                mit_ea = mit_e/mit_a if mit_a > 0 else 0.0
+                mit_ee = mit_e/sept_e if sept_e > 0 else 0.0
+                laci = laedv/lvedv if lvedv > 0 else 0.0
+                st.markdown(f"🔵 **E/A:** {mit_ea:.2f} | **E/e':** {mit_ee:.2f} | **LACi:** {laci:.2f}")
+
+            with e4:
+                st.markdown("**4. Sağ Kalp**")
+                tapse = st.number_input("TAPSE (mm)"); rv_sm = st.number_input("RV Sm (cm/sn)")
+                spap = st.number_input("sPAP (mmHg)"); rvot_vti = st.number_input("RVOT VTI (cm)"); rvot_acct = st.number_input("RVOT accT (ms)")
+                tapse_sm = tapse/rv_sm if rv_sm > 0 else 0.0
+                st.markdown(f"🔵 **TAPSE/Sm:** {tapse_sm:.2f}")
+
+        st.write("") 
+        submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+        
+        if submitted:
+            if not dosya_no or not hekim:
+                st.error("⚠️ Dosya No ve Hekim zorunlu!")
+            else:
+                mit_ea = mit_e/mit_a if mit_a>0 else ""
+                mit_ee = mit_e/sept_e if sept_e>0 else ""
+                laci = laedv/lvedv if lvedv>0 else ""
+                tapse_sm = tapse/rv_sm if rv_sm>0 else ""
+                
+                data_row = {
+                    "Dosya Numarası": dosya_no, "Adı Soyadı": ad_soyad, "Tarih": str(basvuru), "Hekim": hekim,
+                    "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
+                    "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
+                    "İlaçlar": ilaclar, "Başlanan İlaçlar": baslanan,
+                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer Hast": diger_hst
