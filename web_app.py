@@ -19,7 +19,7 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- YARDIMCI DÖNÜŞTÜRÜCÜLER ---
+# --- YARDIMCI FONKSİYONLAR ---
 def safe_float(val):
     try: return float(val)
     except: return 0.0
@@ -42,15 +42,20 @@ def load_data(sheet_id, worksheet_index=0):
             return pd.DataFrame()
             
         headers = data[0]
-        # Header Düzeltme
+        # Eğer başlık satırı bozuksa boş dön
+        if "Dosya Numarası" not in headers:
+            return pd.DataFrame()
+
+        rows = data[1:]
+        
+        # Header Düzeltme (Çakışma önleyici)
         seen = {}; unique_headers = []
         for h in headers:
             h = str(h).strip()
             if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
             else: seen[h]=0; unique_headers.append(h)
 
-        rows = data[1:]
-        # Satır Dengeleme
+        # Satır Dengeleme (Çökme önleyici)
         num_cols = len(unique_headers)
         fixed_rows = []
         for row in rows:
@@ -59,71 +64,104 @@ def load_data(sheet_id, worksheet_index=0):
 
         df = pd.DataFrame(fixed_rows, columns=unique_headers)
         return df.astype(str)
-    except: return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 # --- SİLME ---
 def delete_patient(sheet_id, dosya_no):
+    client = connect_to_gsheets()
+    sheet = client.open_by_key(sheet_id).sheet1
     try:
-        client = connect_to_gsheets()
-        sheet = client.open_by_key(sheet_id).sheet1
         cell = sheet.find(str(dosya_no))
         sheet.delete_rows(cell.row)
         return True
     except: return False
 
 # --- KAYIT VE GÜNCELLEME ---
-def save_data_row(sheet_id, new_data, unique_col="Dosya Numarası", worksheet_index=0):
+def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
     sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+    
+    clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
     all_values = sheet.get_all_values()
     
-    # Temizle
-    clean_d = {k: str(v) if v is not None else "" for k, v in new_data.items()}
-
-    if not all_values:
-        sheet.append_row(list(clean_d.keys()))
-        sheet.append_row(list(clean_d.values()))
+    # Dosya boşsa başlıkları yaz
+    if not all_values or "Dosya Numarası" not in all_values[0]:
+        sheet.clear()
+        sheet.append_row(list(clean_data.keys()))
+        sheet.append_row(list(clean_data.values()))
         return
 
     headers = all_values[0]
-    # Eksik sütun varsa ekle
-    for k in clean_d.keys():
-        if k not in headers: headers.append(k)
+    # Eksik sütun varsa listeye ekle (Sheet'e yansıtmak için)
+    missing_cols = [k for k in clean_data.keys() if k not in headers]
+    if missing_cols: headers.extend(missing_cols)
 
     row_to_save = []
-    # Eski veriyi bul
+    # Mevcut başlık sırasına göre veriyi diz
+    for h in headers: row_to_save.append(clean_data.get(h, ""))
+    
+    # Yeni eklenen parametreler varsa onları da ekle
+    for k in missing_cols: row_to_save.append(clean_data[k])
+
+    # Güncelleme Kontrolü
     df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
-    row_index = None
-    existing = {}
+    row_index_to_update = None
     
     if unique_col in df.columns:
-        matches = df.index[df[unique_col] == str(clean_d[unique_col])].tolist()
-        if matches:
-            row_index = matches[0] + 2
-            existing = df.iloc[matches[0]].to_dict()
+        matches = df.index[df[unique_col] == str(clean_data[unique_col])].tolist()
+        if matches: row_index_to_update = matches[0] + 2
 
-    for h in headers:
-        new_v = str(clean_d.get(h, ""))
-        old_v = str(existing.get(h, ""))
-        if new_v == "" and old_v != "": row_to_save.append(old_v)
-        else: row_to_save.append(new_v)
-
-    if row_index:
+    if row_index_to_update:
         try:
-            sheet.delete_rows(row_index); time.sleep(1)
+            sheet.delete_rows(row_index_to_update)
+            time.sleep(1)
             sheet.append_row(row_to_save)
-            st.toast("✅ Güncellendi", icon="🔄")
-        except: sheet.append_row(row_to_save)
+            st.toast(f"✅ {clean_data[unique_col]} güncellendi.", icon="🔄")
+        except:
+            sheet.append_row(row_to_save)
     else:
         sheet.append_row(row_to_save)
-        st.toast("✅ Kaydedildi", icon="💾")
+        st.toast(f"✅ {clean_data[unique_col]} kaydedildi.", icon="💾")
 
 # ================= ARAYÜZ =================
 
-st.markdown("""<style>.ecg-c{background:#000;height:70px;width:100%;overflow:hidden;position:relative;border-radius:8px;border:1px solid #333;margin-bottom:10px}.ecg-l{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="70" viewBox="0 0 300 70"><path d="M0 35 L20 35 L25 30 L30 35 L40 35 L42 40 L45 5 L48 65 L52 35 L60 35 L65 25 L75 25 L80 35 L300 35" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');width:200%;height:100%;position:absolute;animation:slide 3s linear infinite;background-repeat:repeat-x}@keyframes slide{from{transform:translateX(0)}to{transform:translateX(-300px)}}</style><div class="ecg-c"><div class="ecg-l"></div></div>""", unsafe_allow_html=True)
+# --- ÖZEL EKG ANİMASYONU (İSİMLİ & SARI RENKLİ) ---
+st.markdown("""
+<style>
+.ecg-container {
+    background: #000; height: 80px; width: 100%; overflow: hidden; position: relative; 
+    border-radius: 8px; border: 2px solid #333; margin-bottom: 20px; display: flex; align-items: center;
+}
+.ecg-line {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80" viewBox="0 0 300 80"><path d="M0 45 L20 45 L25 40 L30 45 L40 45 L42 50 L45 15 L48 75 L52 45 L60 45 L65 35 L75 35 L80 45 L300 45" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
+    background-repeat: repeat-x; animation: scroll-bg 3s linear infinite; z-index: 1;
+}
+.ecg-text-track {
+    display: flex; position: absolute; top: 32px; left: 0; white-space: nowrap;
+    animation: scroll-text 12s linear infinite; z-index: 2;
+}
+.ecg-name {
+    display: inline-block; width: 300px; color: #FFFF00; font-family: 'Courier New', monospace;
+    font-weight: bold; font-size: 16px; text-align: right; padding-right: 60px;
+}
+@keyframes scroll-bg { 0% { background-position: 0 0; } 100% { background-position: -300px 0; } }
+@keyframes scroll-text { 0% { transform: translateX(0); } 100% { transform: translateX(-1200px); } }
+</style>
+<div class="ecg-container">
+    <div class="ecg-line"></div>
+    <div class="ecg-text-track">
+        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
 
+# --- LİSTE ÇEKME ---
 df = load_data(SHEET_ID, 0)
 
 with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
@@ -131,35 +169,38 @@ with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
     with c1:
         if st.button("🔄 Yenile"): st.rerun()
         if not df.empty:
+            # Sadece önemli sütunları göster
             cols = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim"]
             final = [c for c in cols if c in df.columns]
             st.dataframe(df[final] if final else df, use_container_width=True)
         else: st.info("Kayıt yok.")
+    
     with c2:
         if not df.empty:
             del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique())
             if st.button("🗑️ SİL"):
                 if delete_patient(SHEET_ID, del_id):
                     st.success("Silindi!"); time.sleep(1); st.rerun()
+                else: st.error("Hata!")
 
 st.divider()
 mode = st.radio("İşlem:", ["Yeni Kayıt", "Düzenleme"], horizontal=True)
 
-cur = {}
+current = {}
 if mode == "Düzenleme" and not df.empty:
     edit_id = st.selectbox("Hasta Seç (Dosya No):", df["Dosya Numarası"].unique())
     if edit_id:
-        cur = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
+        current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
 
-# --- KISA VERİ ALICILAR ---
-def gs(k): return str(cur.get(k, ""))
+# --- VERİ ALICILAR ---
+def gs(k): return str(current.get(k, ""))
 def gf(k): 
-    try: return float(cur.get(k, 0))
+    try: return float(current.get(k, 0))
     except: return 0.0
 def gi(k): 
-    try: return int(float(cur.get(k, 0)))
+    try: return int(float(current.get(k, 0)))
     except: return 0
-def gc(k): return str(cur.get(k, "")).lower() == "true"
+def gc(k): return str(current.get(k, "")).lower() == "true"
 
 with st.form("main_form"):
     st.markdown("### 👤 Klinik")
@@ -184,6 +225,7 @@ with st.form("main_form"):
         cb1, cb2, cb3 = st.columns(3)
         boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
         kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
+        
         bmi = kilo/((boy/100)**2) if boy>0 else 0
         bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
         cb3.metric("BMI", f"{bmi:.1f}")
@@ -209,7 +251,7 @@ with st.form("main_form"):
     hpl = ck3.checkbox("HPL", value=gc("HPL"))
     inme = ck4.checkbox("İnme", value=gc("İnme"))
     sigara = ck5.checkbox("Sigara", value=gc("Sigara"))
-    diger_hst = st.text_input("Diğer", value=gs("Diğer")) # İsim düzeltildi
+    diger = st.text_input("Diğer", value=gs("Diğer"))
 
     st.markdown("### 🩸 Laboratuvar")
     l1, l2, l3, l4 = st.columns(4)
@@ -307,7 +349,7 @@ with st.form("main_form"):
                 "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
                 "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
                 "İlaçlar": ilaclar, "Başlanan": baslanan,
-                "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer": diger_hst,
+                "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer": diger,
                 "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
                 "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
                 "ALT": alt, "AST": ast, "Tot. Prot": prot, "Albümin": alb,
