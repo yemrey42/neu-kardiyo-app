@@ -19,18 +19,17 @@ def connect_to_gsheets():
     client = gspread.authorize(creds)
     return client
 
-# --- YARDIMCI FONKSİYONLAR (HATA ÖNLEYİCİ) ---
+# --- YARDIMCI DÖNÜŞTÜRÜCÜLER (Düzenleme Modu İçin Şart) ---
 def safe_float(val):
-    try:
-        return float(val)
-    except:
-        return 0.0
+    try: return float(val)
+    except: return 0.0
 
 def safe_int(val):
-    try:
-        return int(float(val))
-    except:
-        return 0
+    try: return int(float(val))
+    except: return 0
+
+def is_checked(val):
+    return str(val).upper() == "TRUE"
 
 # --- VERİ ÇEKME ---
 def load_data(sheet_id, worksheet_index=0):
@@ -39,18 +38,22 @@ def load_data(sheet_id, worksheet_index=0):
         sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
         data = sheet.get_all_values()
         
-        if not data: return pd.DataFrame()
+        if not data or len(data) < 1:
+            return pd.DataFrame()
             
         headers = data[0]
+        if "Dosya Numarası" not in headers:
+            return pd.DataFrame()
+
         rows = data[1:]
         
-        # Header düzeltme
+        # Header Düzeltme
         seen = {}; unique_headers = []
         for h in headers:
             h = str(h).strip()
             if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
             else: seen[h]=0; unique_headers.append(h)
-        
+
         # Satır Dengeleme
         num_cols = len(unique_headers)
         fixed_rows = []
@@ -60,166 +63,140 @@ def load_data(sheet_id, worksheet_index=0):
 
         df = pd.DataFrame(fixed_rows, columns=unique_headers)
         return df.astype(str)
-    except: return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 # --- SİLME ---
 def delete_patient(sheet_id, dosya_no):
-    client = connect_to_gsheets()
-    sheet = client.open_by_key(sheet_id).sheet1
     try:
+        client = connect_to_gsheets()
+        sheet = client.open_by_key(sheet_id).sheet1
         cell = sheet.find(str(dosya_no))
         sheet.delete_rows(cell.row)
         return True
-    except: return False
+    except:
+        return False
 
-# --- KAYIT (AKILLI GÜNCELLEME) ---
-def save_data_row(sheet_id, new_data, unique_col="Dosya Numarası", worksheet_index=0):
+# --- KAYIT VE GÜNCELLEME ---
+def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
     client = connect_to_gsheets()
     sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     
+    clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
     all_values = sheet.get_all_values()
     
-    if not all_values:
-        sheet.append_row(list(new_data.keys()))
-        sheet.append_row(list(new_data.values()))
+    if not all_values or "Dosya Numarası" not in all_values[0]:
+        sheet.clear()
+        sheet.append_row(list(clean_data.keys()))
+        sheet.append_row(list(clean_data.values()))
         return
 
     headers = all_values[0]
-    # Eksik sütun varsa ekle
-    for k in new_data.keys():
-        if k not in headers: headers.append(k)
+    missing_cols = [k for k in clean_data.keys() if k not in headers]
+    if missing_cols: headers.extend(missing_cols)
 
-    # Eski veriyi bul (Merge işlemi için)
-    row_index = None
-    existing_row_data = {}
-    
-    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
-    if unique_col in df.columns:
-        matches = df.index[df[unique_col] == str(new_data[unique_col])].tolist()
-        if matches:
-            row_index = matches[0] + 2
-            existing_row_data = df.iloc[matches[0]].to_dict()
-
-    # Satırı oluştur (Eski veriyi koruyarak)
     row_to_save = []
-    for h in headers:
-        new_val = str(new_data.get(h, ""))
-        old_val = str(existing_row_data.get(h, ""))
-        
-        # Eğer yeni değer boşsa ve eski değer doluysa -> Eskiyi Koru
-        if new_val == "" and old_val != "":
-            row_to_save.append(old_val)
-        else:
-            row_to_save.append(new_val)
+    for h in headers: row_to_save.append(clean_data.get(h, ""))
+    
+    # Yeni eklenenler
+    for k in clean_data.keys():
+        if k not in headers: row_to_save.append(clean_data[k])
 
-    if row_index:
+    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
+    row_index_to_update = None
+    
+    if unique_col in df.columns:
+        matches = df.index[df[unique_col] == str(clean_data[unique_col])].tolist()
+        if matches: row_index_to_update = matches[0] + 2
+
+    if row_index_to_update:
         try:
-            sheet.delete_rows(row_index)
+            sheet.delete_rows(row_index_to_update)
             time.sleep(1)
             sheet.append_row(row_to_save)
-            st.toast(f"✅ {new_data[unique_col]} GÜNCELLENDİ", icon="🔄")
+            st.toast(f"✅ {clean_data[unique_col]} güncellendi.", icon="🔄")
         except:
             sheet.append_row(row_to_save)
     else:
         sheet.append_row(row_to_save)
-        st.toast(f"✅ {new_data[unique_col]} KAYDEDİLDİ", icon="💾")
 
-# ================= ARAYÜZ =================
+# --- ARAYÜZ ---
+with st.sidebar:
+    st.title("❤️ NEÜ-KARDİYO")
+    menu = st.radio("Menü", ["🏥 Veri Girişi (H-Type HT)", "📝 Vaka Takip (Notlar)"])
+    st.divider()
+    with st.expander("📋 ÇALIŞMA KRİTERLERİ", expanded=True):
+        st.success("**✅ DAHİL:** Son 6 ayda yeni tanı esansiyel HT")
+        st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
 
-# EKG Animasyonu
-st.markdown("""
-<style>
-.ecg-container { background: #000; height: 70px; width: 100%; overflow: hidden; position: relative; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
-.ecg-line {
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="70" viewBox="0 0 300 70"><path d="M0 35 L20 35 L25 30 L30 35 L40 35 L42 40 L45 5 L48 65 L52 35 L60 35 L65 25 L75 25 L80 35 L300 35" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
-    width: 200%; height: 100%; position: absolute; animation: slide 3s linear infinite; background-repeat: repeat-x;
-}
-@keyframes slide { from { transform: translateX(0); } to { transform: translateX(-300px); } }
-</style>
-<div class="ecg-container"><div class="ecg-line"></div></div>
-""", unsafe_allow_html=True)
-
-st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
-
-# --- LİSTE VE SEÇİM ---
-df = load_data(SHEET_ID, 0)
-
-with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
-    c1, c2 = st.columns([3, 1])
+# --- MOD 1: VAKA TAKİP ---
+if menu == "📝 Vaka Takip (Notlar)":
+    st.header("📝 Vaka Takip Defteri")
+    c1, c2 = st.columns([1, 2])
     with c1:
-        if st.button("🔄 Yenile"): st.rerun()
-        if not df.empty:
-            cols_show = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim"]
-            final_cols = [c for c in cols_show if c in df.columns]
-            st.dataframe(df[final_cols] if final_cols else df, use_container_width=True)
-        else:
-            st.info("Kayıt yok.")
-    
+        with st.form("note"):
+            n_dosya = st.text_input("Dosya No")
+            n_ad = st.text_input("Hasta")
+            n_not = st.text_area("Not")
+            if st.form_submit_button("Kaydet"):
+                try:
+                    save_data_row(CASE_SHEET_ID, {"Tarih":str(datetime.now().date()), "Dosya No":n_dosya, "Hasta":n_ad, "Not":n_not}, "Dosya No", 1)
+                    st.success("Kaydedildi")
+                except: st.error("Google Sheet'te 2. Sayfa Yok!")
     with c2:
-        if not df.empty:
-            del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique())
-            if st.button("🗑️ SİL"):
-                if delete_patient(SHEET_ID, del_id):
-                    st.success("Silindi!"); time.sleep(1); st.rerun()
+        dfn = load_data(CASE_SHEET_ID, 1)
+        if not dfn.empty: st.dataframe(dfn, use_container_width=True)
 
-# --- MOD SEÇİMİ (YENİ / DÜZENLE) ---
-st.divider()
-col_mode1, col_mode2 = st.columns([1, 3])
-with col_mode1:
-    mode = st.radio("İşlem:", ["Yeni Kayıt", "Düzenleme"], horizontal=True)
-
-current_data = {}
-if mode == "Düzenleme" and not df.empty:
-    with col_mode2:
-        edit_id = st.selectbox("Hasta Seç (Dosya No):", df["Dosya Numarası"].unique())
-        if edit_id:
-            # Seçilen hastanın verilerini sözlüğe al
-            current_data = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
-
-# --- FORM ---
-with st.form("main_form"):
+# --- MOD 2: VERİ GİRİŞİ ---
+elif menu == "🏥 Veri Girişi (H-Type HT)":
     
-    # KLİNİK
-    st.markdown("### 👤 Klinik")
-    c1, c2 = st.columns(2)
-    with c1:
-        dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=current_data.get("Dosya Numarası", ""))
-        ad_soyad = st.text_input("Adı Soyadı", value=current_data.get("Adı Soyadı", ""))
-        
-        try: def_date = datetime.strptime(current_data.get("Tarih", str(datetime.now().date())), "%Y-%m-%d")
-        except: def_date = datetime.now()
-        basvuru = st.date_input("Başvuru Tarihi", value=def_date)
-        
-        hekim = st.text_input("Veriyi Giren Hekim", value=current_data.get("Hekim", ""))
-        iletisim = st.text_input("İletişim", value=current_data.get("İletişim", ""))
-    
-    with c2:
-        col_y, col_c = st.columns(2)
-        yas = col_y.number_input("Yaş", step=1, value=safe_int(current_data.get("Yaş", 0)))
-        
-        sex_opts = ["Erkek", "Kadın"]
-        try: sex_idx = sex_opts.index(current_data.get("Cinsiyet", "Erkek"))
-        except: sex_idx = 0
-        cinsiyet = col_c.radio("Cinsiyet", sex_opts, index=sex_idx, horizontal=True)
-        
-        cb1, cb2, cb3 = st.columns(3)
-        boy = cb1.number_input("Boy (cm)", value=safe_float(current_data.get("Boy", 0)))
-        kilo = cb2.number_input("Kilo (kg)", value=safe_float(current_data.get("Kilo", 0)))
-        
-        bmi = kilo/((boy/100)**2) if boy>0 else 0
-        bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
-        cb3.metric("BMI", f"{bmi:.1f}")
+    # 1. EKG ANİMASYONU (EKLEME YAPILDI)
+    st.markdown("""
+    <style>
+    .ecg-container { background: #000; height: 70px; width: 100%; overflow: hidden; position: relative; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
+    .ecg-line {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="70" viewBox="0 0 300 70"><path d="M0 35 L20 35 L25 30 L30 35 L40 35 L42 40 L45 5 L48 65 L52 35 L60 35 L65 25 L75 25 L80 35 L300 35" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
+        width: 200%; height: 100%; position: absolute; animation: slide 3s linear infinite; background-repeat: repeat-x;
+    }
+    @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-300px); } }
+    </style>
+    <div class="ecg-container"><div class="ecg-line"></div></div>
+    """, unsafe_allow_html=True)
 
-        ct1, ct2 = st.columns(2)
-        ta_sis = ct1.number_input("TA Sistol", value=safe_int(current_data.get("TA Sistol", 0)))
-        ta_dia = ct2.number_input("TA Diyastol", value=safe_int(current_data.get("TA Diyastol", 0)))
+    st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
+    
+    # Verileri Çek (Liste ve Düzenleme için)
+    df = load_data(SHEET_ID, 0)
 
-    st.markdown("---")
-    
-    ekg_opts = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
-    try: ekg_idx = ekg_opts.index(current_data.get("EKG", "NSR"))
-    except: ekg_idx = 0
-    ekg = st.selectbox("EKG", ekg_opts, index=ekg_idx)
-    
-    ci1, ci2 = st.columns(2)
-    ilaclar = ci1.text_area("Kullandığı İ
+    tab_list, tab_form = st.tabs(["📋 LİSTE / SİLME", "✍️ VERİ GİRİŞ / DÜZENLE"])
+
+    # LİSTE VE SİLME EKRANI
+    with tab_list:
+        col_L1, col_L2 = st.columns([3, 1])
+        with col_L1:
+            if st.button("🔄 Listeyi Yenile"): st.rerun()
+            if not df.empty:
+                st.metric("Toplam Kayıt", len(df))
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("Henüz kayıt yok.")
+        
+        with col_L2:
+            st.warning("⚠️ HASTA SİLME")
+            if not df.empty:
+                del_list = df["Dosya Numarası"].astype(str).tolist()
+                del_select = st.selectbox("Silinecek Dosya", del_list)
+                if st.button("🗑️ SİL"):
+                    if delete_patient(SHEET_ID, del_select):
+                        st.success("Silindi!"); time.sleep(1); st.rerun()
+                    else: st.error("Hata!")
+
+    # VERİ GİRİŞ EKRANI
+    with tab_form:
+        # --- DÜZENLEME SEÇİMİ (EKLEME YAPILDI) ---
+        edit_mode = st.checkbox("📋 Listeden Hasta Seçip Düzenle")
+        current_data = {}
+        
+        if edit_mode and not df.empty:
+            edit_id = st.selectbox("Düzenlenecek Hasta Seç (Dosya No):", df["Dosya Numarası"].unique())
+            if
