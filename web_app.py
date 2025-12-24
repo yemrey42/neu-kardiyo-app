@@ -180,13 +180,19 @@ with st.sidebar:
     quotes = [
         "Halk içinde muteber bir nesne yok devlet gibi,\nOlmaya devlet cihanda bir nefes sıhhat gibi.\n(Kanuni Sultan Süleyman)",
         "Sağlık bir beden değil, bir kafa meselesidir.\n(Marku)",
-        "Tıbbın sanatı, hastayı eğlendirirken doğanın hastalığı iyileştirmesidir.\n(Voltaire)",
-        "Her şeyin başı sağlıktır.",
-        "Güneş girmeyen eve doktor girer.",
+        "Anlarsa uzağım yakınımdır; Anlamazsa yakınım uzağımdır.\n(İsmail fakirullah hz.)",
+        "Beden almakla doyar ruh vermekle",
+        "Sonum yokluk olsa bu varlık niye",
         "Kalp, aklın bilmediği sebeplere sahiptir.\n(Blaise Pascal)",
         "İlim ilim bilmektir, ilim kendin bilmektir.\n(Yunus Emre)",
         "Zahmetsiz rahmet olmaz.",
-        "En büyük zenginlik sağlıktır."
+        "Çilesini çekemedigin davanın mukafatına mi talipsin.\n(Mevlana Hz.)",
+        "Işığa sahip olabilmek için karanlığa ihtiyaç vardır.\n(Ressam bob)",
+        "Ne doğrarsan aşına, o gelir kaşığa.",
+        "Sabır acidir , meyvesi tatlıdır.",
+        "kısmet etmiş ise mevla; el getirir, yel getirir, sel getirir. kısmet etmez ise mevla; el götürür, yel götürür, sel götürür.",
+        "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
+        
     ]
     random_quote = random.choice(quotes)
     st.info(f"💡 **Günün Sözü:**\n\n_{random_quote}_")
