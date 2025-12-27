@@ -266,7 +266,8 @@ with st.sidebar:
         "Zahmetsiz rahmet olmaz.",
         "Sabır acidir , meyvesi tatlıdır.",
         "Ne doğrarsan aşına, o gelir kaşığa.",
-        "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
+        "kısmet etmiş ise mevla; el getirir, yel getirir, sel getirir. kısmet etmez ise mevla; el götürür, yel götürür, sel götürür.",
+        "Beden almakla doyar ruh vermekle",
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
 
