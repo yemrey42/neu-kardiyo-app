@@ -30,7 +30,7 @@ def connect_to_gsheets():
     )
     return gspread.authorize(creds)
 
-# ===================== YARDIMCI FONKSİYONLAR =====================
+# ===================== YARDIMCI =====================
 def safe_float(val):
     try:
         return float(val)
@@ -44,7 +44,6 @@ def safe_int(val):
         return 0
 
 def colnum_to_letter(n: int) -> str:
-    # 1->A, 26->Z, 27->AA ...
     s = ""
     while n > 0:
         n, r = divmod(n - 1, 26)
@@ -67,7 +66,9 @@ def load_data(sheet_id, worksheet_index=0, required_col=None):
         if not data or len(data) < 1:
             return pd.DataFrame()
 
-        headers = data[0]
+        headers = [str(h).strip() for h in data[0]]
+
+        # required_col kontrol
         if required_col and required_col not in headers:
             return pd.DataFrame()
 
@@ -77,7 +78,6 @@ def load_data(sheet_id, worksheet_index=0, required_col=None):
         seen = {}
         unique_headers = []
         for h in headers:
-            h = str(h).strip()
             if h in seen:
                 seen[h] += 1
                 unique_headers.append(f"{h}_{seen[h]}")
@@ -99,11 +99,11 @@ def load_data(sheet_id, worksheet_index=0, required_col=None):
         return pd.DataFrame()
 
 # ===================== SİLME =====================
-def delete_patient(sheet_id, dosya_no, worksheet_index=0):
+def delete_row_by_value(sheet_id, worksheet_index, col_name, value):
     client = connect_to_gsheets()
     ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     try:
-        cell = ws.find(str(dosya_no))
+        cell = ws.find(str(value))
         ws.delete_rows(cell.row)
         return True
     except:
@@ -117,7 +117,7 @@ def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
     clean_data = {str(k).strip(): ("" if v is None else str(v)) for k, v in data_dict.items()}
     all_values = ws.get_all_values()
 
-    # Sheet boşsa: header + 1 satır
+    # Sheet boşsa
     if not all_values:
         ws.append_row(list(clean_data.keys()))
         ws.append_row(list(clean_data.values()))
@@ -126,30 +126,27 @@ def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
 
     headers = [str(h).strip() for h in all_values[0]]
 
-    # Unique kolon header'da yoksa ekle
+    # unique col yoksa ekle
     if unique_col not in headers:
         headers.append(unique_col)
 
-    # Eksik kolonları ekle ve header'ı sheet'e yaz
+    # eksik kolonları ekle ve header güncelle
     missing_cols = [k for k in clean_data.keys() if k not in headers]
     if missing_cols:
         headers.extend(missing_cols)
         ws.update("1:1", [headers])
 
-    # Kaydedilecek satır
     row_to_save = [clean_data.get(h, "") for h in headers]
 
     uid = clean_data.get(unique_col, "").strip()
     if not uid:
         raise ValueError(f"{unique_col} boş olamaz!")
 
-    # unique_col sütun index (1-based)
     uid_col_idx = headers.index(unique_col) + 1
-
-    # o sütunun değerleri
     col_vals = ws.col_values(uid_col_idx)
+
     row_index_to_update = None
-    for i, v in enumerate(col_vals[1:], start=2):  # header sonrası
+    for i, v in enumerate(col_vals[1:], start=2):
         if str(v).strip() == uid:
             row_index_to_update = i
             break
@@ -158,10 +155,10 @@ def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
 
     if row_index_to_update:
         ws.update(f"A{row_index_to_update}:{end_col}{row_index_to_update}", [row_to_save])
-        st.toast(f"✅ {uid} güncellendi.", icon="🔄")
+        st.toast(f"✅ Güncellendi: {uid}", icon="🔄")
     else:
         ws.append_row(row_to_save)
-        st.toast(f"✅ {uid} kaydedildi.", icon="💾")
+        st.toast(f"✅ Kaydedildi: {uid}", icon="💾")
 
 # ===================== AUTH (1. EKRAN ŞİFRE) =====================
 def require_password_gate():
@@ -170,7 +167,7 @@ def require_password_gate():
 
     app_password = st.secrets.get("app_password", None)
     if not app_password:
-        st.error("⚠️ Şifre tanımlı değil. `.streamlit/secrets.toml` içine `app_password = \"...\"` eklemelisin.")
+        st.error("⚠️ Şifre tanımlı değil. Streamlit Cloud → Settings → Secrets içine `app_password = \"...\"` ekle.")
         st.stop()
 
     if st.session_state.auth_ok:
@@ -178,14 +175,18 @@ def require_password_gate():
 
     st.subheader("🔐 Veri Girişi (Şifreli)")
     pw = st.text_input("Şifre", type="password")
-    if st.button("Giriş", type="primary"):
-        if pw == app_password:
-            st.session_state.auth_ok = True
-            st.success("✅ Giriş başarılı")
-            time.sleep(0.5)
-            st.rerun()
-        else:
-            st.error("❌ Şifre yanlış")
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        if st.button("Giriş", type="primary"):
+            if pw == app_password:
+                st.session_state.auth_ok = True
+                st.success("✅ Giriş başarılı")
+                time.sleep(0.4)
+                st.rerun()
+            else:
+                st.error("❌ Şifre yanlış")
+    with c2:
+        st.caption("Not: Bu şifre sadece Veri Girişi ekranı için geçerli.")
 
     st.stop()
 
@@ -194,7 +195,7 @@ st.markdown(
     """
 <style>
 .ecg-container {
-    background: #000; height: 90px; width: 100%; overflow: hidden; position: relative; 
+    background: #000; height: 90px; width: 100%; overflow: hidden; position: relative;
     border-radius: 10px; border: 2px solid #444; margin-bottom: 20px; display: flex; align-items: center;
     box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
 }
@@ -206,7 +207,7 @@ st.markdown(
 .ecg-text-track { display: flex; position: absolute; top: 30px; left: 0; white-space: nowrap;
     animation: scroll-text 12s linear infinite; z-index: 2; }
 .ecg-name {
-    display: inline-block; width: 300px; 
+    display: inline-block; width: 300px;
     font-family: 'Courier New', monospace; font-weight: 900; font-size: 20px; text-align: center;
     text-shadow: 2px 2px 0px #000;
     animation: bounce 1s infinite alternate, color-shift 5s infinite linear;
@@ -258,7 +259,6 @@ with st.sidebar:
         "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
-    
 
 # ===================== EKRAN 2: CASE REPORT TAKİP =====================
 if menu == "📝 Case Report Takip":
@@ -266,25 +266,25 @@ if menu == "📝 Case Report Takip":
 
     left, right = st.columns([1, 2])
 
-    # SOL: FORM
     with left:
         with st.form("case_form"):
-            dosya_no = st.text_input("Dosya No")
-            hasta = st.text_input("Hasta")
-            doktor = st.text_input("Sorumlu Doktor")
-            not_text = st.text_area("Not")
+            n_dosya = st.text_input("Dosya No")
+            n_ad = st.text_input("Hasta")
+            n_dr = st.text_input("Sorumlu Doktor")
+            n_not = st.text_area("Not")
 
             if st.form_submit_button("Kaydet", type="primary"):
                 try:
                     now = datetime.now()
                     payload = {
                         "Tarih": str(now.date()),
-                        "TarihSaat": now.isoformat(timespec="seconds"),  # unique id
-                        "Dosya No": dosya_no,
-                        "Hasta": hasta,
-                        "Doktor": doktor,
-                        "Not": not_text,
+                        "TarihSaat": now.isoformat(timespec="seconds"),
+                        "Dosya No": n_dosya,
+                        "Hasta": n_ad,
+                        "Doktor": n_dr,
+                        "Not": n_not,
                     }
+                    # unique: TarihSaat
                     save_data_row(CASE_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=CASE_WS_INDEX)
                     st.success("✅ Kaydedildi")
                     time.sleep(0.6)
@@ -292,33 +292,29 @@ if menu == "📝 Case Report Takip":
                 except Exception as e:
                     st.error(f"Hata: {e}")
 
-    # SAĞ: ARAMA + TABLO (Editöre mektup ile aynı tarz)
     with right:
         dfn = load_data(CASE_SHEET_ID, CASE_WS_INDEX, required_col="TarihSaat")
-
         if not dfn.empty:
             q = st.text_input("🔎 Arama (dosya no / hasta / doktor / not)", "")
             dfn_show = dfn.copy()
             if q.strip():
                 mask = dfn_show.apply(
-                    lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1
+                    lambda row: row.astype(str).str.contains(q, case=False, na=False).any(),
+                    axis=1,
                 )
                 dfn_show = dfn_show[mask].copy()
 
-            # İstersen sütun sırası:
-            preferred = ["TarihSaat", "Tarih", "Dosya No", "Hasta", "Doktor", "Not"]
-            cols = [c for c in preferred if c in dfn_show.columns] + [c for c in dfn_show.columns if c not in preferred]
-            st.dataframe(dfn_show[cols], use_container_width=True)
+            st.dataframe(dfn_show, use_container_width=True)
         else:
             st.info("Henüz case report kaydı yok veya 2. sheet yok/başlık uyumsuz.")
-
 
 # ===================== EKRAN 3: EDİTÖRE MEKTUP =====================
 elif menu == "✉️ Editöre Mektup":
     st.header("✉️ Editöre Mektup Takip")
 
-    c1, c2 = st.columns([1, 2])
-    with c1:
+    left, right = st.columns([1, 2])
+
+    with left:
         with st.form("letter_form"):
             dergi = st.text_input("Dergi Adı")
             makale = st.text_input("Makale İsmi")
@@ -329,7 +325,7 @@ elif menu == "✉️ Editöre Mektup":
                     now = datetime.now()
                     payload = {
                         "Tarih": str(now.date()),
-                        "TarihSaat": now.isoformat(timespec="seconds"),  # unique id
+                        "TarihSaat": now.isoformat(timespec="seconds"),
                         "Dergi Adı": dergi,
                         "Makale İsmi": makale,
                         "Yazarlar": yazarlar,
@@ -341,15 +337,17 @@ elif menu == "✉️ Editöre Mektup":
                 except Exception as e:
                     st.error(f"Hata: {e}")
 
-    with c2:
+    with right:
         dfl = load_data(LETTER_SHEET_ID, LETTER_WS_INDEX, required_col="TarihSaat")
         if not dfl.empty:
             q = st.text_input("🔎 Arama (dergi / makale / yazar)", "")
+            dfl_show = dfl.copy()
             if q.strip():
-                mask = dfl.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
-                dfl_show = dfl[mask].copy()
-            else:
-                dfl_show = dfl.copy()
+                mask = dfl_show.apply(
+                    lambda row: row.astype(str).str.contains(q, case=False, na=False).any(),
+                    axis=1,
+                )
+                dfl_show = dfl_show[mask].copy()
 
             st.dataframe(dfl_show, use_container_width=True)
         else:
@@ -357,10 +355,20 @@ elif menu == "✉️ Editöre Mektup":
 
 # ===================== EKRAN 1: VERİ GİRİŞİ (ŞİFRELİ) =====================
 else:
-    require_password_gate()  # <-- şifre kontrolü burada
+    require_password_gate()
 
     # ---- ANA VERİ ----
     df = load_data(SHEET_ID, DATA_WS_INDEX, required_col="Dosya Numarası")
+
+    # ---- ÜST BOŞ ALAN: ÇALIŞMA KRİTERLERİ (SİYAH ALANA TAŞINDI) ----
+    st.markdown("### 📋 Çalışma Kriterleri")
+    k1, k2 = st.columns(2)
+    with k1:
+        st.success("**✅ DAHİL:** Son 6 ayda yeni tanı esansiyel HT")
+    with k2:
+        st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
+
+    st.markdown("---")
 
     # ---- SOL/SAĞ PANEL ----
     col_left, col_right = st.columns([2, 3])
@@ -368,36 +376,6 @@ else:
     with col_left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed")
-    st.markdown("---")
-    st.markdown("### 📋 Çalışma Kriterleri")
-
-    k1, k2 = st.columns(2)
-
-    with k1:
-        st.success(
-            """
-            **✅ DAHİL KRİTERLER**
-            
-            • Son **6 ay** içinde  
-            • **Yeni tanı esansiyel hipertansiyon**
-            """
-        )
-
-    with k2:
-        st.error(
-            """
-            **⛔ HARİÇ KRİTERLER**
-            
-            • Sekonder HT  
-            • Kalp yetmezliği (KY)  
-            • Akut koroner sendrom (AKS)  
-            • Cerrahi öyküsü  
-            • Konjenital kalp hastalığı  
-            • Pulmoner HT  
-            • ABY  
-            • **AF**
-            """
-        )
 
         current = {}
         if mode == "Düzenleme":
@@ -417,11 +395,13 @@ else:
             if df.empty:
                 st.info("Kayıt yok.")
             else:
-                # Arama / filtre
                 q = st.text_input("🔎 Arama (dosya no / ad / hekim)", "")
                 show_df = df.copy()
                 if q.strip():
-                    mask = show_df.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                    mask = show_df.apply(
+                        lambda row: row.astype(str).str.contains(q, case=False, na=False).any(),
+                        axis=1,
+                    )
                     show_df = show_df[mask].copy()
 
                 cols_show = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "TA Sistol", "TA Diyastol"]
@@ -430,7 +410,6 @@ else:
 
                 st.divider()
 
-                # Export: Seçili hasta
                 st.markdown("##### 📦 Export (Seçili Hasta)")
                 pick = st.selectbox("Export edilecek Dosya No:", df["Dosya Numarası"].unique(), key="export_pick")
                 sel = df[df["Dosya Numarası"] == pick].copy()
@@ -450,12 +429,10 @@ else:
                     )
 
                 st.divider()
-
-                # Silme
                 st.markdown("##### 🗑️ Silme")
                 del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique(), key="del_box")
                 if st.button("🗑️ SİL", type="secondary"):
-                    if delete_patient(SHEET_ID, del_id, worksheet_index=DATA_WS_INDEX):
+                    if delete_row_by_value(SHEET_ID, DATA_WS_INDEX, "Dosya Numarası", del_id):
                         st.success("Silindi!")
                         time.sleep(0.8)
                         st.rerun()
