@@ -452,7 +452,7 @@ else:
                     )
                     show_df = show_df[mask].copy()
 
-                cols_show = ["Dosya Numarası", "Tarih", "Hekim", "TA Sistol", "TA Diyastol"]
+                cols_show = ["Dosya Numarası", "Tarih", "Hekim"]
                 final_cols = [c for c in cols_show if c in show_df.columns]
                 if final_cols:
                     st.dataframe(show_df[final_cols], use_container_width=True)
