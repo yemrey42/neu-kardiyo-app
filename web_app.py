@@ -4,124 +4,194 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
-import random  # Rastgele söz seçmek için gerekli kütüphane
+import random
+from io import BytesIO
 
-# --- AYARLAR ---
+# ===================== AYARLAR =====================
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
-CASE_SHEET_ID = SHEET_ID 
+CASE_SHEET_ID = SHEET_ID
+LETTER_SHEET_ID = SHEET_ID
+
+DATA_WS_INDEX = 0       # 1. sayfa: Veri Girişi
+CASE_WS_INDEX = 1       # 2. sayfa: Case Report Takip
+LETTER_WS_INDEX = 2     # 3. sayfa: Editöre Mektup
 
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
-# --- BAĞLANTILAR ---
+# ===================== GOOGLE SHEETS BAĞLANTI =====================
 @st.cache_resource
 def connect_to_gsheets():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
-    client = gspread.authorize(creds)
-    return client
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"], scope
+    )
+    return gspread.authorize(creds)
 
-# --- YARDIMCI DÖNÜŞTÜRÜCÜLER ---
+# ===================== YARDIMCI FONKSİYONLAR =====================
 def safe_float(val):
-    try: return float(val)
-    except: return 0.0
+    try:
+        return float(val)
+    except:
+        return 0.0
 
 def safe_int(val):
-    try: return int(float(val))
-    except: return 0
+    try:
+        return int(float(val))
+    except:
+        return 0
 
-def is_checked(val):
-    return str(val).lower() == "true"
+def colnum_to_letter(n: int) -> str:
+    # 1->A, 26->Z, 27->AA ...
+    s = ""
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
 
-# --- VERİ ÇEKME ---
-def load_data(sheet_id, worksheet_index=0):
+def to_excel_bytes(df: pd.DataFrame, sheet_name="Sheet1") -> bytes:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+    return output.getvalue()
+
+# ===================== VERİ ÇEKME =====================
+def load_data(sheet_id, worksheet_index=0, required_col=None):
     try:
         client = connect_to_gsheets()
-        sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
-        data = sheet.get_all_values()
-        
+        ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+        data = ws.get_all_values()
+
         if not data or len(data) < 1:
             return pd.DataFrame()
-            
+
         headers = data[0]
-        if "Dosya Numarası" not in headers:
+        if required_col and required_col not in headers:
             return pd.DataFrame()
 
         rows = data[1:]
-        
-        seen = {}; unique_headers = []
+
+        # Duplicate header fix
+        seen = {}
+        unique_headers = []
         for h in headers:
             h = str(h).strip()
-            if h in seen: seen[h]+=1; unique_headers.append(f"{h}_{seen[h]}")
-            else: seen[h]=0; unique_headers.append(h)
+            if h in seen:
+                seen[h] += 1
+                unique_headers.append(f"{h}_{seen[h]}")
+            else:
+                seen[h] = 0
+                unique_headers.append(h)
 
         num_cols = len(unique_headers)
         fixed_rows = []
         for row in rows:
-            if len(row) < num_cols: row += [""] * (num_cols - len(row))
+            if len(row) < num_cols:
+                row += [""] * (num_cols - len(row))
             fixed_rows.append(row)
 
         df = pd.DataFrame(fixed_rows, columns=unique_headers)
         return df.astype(str)
+
     except:
         return pd.DataFrame()
 
-# --- SİLME ---
-def delete_patient(sheet_id, dosya_no):
+# ===================== SİLME =====================
+def delete_patient(sheet_id, dosya_no, worksheet_index=0):
     client = connect_to_gsheets()
-    sheet = client.open_by_key(sheet_id).sheet1
+    ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     try:
-        cell = sheet.find(str(dosya_no))
-        sheet.delete_rows(cell.row)
+        cell = ws.find(str(dosya_no))
+        ws.delete_rows(cell.row)
         return True
-    except: return False
+    except:
+        return False
 
-# --- KAYIT VE GÜNCELLEME ---
-def save_data_row(sheet_id, data_dict, unique_col="Dosya Numarası", worksheet_index=0):
+# ===================== KAYIT / GÜNCELLEME (UPSERT) =====================
+def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
     client = connect_to_gsheets()
-    sheet = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
-    
-    clean_data = {k: str(v) if v is not None else "" for k, v in data_dict.items()}
-    all_values = sheet.get_all_values()
-    
-    if not all_values or "Dosya Numarası" not in all_values[0]:
-        sheet.clear()
-        sheet.append_row(list(clean_data.keys()))
-        sheet.append_row(list(clean_data.values()))
+    ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+
+    clean_data = {str(k).strip(): ("" if v is None else str(v)) for k, v in data_dict.items()}
+    all_values = ws.get_all_values()
+
+    # Sheet boşsa: header + 1 satır
+    if not all_values:
+        ws.append_row(list(clean_data.keys()))
+        ws.append_row(list(clean_data.values()))
+        st.toast("✅ İlk kayıt oluşturuldu.", icon="💾")
         return
 
-    headers = all_values[0]
+    headers = [str(h).strip() for h in all_values[0]]
+
+    # Unique kolon header'da yoksa ekle
+    if unique_col not in headers:
+        headers.append(unique_col)
+
+    # Eksik kolonları ekle ve header'ı sheet'e yaz
     missing_cols = [k for k in clean_data.keys() if k not in headers]
-    if missing_cols: headers.extend(missing_cols)
+    if missing_cols:
+        headers.extend(missing_cols)
+        ws.update("1:1", [headers])
 
-    row_to_save = []
-    for h in headers: row_to_save.append(clean_data.get(h, ""))
-    
-    for k in clean_data.keys():
-        if k not in headers: row_to_save.append(clean_data[k])
+    # Kaydedilecek satır
+    row_to_save = [clean_data.get(h, "") for h in headers]
 
-    df = pd.DataFrame(all_values[1:], columns=all_values[0]).astype(str)
+    uid = clean_data.get(unique_col, "").strip()
+    if not uid:
+        raise ValueError(f"{unique_col} boş olamaz!")
+
+    # unique_col sütun index (1-based)
+    uid_col_idx = headers.index(unique_col) + 1
+
+    # o sütunun değerleri
+    col_vals = ws.col_values(uid_col_idx)
     row_index_to_update = None
-    
-    if unique_col in df.columns:
-        matches = df.index[df[unique_col] == str(clean_data[unique_col])].tolist()
-        if matches: row_index_to_update = matches[0] + 2
+    for i, v in enumerate(col_vals[1:], start=2):  # header sonrası
+        if str(v).strip() == uid:
+            row_index_to_update = i
+            break
+
+    end_col = colnum_to_letter(len(headers))
 
     if row_index_to_update:
-        try:
-            sheet.delete_rows(row_index_to_update)
-            time.sleep(1)
-            sheet.append_row(row_to_save)
-            st.toast(f"✅ {clean_data[unique_col]} güncellendi.", icon="🔄")
-        except:
-            sheet.append_row(row_to_save)
+        ws.update(f"A{row_index_to_update}:{end_col}{row_index_to_update}", [row_to_save])
+        st.toast(f"✅ {uid} güncellendi.", icon="🔄")
     else:
-        sheet.append_row(row_to_save)
-        st.toast(f"✅ {clean_data[unique_col]} kaydedildi.", icon="💾")
+        ws.append_row(row_to_save)
+        st.toast(f"✅ {uid} kaydedildi.", icon="💾")
 
-# ================= ARAYÜZ =================
+# ===================== AUTH (1. EKRAN ŞİFRE) =====================
+def require_password_gate():
+    if "auth_ok" not in st.session_state:
+        st.session_state.auth_ok = False
 
-# --- EKG ANİMASYONU ---
-st.markdown("""
+    app_password = st.secrets.get("app_password", None)
+    if not app_password:
+        st.error("⚠️ Şifre tanımlı değil. `.streamlit/secrets.toml` içine `app_password = \"...\"` eklemelisin.")
+        st.stop()
+
+    if st.session_state.auth_ok:
+        return
+
+    st.subheader("🔐 Veri Girişi (Şifreli)")
+    pw = st.text_input("Şifre", type="password")
+    if st.button("Giriş", type="primary"):
+        if pw == app_password:
+            st.session_state.auth_ok = True
+            st.success("✅ Giriş başarılı")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.error("❌ Şifre yanlış")
+
+    st.stop()
+
+# ===================== HEADER / EKG ANİMASYONU =====================
+st.markdown(
+    """
 <style>
 .ecg-container {
     background: #000; height: 90px; width: 100%; overflow: hidden; position: relative; 
@@ -133,10 +203,8 @@ st.markdown("""
     background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="90" viewBox="0 0 300 90"><path d="M0 50 L20 50 L25 45 L30 50 L40 50 L42 55 L45 10 L48 85 L52 50 L60 50 L65 40 L75 40 L80 50 L300 50" stroke="%2300ff00" stroke-width="2" fill="none"/></svg>');
     background-repeat: repeat-x; animation: scroll-bg 3s linear infinite; z-index: 1; opacity: 0.6;
 }
-.ecg-text-track {
-    display: flex; position: absolute; top: 30px; left: 0; white-space: nowrap;
-    animation: scroll-text 12s linear infinite; z-index: 2;
-}
+.ecg-text-track { display: flex; position: absolute; top: 30px; left: 0; white-space: nowrap;
+    animation: scroll-text 12s linear infinite; z-index: 2; }
 .ecg-name {
     display: inline-block; width: 300px; 
     font-family: 'Courier New', monospace; font-weight: 900; font-size: 20px; text-align: center;
@@ -163,144 +231,249 @@ st.markdown("""
         <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
 
-# --- ANA VERİ ÇEKME ---
-df = load_data(SHEET_ID, 0)
-
-# --- MENÜ & GÜNÜN SÖZÜ ---
+# ===================== SIDEBAR =====================
 with st.sidebar:
     st.title("❤️ NEÜ-KARDİYO")
-    menu = st.radio("Menü", ["🏥 Veri Girişi (H-Type HT)", "📝 Vaka Takip (Notlar)"])
+
+    menu = st.radio(
+        "Menü",
+        ["🏥 Veri Girişi (H-Type HT) [Şifreli]", "📝 Case Report Takip", "✉️ Editöre Mektup"],
+    )
+
     st.divider()
-    
-    # -- GÜNÜN SÖZÜ (YENİ EKLENDİ) --
+
     quotes = [
         "Halk içinde muteber bir nesne yok devlet gibi,\nOlmaya devlet cihanda bir nefes sıhhat gibi.\n(Kanuni Sultan Süleyman)",
-        "Sağlık bir beden değil, bir kafa meselesidir.\n(Marku)",
-        "Anlarsa uzağım yakınımdır; Anlamazsa yakınım uzağımdır.\n(İsmail fakirullah hz.)",
-        "Beden almakla doyar ruh vermekle",
-        "Sonum yokluk olsa bu varlık niye",
         "Kalp, aklın bilmediği sebeplere sahiptir.\n(Blaise Pascal)",
         "İlim ilim bilmektir, ilim kendin bilmektir.\n(Yunus Emre)",
         "Zahmetsiz rahmet olmaz.",
-        "Çilesini çekemedigin davanın mukafatına mi talipsin.\n(Mevlana Hz.)",
-        "Işığa sahip olabilmek için karanlığa ihtiyaç vardır.\n(Ressam bob)",
-        "Ne doğrarsan aşına, o gelir kaşığa.",
         "Sabır acidir , meyvesi tatlıdır.",
-        "kısmet etmiş ise mevla; el getirir, yel getirir, sel getirir. kısmet etmez ise mevla; el götürür, yel götürür, sel götürür.",
+        "Ne doğrarsan aşına, o gelir kaşığa.",
         "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
-        
     ]
-    random_quote = random.choice(quotes)
-    st.info(f"💡 **Günün Sözü:**\n\n_{random_quote}_")
-    
+    st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
+
     st.divider()
     with st.expander("📋 ÇALIŞMA KRİTERLERİ", expanded=True):
         st.success("**✅ DAHİL:** Son 6 ayda yeni tanı esansiyel HT")
         st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
 
-# --- YENİ DÜZEN (SOL: SEÇİM / SAĞ: LİSTE) ---
-col_left, col_right = st.columns([2, 3])
+# ===================== EKRAN 2: CASE REPORT TAKİP =====================
+if menu == "📝 Case Report Takip":
+    st.header("📝 Case Report Takip")
 
-# SOL KOLON: İŞLEM SEÇİMİ
-with col_left:
-    st.markdown("##### ⚙️ İşlem Seçimi")
-    mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed")
-    
-    current = {}
-    if mode == "Düzenleme":
-        if not df.empty:
-            edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique())
-            if edit_id:
-                # Seçilen satırı bul ve sözlüğe çevir
-                current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
-                st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
-        else:
-            st.warning("Düzenlenecek kayıt yok.")
-
-# SAĞ KOLON: LİSTE & SİLME (EXPANDER İÇİNDE)
-with col_right:
-    with st.expander("📋 KAYITLI HASTA LİSTESİ & SİLME", expanded=False):
-        c_list1, c_list2 = st.columns([3, 1])
-        with c_list1:
-            if st.button("🔄 Listeyi Yenile"): st.rerun()
-            if not df.empty:
-                cols_show = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim"]
-                final_cols = [c for c in cols_show if c in df.columns]
-                st.dataframe(df[final_cols] if final_cols else df, use_container_width=True)
-            else:
-                st.info("Kayıt yok.")
-        
-        with c_list2:
-            if not df.empty:
-                del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique(), key="del_box")
-                if st.button("🗑️ SİL"):
-                    if delete_patient(SHEET_ID, del_id):
-                        st.success("Silindi!"); time.sleep(1); st.rerun()
-                    else: st.error("Hata!")
-
-st.divider()
-
-# --- FORM BAŞLANGICI ---
-# Değerleri almak için kısa fonksiyonlar
-def gs(k): return str(current.get(k, ""))
-def gf(k): 
-    try: return float(current.get(k, 0))
-    except: return 0.0
-def gi(k): 
-    try: return int(float(current.get(k, 0)))
-    except: return 0
-def gc(k): return str(current.get(k, "")).lower() == "true"
-
-# MOD KONTROLÜ (Vaka Takip vs Veri Girişi)
-if menu == "📝 Vaka Takip (Notlar)":
-    st.header("📝 Vaka Takip Defteri")
     c1, c2 = st.columns([1, 2])
     with c1:
-        with st.form("note_form"):
-            n_dosya = st.text_input("Dosya No")
-            n_ad = st.text_input("Hasta")
-            n_dr = st.text_input("Sorumlu Doktor")
-            n_not = st.text_area("Not")
-            if st.form_submit_button("Kaydet"):
-                try:
-                    save_data_row(CASE_SHEET_ID, {"Tarih":str(datetime.now().date()), "Dosya No":n_dosya, "Hasta":n_ad, "Doktor":n_dr, "Not":n_not}, "Dosya No", 1)
-                    st.success("Kaydedildi")
-                except: st.error("Google Sheet'te 2. Sayfa Yok!")
-    with c2:
-        dfn = load_data(CASE_SHEET_ID, 1)
-        if not dfn.empty: st.dataframe(dfn, use_container_width=True)
+        with st.form("case_form"):
+            dosya_no = st.text_input("Dosya No")
+            hasta = st.text_input("Hasta")
+            doktor = st.text_input("Sorumlu Doktor")
+            not_text = st.text_area("Not")
 
-else: # VERİ GİRİŞİ FORMU
+            if st.form_submit_button("Kaydet", type="primary"):
+                try:
+                    now = datetime.now()
+                    payload = {
+                        "Tarih": str(now.date()),
+                        "TarihSaat": now.isoformat(timespec="seconds"),
+                        "Dosya No": dosya_no,
+                        "Hasta": hasta,
+                        "Doktor": doktor,
+                        "Not": not_text,
+                    }
+                    save_data_row(CASE_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=CASE_WS_INDEX)
+                    st.success("✅ Kaydedildi")
+                    time.sleep(0.6)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Hata: {e}")
+
+    with c2:
+        dfn = load_data(CASE_SHEET_ID, CASE_WS_INDEX, required_col="TarihSaat")
+        if not dfn.empty:
+            q = st.text_input("🔎 Arama (dosya no / hasta / doktor / not)", "")
+            if q.strip():
+                mask = dfn.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                dfn_show = dfn[mask].copy()
+            else:
+                dfn_show = dfn.copy()
+
+            st.dataframe(dfn_show, use_container_width=True)
+        else:
+            st.info("Henüz case report notu yok veya sheet başlığı uygun değil.")
+
+# ===================== EKRAN 3: EDİTÖRE MEKTUP =====================
+elif menu == "✉️ Editöre Mektup":
+    st.header("✉️ Editöre Mektup Takip")
+
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        with st.form("letter_form"):
+            dergi = st.text_input("Dergi Adı")
+            makale = st.text_input("Makale İsmi")
+            yazarlar = st.text_area("Yazarlar")
+
+            if st.form_submit_button("Kaydet", type="primary"):
+                try:
+                    now = datetime.now()
+                    payload = {
+                        "Tarih": str(now.date()),
+                        "TarihSaat": now.isoformat(timespec="seconds"),  # unique id
+                        "Dergi Adı": dergi,
+                        "Makale İsmi": makale,
+                        "Yazarlar": yazarlar,
+                    }
+                    save_data_row(LETTER_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=LETTER_WS_INDEX)
+                    st.success("✅ Kaydedildi (3. sayfaya yazıldı)")
+                    time.sleep(0.6)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Hata: {e}")
+
+    with c2:
+        dfl = load_data(LETTER_SHEET_ID, LETTER_WS_INDEX, required_col="TarihSaat")
+        if not dfl.empty:
+            q = st.text_input("🔎 Arama (dergi / makale / yazar)", "")
+            if q.strip():
+                mask = dfl.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                dfl_show = dfl[mask].copy()
+            else:
+                dfl_show = dfl.copy()
+
+            st.dataframe(dfl_show, use_container_width=True)
+        else:
+            st.info("Henüz editöre mektup kaydı yok veya 3. sheet yok/başlık uyumsuz.")
+
+# ===================== EKRAN 1: VERİ GİRİŞİ (ŞİFRELİ) =====================
+else:
+    require_password_gate()  # <-- şifre kontrolü burada
+
+    # ---- ANA VERİ ----
+    df = load_data(SHEET_ID, DATA_WS_INDEX, required_col="Dosya Numarası")
+
+    # ---- SOL/SAĞ PANEL ----
+    col_left, col_right = st.columns([2, 3])
+
+    with col_left:
+        st.markdown("##### ⚙️ İşlem Seçimi")
+        mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed")
+
+        current = {}
+        if mode == "Düzenleme":
+            if not df.empty:
+                edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique())
+                if edit_id:
+                    current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
+                    st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
+            else:
+                st.warning("Düzenlenecek kayıt yok.")
+
+    with col_right:
+        with st.expander("📋 KAYITLI HASTA LİSTESİ / ARAMA / EXPORT / SİLME", expanded=True):
+            if st.button("🔄 Listeyi Yenile"):
+                st.rerun()
+
+            if df.empty:
+                st.info("Kayıt yok.")
+            else:
+                # Arama / filtre
+                q = st.text_input("🔎 Arama (dosya no / ad / hekim)", "")
+                show_df = df.copy()
+                if q.strip():
+                    mask = show_df.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                    show_df = show_df[mask].copy()
+
+                cols_show = ["Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "TA Sistol", "TA Diyastol"]
+                final_cols = [c for c in cols_show if c in show_df.columns]
+                st.dataframe(show_df[final_cols] if final_cols else show_df, use_container_width=True)
+
+                st.divider()
+
+                # Export: Seçili hasta
+                st.markdown("##### 📦 Export (Seçili Hasta)")
+                pick = st.selectbox("Export edilecek Dosya No:", df["Dosya Numarası"].unique(), key="export_pick")
+                sel = df[df["Dosya Numarası"] == pick].copy()
+
+                csv_bytes = sel.to_csv(index=False).encode("utf-8-sig")
+                xlsx_bytes = to_excel_bytes(sel, sheet_name="Patient")
+
+                cexp1, cexp2 = st.columns(2)
+                with cexp1:
+                    st.download_button("⬇️ CSV indir", data=csv_bytes, file_name=f"{pick}.csv", mime="text/csv")
+                with cexp2:
+                    st.download_button(
+                        "⬇️ Excel indir",
+                        data=xlsx_bytes,
+                        file_name=f"{pick}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+
+                st.divider()
+
+                # Silme
+                st.markdown("##### 🗑️ Silme")
+                del_id = st.selectbox("Silinecek No", df["Dosya Numarası"].unique(), key="del_box")
+                if st.button("🗑️ SİL", type="secondary"):
+                    if delete_patient(SHEET_ID, del_id, worksheet_index=DATA_WS_INDEX):
+                        st.success("Silindi!")
+                        time.sleep(0.8)
+                        st.rerun()
+                    else:
+                        st.error("Hata!")
+
+    st.divider()
+
+    # ---- FORM HELPER ----
+    def gs(k): return str(current.get(k, ""))
+    def gf(k):
+        try: return float(current.get(k, 0))
+        except: return 0.0
+    def gi(k):
+        try: return int(float(current.get(k, 0)))
+        except: return 0
+    def gc(k): return str(current.get(k, "")).lower() == "true"
+
+    # ---- VERİ GİRİŞ FORMU ----
     with st.form("main_form"):
         st.markdown("### 👤 Klinik")
         c1, c2 = st.columns(2)
+
         with c1:
             dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=gs("Dosya Numarası"))
             ad_soyad = st.text_input("Adı Soyadı", value=gs("Adı Soyadı"))
-            try: d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d")
-            except: d_date = datetime.now()
+
+            try:
+                d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d")
+            except:
+                d_date = datetime.now()
             basvuru = st.date_input("Başvuru Tarihi", value=d_date)
-            hekim = st.text_input("Veriyi Giren Hekim", value=gs("Hekim"))
+
+            hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)", value=gs("Hekim"))
             iletisim = st.text_input("İletişim", value=gs("İletişim"))
-        
+
         with c2:
             cy, cc = st.columns(2)
             yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
+
             sex_l = ["Erkek", "Kadın"]
-            try: s_ix = sex_l.index(gs("Cinsiyet"))
-            except: s_ix = 0
+            try:
+                s_ix = sex_l.index(gs("Cinsiyet"))
+            except:
+                s_ix = 0
             cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
-            
+
             cb1, cb2, cb3 = st.columns(3)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
             kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
-            
-            bmi = kilo/((boy/100)**2) if boy>0 else 0
-            bsa = (boy * kilo / 3600) ** 0.5 if (boy>0 and kilo>0) else 0
+
+            bmi = kilo / ((boy / 100) ** 2) if boy > 0 else 0
+            bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             cb3.metric("BMI", f"{bmi:.1f}")
 
             ct1, ct2 = st.columns(2)
@@ -309,10 +482,12 @@ else: # VERİ GİRİŞİ FORMU
 
         st.markdown("---")
         ekg_l = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
-        try: e_ix = ekg_l.index(gs("EKG"))
-        except: e_ix = 0
+        try:
+            e_ix = ekg_l.index(gs("EKG"))
+        except:
+            e_ix = 0
         ekg = st.selectbox("EKG", ekg_l, index=e_ix)
-        
+
         ci1, ci2 = st.columns(2)
         ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
         baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
@@ -328,6 +503,7 @@ else: # VERİ GİRİŞİ FORMU
 
         st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3, l4 = st.columns(4)
+
         hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
         hct = l1.number_input("Hct (%)", value=gf("Hct"))
         wbc = l1.number_input("WBC (10³/µL)", value=gf("WBC"))
@@ -360,6 +536,7 @@ else: # VERİ GİRİŞİ FORMU
 
         st.markdown("### 🫀 Eko")
         e1, e2, e3, e4 = st.columns(4)
+
         with e1:
             st.caption("Yapısal")
             lvedd = st.number_input("LVEDD (mm)", value=gf("LVEDD"))
@@ -369,13 +546,19 @@ else: # VERİ GİRİŞİ FORMU
             lvedv = st.number_input("LVEDV (mL)", value=gf("LVEDV"))
             lvesv = st.number_input("LVESV (mL)", value=gf("LVESV"))
             ao = st.number_input("Ao Asc (mm)", value=gf("Ao Asc"))
-            
-            lvm = 0.0; lvmi = 0.0; rwt = 0.0
-            if lvedd>0 and ivs>0 and pw>0:
-                d_cm = lvedd/10; i_cm = ivs/10; p_cm = pw/10
-                lvm = 0.8*(1.04*((d_cm+i_cm+p_cm)**3 - d_cm**3))+0.6
-                if bsa>0: lvmi = lvm/bsa
-            if lvedd>0 and pw>0: rwt = (2*pw)/lvedd
+
+            lvm = 0.0
+            lvmi = 0.0
+            rwt = 0.0
+            if lvedd > 0 and ivs > 0 and pw > 0:
+                d_cm = lvedd / 10
+                i_cm = ivs / 10
+                p_cm = pw / 10
+                lvm = 0.8 * (1.04 * ((d_cm + i_cm + p_cm) ** 3 - d_cm ** 3)) + 0.6
+                if bsa > 0:
+                    lvmi = lvm / bsa
+            if lvedd > 0 and pw > 0:
+                rwt = (2 * pw) / lvedd
             st.caption(f"🔵 Mass:{lvm:.0f} | LVMi:{lvmi:.0f} | RWT:{rwt:.2f}")
 
         with e2:
@@ -396,10 +579,10 @@ else: # VERİ GİRİŞİ FORMU
             laedv = st.number_input("LAEDV (mL)", value=gf("LAEDV"))
             laesv = st.number_input("LAESV (mL)", value=gf("LAESV"))
             lastr = st.number_input("LA Strain (%)", value=gf("LA Strain"))
-            
-            ea = mite/mita if mita>0 else 0
-            ee = mite/septe if septe>0 else 0
-            laci = laedv/lvedv if lvedv>0 else 0
+
+            ea = mite / mita if mita > 0 else 0
+            ee = mite / septe if septe > 0 else 0
+            laci = laedv / lvedv if lvedv > 0 else 0
             st.caption(f"🔵 E/A:{ea:.1f} | E/e':{ee:.1f} | LACi:{laci:.2f}")
 
         with e4:
@@ -410,9 +593,9 @@ else: # VERİ GİRİŞİ FORMU
             tyvel = st.number_input("TY vel. (m/sn)", value=gf("TY vel."))
             rvot = st.number_input("RVOT VTI (cm)", value=gf("RVOT VTI"))
             rvota = st.number_input("RVOT accT (ms)", value=gf("RVOT accT"))
-            
-            tsm = tapse/rvsm if rvsm>0 else 0
-            tspap = tapse/spap if spap>0 else 0
+
+            tsm = tapse / rvsm if rvsm > 0 else 0
+            tspap = tapse / spap if spap > 0 else 0
             st.caption(f"🔵 TAPSE/Sm: {tsm:.2f} | TAPSE/sPAP: {tspap:.2f}")
 
         st.write("")
@@ -421,26 +604,90 @@ else: # VERİ GİRİŞİ FORMU
                 st.error("Dosya No ve Hekim zorunlu!")
             else:
                 final_data = {
-                    "Dosya Numarası": dosya_no, "Adı Soyadı": ad_soyad, "Tarih": str(basvuru), "Hekim": hekim,
-                    "Yaş": yas, "Cinsiyet": cinsiyet, "Boy": boy, "Kilo": kilo, "BMI": bmi, "BSA": bsa,
-                    "TA Sistol": ta_sis, "TA Diyastol": ta_dia, "EKG": ekg, 
-                    "İlaçlar": ilaclar, "Başlanan": baslanan,
-                    "DM": dm, "KAH": kah, "HPL": hpl, "İnme": inme, "Sigara": sigara, "Diğer": diger,
-                    "Hgb": hgb, "Hct": hct, "WBC": wbc, "PLT": plt, "Neu": neu, "Lym": lym, "MPV": mpv, "RDW": rdw,
-                    "Glukoz": glukoz, "Üre": ure, "Kreatinin": krea, "Ürik Asit": uric, "Na": na, "K": k_val, 
-                    "ALT": alt, "AST": ast, "Tot. Prot": prot, "Albümin": alb,
-                    "Chol": chol, "LDL": ldl, "HDL": hdl, "Trig": trig, 
-                    "Lp(a)": lpa, "Homosistein": homo, "Folik Asit": folik, "B12": b12,
-                    "LVEDD": lvedd, "LVESD": lvesd, "IVS": ivs, "PW": pw, "LVEDV": lvedv, "LVESV": lvesv, 
-                    "LV Mass": lvm, "LVMi": lvmi, "RWT": rwt, "Ao Asc": ao,
-                    "LVEF": lvef, "SV": sv, "LVOT VTI": lvot, "GLS": gls, "GCS": gcs, "SD-LS": sdls,
-                    "Mitral E": mite, "Mitral A": mita, "Mitral E/A": ea, "Septal e'": septe, "Lateral e'": late, "Mitral E/e'": ee,
-                    "LAEDV": laedv, "LAESV": laesv, "LA Strain": lastr, "LACi": laci,
-                    "TAPSE": tapse, "RV Sm": rvsm, "TAPSE/Sm": tsm, "sPAP": spap, 
-                    "TY vel.": tyvel, "TAPSE/sPAP": tspap,
-                    "RVOT VTI": rvot, "RVOT accT": rvota
+                    "Dosya Numarası": dosya_no,
+                    "Adı Soyadı": ad_soyad,
+                    "Tarih": str(basvuru),
+                    "Hekim": hekim,
+                    "İletişim": iletisim,
+                    "Yaş": yas,
+                    "Cinsiyet": cinsiyet,
+                    "Boy": boy,
+                    "Kilo": kilo,
+                    "BMI": bmi,
+                    "BSA": bsa,
+                    "TA Sistol": ta_sis,
+                    "TA Diyastol": ta_dia,
+                    "EKG": ekg,
+                    "İlaçlar": ilaclar,
+                    "Başlanan": baslanan,
+                    "DM": dm,
+                    "KAH": kah,
+                    "HPL": hpl,
+                    "İnme": inme,
+                    "Sigara": sigara,
+                    "Diğer": diger,
+                    "Hgb": hgb,
+                    "Hct": hct,
+                    "WBC": wbc,
+                    "PLT": plt,
+                    "Neu": neu,
+                    "Lym": lym,
+                    "MPV": mpv,
+                    "RDW": rdw,
+                    "Glukoz": glukoz,
+                    "Üre": ure,
+                    "Kreatinin": krea,
+                    "Ürik Asit": uric,
+                    "Na": na,
+                    "K": k_val,
+                    "ALT": alt,
+                    "AST": ast,
+                    "Tot. Prot": prot,
+                    "Albümin": alb,
+                    "Chol": chol,
+                    "LDL": ldl,
+                    "HDL": hdl,
+                    "Trig": trig,
+                    "Lp(a)": lpa,
+                    "Homosistein": homo,
+                    "Folik Asit": folik,
+                    "B12": b12,
+                    "LVEDD": lvedd,
+                    "LVESD": lvesd,
+                    "IVS": ivs,
+                    "PW": pw,
+                    "LVEDV": lvedv,
+                    "LVESV": lvesv,
+                    "LV Mass": lvm,
+                    "LVMi": lvmi,
+                    "RWT": rwt,
+                    "Ao Asc": ao,
+                    "LVEF": lvef,
+                    "SV": sv,
+                    "LVOT VTI": lvot,
+                    "GLS": gls,
+                    "GCS": gcs,
+                    "SD-LS": sdls,
+                    "Mitral E": mite,
+                    "Mitral A": mita,
+                    "Mitral E/A": ea,
+                    "Septal e'": septe,
+                    "Lateral e'": late,
+                    "Mitral E/e'": ee,
+                    "LAEDV": laedv,
+                    "LAESV": laesv,
+                    "LA Strain": lastr,
+                    "LACi": laci,
+                    "TAPSE": tapse,
+                    "RV Sm": rvsm,
+                    "TAPSE/Sm": tsm,
+                    "sPAP": spap,
+                    "TY vel.": tyvel,
+                    "TAPSE/sPAP": tspap,
+                    "RVOT VTI": rvot,
+                    "RVOT accT": rvota,
                 }
-                save_data_row(SHEET_ID, final_data, worksheet_index=0)
-                st.success(f"✅ {dosya_no} kaydedildi!")
-                time.sleep(1)
+                save_data_row(SHEET_ID, final_data, unique_col="Dosya Numarası", worksheet_index=DATA_WS_INDEX)
+                st.success(f"✅ {dosya_no} kaydedildi / güncellendi!")
+                time.sleep(0.8)
                 st.rerun()
