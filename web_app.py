@@ -264,8 +264,10 @@ with st.sidebar:
 if menu == "📝 Case Report Takip":
     st.header("📝 Case Report Takip")
 
-    c1, c2 = st.columns([1, 2])
-    with c1:
+    left, right = st.columns([1, 2])
+
+    # SOL: FORM
+    with left:
         with st.form("case_form"):
             dosya_no = st.text_input("Dosya No")
             hasta = st.text_input("Hasta")
@@ -277,7 +279,7 @@ if menu == "📝 Case Report Takip":
                     now = datetime.now()
                     payload = {
                         "Tarih": str(now.date()),
-                        "TarihSaat": now.isoformat(timespec="seconds"),
+                        "TarihSaat": now.isoformat(timespec="seconds"),  # unique id
                         "Dosya No": dosya_no,
                         "Hasta": hasta,
                         "Doktor": doktor,
@@ -290,19 +292,26 @@ if menu == "📝 Case Report Takip":
                 except Exception as e:
                     st.error(f"Hata: {e}")
 
-    with c2:
+    # SAĞ: ARAMA + TABLO (Editöre mektup ile aynı tarz)
+    with right:
         dfn = load_data(CASE_SHEET_ID, CASE_WS_INDEX, required_col="TarihSaat")
+
         if not dfn.empty:
             q = st.text_input("🔎 Arama (dosya no / hasta / doktor / not)", "")
+            dfn_show = dfn.copy()
             if q.strip():
-                mask = dfn.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
-                dfn_show = dfn[mask].copy()
-            else:
-                dfn_show = dfn.copy()
+                mask = dfn_show.apply(
+                    lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1
+                )
+                dfn_show = dfn_show[mask].copy()
 
-            st.dataframe(dfn_show, use_container_width=True)
+            # İstersen sütun sırası:
+            preferred = ["TarihSaat", "Tarih", "Dosya No", "Hasta", "Doktor", "Not"]
+            cols = [c for c in preferred if c in dfn_show.columns] + [c for c in dfn_show.columns if c not in preferred]
+            st.dataframe(dfn_show[cols], use_container_width=True)
         else:
-            st.info("Henüz case report notu yok veya sheet başlığı uygun değil.")
+            st.info("Henüz case report kaydı yok veya 2. sheet yok/başlık uyumsuz.")
+
 
 # ===================== EKRAN 3: EDİTÖRE MEKTUP =====================
 elif menu == "✉️ Editöre Mektup":
