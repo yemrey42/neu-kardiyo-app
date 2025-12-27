@@ -199,6 +199,27 @@ def require_password_gate():
         st.caption("Not: Bu şifre sadece Veri Girişi ekranı için geçerli.")
 
     st.stop()
+def confirm_delete_with_password(key_prefix=""):
+    """
+    Silme öncesi şifre sorar.
+    Doğruysa True döner.
+    """
+    st.warning("⚠️ Silme işlemi için şifre gerekli")
+
+    pw = st.text_input(
+        "Silme Şifresi",
+        type="password",
+        key=f"{key_prefix}_pw"
+    )
+
+    if st.button("🔓 Onayla", key=f"{key_prefix}_btn"):
+        if pw == st.secrets.get("app_password"):
+            return True
+        else:
+            st.error("❌ Şifre yanlış")
+            return False
+
+    return False
 
 # ===================== HEADER / EKG ANİMASYONU =====================
 st.markdown(
@@ -325,12 +346,14 @@ if menu == "📝 Case Report Takip":
             st.markdown("##### 🗑️ Silme")
             del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfn["TarihSaat"].unique(), key="case_del_ts")
             if st.button("🗑️ Sil", key="case_del_btn"):
-                if delete_row_by_value(SHEET_ID, CASE_WS_INDEX, "TarihSaat", del_ts):
-                    st.success("Silindi")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("Silinemedi")
+    if confirm_delete_with_password("case"):
+        if delete_row_by_value(SHEET_ID, CASE_WS_INDEX, "TarihSaat", del_ts):
+            st.success("Silindi")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.error("Silinemedi")
+
         else:
             st.info("Henüz case report kaydı yok veya 2. sheet yok/başlık uyumsuz.")
 
@@ -388,12 +411,14 @@ elif menu == "✉️ Editöre Mektup":
             st.markdown("##### 🗑️ Silme")
             del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfl["TarihSaat"].unique(), key="letter_del_ts")
             if st.button("🗑️ Sil", key="letter_del_btn"):
-                if delete_row_by_value(SHEET_ID, LETTER_WS_INDEX, "TarihSaat", del_ts):
-                    st.success("Silindi")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("Silinemedi")
+    if confirm_delete_with_password("letter"):
+        if delete_row_by_value(SHEET_ID, LETTER_WS_INDEX, "TarihSaat", del_ts):
+            st.success("Silindi")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.error("Silinemedi")
+
         else:
             st.info("Henüz editöre mektup kaydı yok veya 3. sheet yok/başlık uyumsuz.")
 
