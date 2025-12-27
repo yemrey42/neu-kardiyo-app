@@ -353,7 +353,6 @@ if menu == "📝 Case Report Takip":
             st.rerun()
         else:
             st.error("Silinemedi")
-
         else:
             st.info("Henüz case report kaydı yok veya 2. sheet yok/başlık uyumsuz.")
 
@@ -418,7 +417,6 @@ elif menu == "✉️ Editöre Mektup":
             st.rerun()
         else:
             st.error("Silinemedi")
-
         else:
             st.info("Henüz editöre mektup kaydı yok veya 3. sheet yok/başlık uyumsuz.")
 
