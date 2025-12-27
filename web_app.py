@@ -56,14 +56,12 @@ def to_excel_bytes(df: pd.DataFrame, sheet_name="Sheet1") -> bytes:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
     return output.getvalue()
 
-def mask_text(x):
-    """Kelime kelime ilk harf + ***"""
-    if x is None:
+def mask_text(x: str) -> str:
+    """Dergi/Makale adını maskeler: her kelimenin ilk harfi + ***"""
+    if not x:
         return ""
-    s = str(x).strip()
-    if not s:
-        return ""
-    return " ".join([(w[0] + "***") if w else "" for w in s.split()])
+    parts = str(x).split()
+    return " ".join([(w[0] + "***") if len(w) > 0 else "" for w in parts])
 
 # ===================== VERİ ÇEKME =====================
 def load_data(sheet_id, worksheet_index=0, required_col=None):
@@ -77,7 +75,6 @@ def load_data(sheet_id, worksheet_index=0, required_col=None):
 
         headers = [str(h).strip() for h in data[0]]
 
-        # required_col kontrol
         if required_col and required_col not in headers:
             return pd.DataFrame()
 
@@ -109,7 +106,6 @@ def load_data(sheet_id, worksheet_index=0, required_col=None):
 
 # ===================== SİLME =====================
 def delete_row_by_value(sheet_id, worksheet_index, col_name, value):
-    """Basit silme: sheet içinde value'yu bulduğu ilk satırı siler."""
     client = connect_to_gsheets()
     ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     try:
@@ -127,7 +123,6 @@ def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
     clean_data = {str(k).strip(): ("" if v is None else str(v)) for k, v in data_dict.items()}
     all_values = ws.get_all_values()
 
-    # Sheet boşsa
     if not all_values:
         ws.append_row(list(clean_data.keys()))
         ws.append_row(list(clean_data.values()))
@@ -136,11 +131,9 @@ def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
 
     headers = [str(h).strip() for h in all_values[0]]
 
-    # unique col yoksa ekle
     if unique_col not in headers:
         headers.append(unique_col)
 
-    # eksik kolonları ekle ve header güncelle
     missing_cols = [k for k in clean_data.keys() if k not in headers]
     if missing_cols:
         headers.extend(missing_cols)
@@ -170,14 +163,14 @@ def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
         ws.append_row(row_to_save)
         st.toast(f"✅ Kaydedildi: {uid}", icon="💾")
 
-# ===================== AUTH (1. EKRAN ŞİFRE) =====================
+# ===================== AUTH (VERİ GİRİŞİ ŞİFRE) =====================
 def require_password_gate():
     if "auth_ok" not in st.session_state:
         st.session_state.auth_ok = False
 
     app_password = st.secrets.get("app_password", None)
     if not app_password:
-        st.error("⚠️ Şifre tanımlı değil. Streamlit Cloud → Settings → Secrets içine `app_password = \"...\"` ekle.")
+        st.error('⚠️ Şifre tanımlı değil. Secrets içine:  app_password = "...."  ekle.')
         st.stop()
 
     if st.session_state.auth_ok:
@@ -197,27 +190,39 @@ def require_password_gate():
                 st.error("❌ Şifre yanlış")
     with c2:
         st.caption("Not: Bu şifre sadece Veri Girişi ekranı için geçerli.")
-
     st.stop()
-def confirm_delete_with_password(key_prefix=""):
-    """
-    Silme öncesi şifre sorar.
-    Doğruysa True döner.
-    """
-    st.warning("⚠️ Silme işlemi için şifre gerekli")
 
-    pw = st.text_input(
-        "Silme Şifresi",
-        type="password",
-        key=f"{key_prefix}_pw"
-    )
+def confirm_delete_with_password(context_key: str) -> bool:
+    """
+    Silme işlemlerini şifreler.
+    context_key: 'case' / 'letter' vb. session_state key için.
+    """
+    app_password = st.secrets.get("app_password", None)
+    if not app_password:
+        st.error('⚠️ Secrets içinde app_password yok.')
+        return False
 
-    if st.button("🔓 Onayla", key=f"{key_prefix}_btn"):
-        if pw == st.secrets.get("app_password"):
-            return True
-        else:
-            st.error("❌ Şifre yanlış")
-            return False
+    key_ok = f"del_ok_{context_key}"
+    if key_ok not in st.session_state:
+        st.session_state[key_ok] = False
+
+    if st.session_state[key_ok]:
+        st.success("✅ Silme yetkisi açık")
+        if st.button("🔒 Silme Kilidini Kapat", key=f"lock_{context_key}"):
+            st.session_state[key_ok] = False
+            st.rerun()
+        return True
+
+    with st.expander("🔐 Silme için şifre gir", expanded=True):
+        pw = st.text_input("Silme Şifresi", type="password", key=f"pw_{context_key}")
+        if st.button("Onayla", key=f"ok_{context_key}", type="primary"):
+            if pw == app_password:
+                st.session_state[key_ok] = True
+                st.success("✅ Doğrulandı")
+                time.sleep(0.3)
+                st.rerun()
+            else:
+                st.error("❌ Şifre yanlış")
 
     return False
 
@@ -287,12 +292,13 @@ with st.sidebar:
         "Zahmetsiz rahmet olmaz.",
         "Sabır acidir , meyvesi tatlıdır.",
         "Ne doğrarsan aşına, o gelir kaşığa.",
-        "kısmet etmiş ise mevla; el getirir, yel getirir, sel getirir. kısmet etmez ise mevla; el götürür, yel götürür, sel götürür.",
-        "Beden almakla doyar ruh vermekle",
+        "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
 
-# ===================== EKRAN 2: CASE REPORT TAKİP =====================
+# =========================================================
+# ===================== EKRAN 2: CASE REPORT =====================
+# =========================================================
 if menu == "📝 Case Report Takip":
     st.header("📝 Case Report Takip")
 
@@ -329,7 +335,7 @@ if menu == "📝 Case Report Takip":
             q = st.text_input("🔎 Arama (dosya no / hasta / doktor)", "")
             dfn_show = dfn.copy()
 
-            # ❌ Not sütununu listeden kaldır
+            # NOT listelenmesin
             if "Not" in dfn_show.columns:
                 dfn_show = dfn_show.drop(columns=["Not"])
 
@@ -343,20 +349,24 @@ if menu == "📝 Case Report Takip":
             st.dataframe(dfn_show, use_container_width=True)
 
             st.divider()
-            st.markdown("##### 🗑️ Silme")
-            del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfn["TarihSaat"].unique(), key="case_del_ts")
-            if st.button("🗑️ Sil", key="case_del_btn"):
-    if confirm_delete_with_password("case"):
-        if delete_row_by_value(SHEET_ID, CASE_WS_INDEX, "TarihSaat", del_ts):
-            st.success("Silindi")
-            time.sleep(0.5)
-            st.rerun()
-        else:
-            st.error("Silinemedi")
+            st.markdown("### 🗑️ Silme (Şifreli)")
+
+            # Şifre doğrulama olmadan silme açılmasın
+            if confirm_delete_with_password("case"):
+                del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfn["TarihSaat"].unique(), key="case_del_ts")
+                if st.button("🗑️ Sil", key="case_del_btn", type="secondary"):
+                    if delete_row_by_value(SHEET_ID, CASE_WS_INDEX, "TarihSaat", del_ts):
+                        st.success("Silindi")
+                        time.sleep(0.4)
+                        st.rerun()
+                    else:
+                        st.error("Hata!")
         else:
             st.info("Henüz case report kaydı yok veya 2. sheet yok/başlık uyumsuz.")
 
+# =========================================================
 # ===================== EKRAN 3: EDİTÖRE MEKTUP =====================
+# =========================================================
 elif menu == "✉️ Editöre Mektup":
     st.header("✉️ Editöre Mektup Takip")
 
@@ -390,13 +400,13 @@ elif menu == "✉️ Editöre Mektup":
         if not dfl.empty:
             dfl_show = dfl.copy()
 
-            # ✅ Maskeli gösterim
+            # Dergi adı + makale adı maskeli
             if "Dergi Adı" in dfl_show.columns:
                 dfl_show["Dergi Adı"] = dfl_show["Dergi Adı"].apply(mask_text)
             if "Makale İsmi" in dfl_show.columns:
                 dfl_show["Makale İsmi"] = dfl_show["Makale İsmi"].apply(mask_text)
 
-            q = st.text_input("🔎 Arama (tarihsaat / yazar)", "")
+            q = st.text_input("🔎 Arama (dergi / makale / yazar)", "")
             if q.strip():
                 mask = dfl_show.apply(
                     lambda row: row.astype(str).str.contains(q, case=False, na=False).any(),
@@ -407,26 +417,29 @@ elif menu == "✉️ Editöre Mektup":
             st.dataframe(dfl_show, use_container_width=True)
 
             st.divider()
-            st.markdown("##### 🗑️ Silme")
-            del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfl["TarihSaat"].unique(), key="letter_del_ts")
-            if st.button("🗑️ Sil", key="letter_del_btn"):
-    if confirm_delete_with_password("letter"):
-        if delete_row_by_value(SHEET_ID, LETTER_WS_INDEX, "TarihSaat", del_ts):
-            st.success("Silindi")
-            time.sleep(0.5)
-            st.rerun()
-        else:
-            st.error("Silinemedi")
+            st.markdown("### 🗑️ Silme (Şifreli)")
+
+            if confirm_delete_with_password("letter"):
+                del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfl["TarihSaat"].unique(), key="letter_del_ts")
+                if st.button("🗑️ Sil", key="letter_del_btn", type="secondary"):
+                    if delete_row_by_value(SHEET_ID, LETTER_WS_INDEX, "TarihSaat", del_ts):
+                        st.success("Silindi")
+                        time.sleep(0.4)
+                        st.rerun()
+                    else:
+                        st.error("Hata!")
         else:
             st.info("Henüz editöre mektup kaydı yok veya 3. sheet yok/başlık uyumsuz.")
 
+# =========================================================
 # ===================== EKRAN 1: VERİ GİRİŞİ (ŞİFRELİ) =====================
+# =========================================================
 else:
     require_password_gate()
 
     df = load_data(SHEET_ID, DATA_WS_INDEX, required_col="Dosya Numarası")
 
-    # ---- ÇALIŞMA KRİTERLERİ (SİYAH ALAN ÜSTÜ) ----
+    # Çalışma kriterleri: ana ekrana taşındı
     st.markdown("### 📋 Çalışma Kriterleri")
     k1, k2 = st.columns(2)
     with k1:
@@ -435,7 +448,6 @@ else:
         st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
     st.markdown("---")
 
-    # ---- SOL/SAĞ PANEL ----
     col_left, col_right = st.columns([2, 3])
 
     with col_left:
@@ -448,11 +460,10 @@ else:
                 edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique())
                 if edit_id:
                     current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
-                    st.success(f"Seçildi: {current.get('Dosya Numarası', '')}")
+                    st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
             else:
                 st.warning("Düzenlenecek kayıt yok.")
 
-    # ===================== VERİ GİRİŞİ LİSTE (EXPORT YOK + AD SOYAD GİZLİ) =====================
     with col_right:
         with st.expander("📋 KAYITLI HASTA LİSTESİ / ARAMA / SİLME", expanded=True):
             if st.button("🔄 Listeyi Yenile"):
@@ -464,9 +475,14 @@ else:
                 q = st.text_input("🔎 Arama (dosya no / hekim)", "")
                 show_df = df.copy()
 
-                # ❌ Adı Soyadı listeden kaldır
+                # Ad Soyad listede görünmesin
                 if "Adı Soyadı" in show_df.columns:
                     show_df = show_df.drop(columns=["Adı Soyadı"])
+
+                # TA sistol/diyastol listeden kalksın (isteğin)
+                for c in ["TA Sistol", "TA Diyastol"]:
+                    if c in show_df.columns:
+                        show_df = show_df.drop(columns=[c])
 
                 if q.strip():
                     mask = show_df.apply(
@@ -477,18 +493,15 @@ else:
 
                 cols_show = ["Dosya Numarası", "Tarih", "Hekim"]
                 final_cols = [c for c in cols_show if c in show_df.columns]
-                if final_cols:
-                    st.dataframe(show_df[final_cols], use_container_width=True)
-                else:
-                    st.dataframe(show_df, use_container_width=True)
+                st.dataframe(show_df[final_cols], use_container_width=True)
 
                 st.divider()
                 st.markdown("##### 🗑️ Silme")
-                del_id = st.selectbox("Silinecek Dosya No", df["Dosya Numarası"].unique(), key="del_box")
-                if st.button("🗑️ SİL", type="secondary"):
+                del_id = st.selectbox("Silinecek Dosya No", df["Dosya Numarası"].unique(), key="data_del_id")
+                if st.button("🗑️ SİL", type="secondary", key="data_del_btn"):
                     if delete_row_by_value(SHEET_ID, DATA_WS_INDEX, "Dosya Numarası", del_id):
                         st.success("Silindi!")
-                        time.sleep(0.5)
+                        time.sleep(0.4)
                         st.rerun()
                     else:
                         st.error("Hata!")
@@ -503,6 +516,7 @@ else:
     def gi(k):
         try: return int(float(current.get(k, 0)))
         except: return 0
+    def gc(k): return str(current.get(k, "")).lower() == "true"
 
     # ---- VERİ GİRİŞ FORMU ----
     with st.form("main_form"):
@@ -559,11 +573,11 @@ else:
 
         st.markdown("##### Ek Hastalıklar")
         ck1, ck2, ck3, ck4, ck5 = st.columns(5)
-        dm = ck1.checkbox("DM", value=(gs("DM").lower() == "true"))
-        kah = ck2.checkbox("KAH", value=(gs("KAH").lower() == "true"))
-        hpl = ck3.checkbox("HPL", value=(gs("HPL").lower() == "true"))
-        inme = ck4.checkbox("İnme", value=(gs("İnme").lower() == "true"))
-        sigara = ck5.checkbox("Sigara", value=(gs("Sigara").lower() == "true"))
+        dm = ck1.checkbox("DM", value=gc("DM"))
+        kah = ck2.checkbox("KAH", value=gc("KAH"))
+        hpl = ck3.checkbox("HPL", value=gc("HPL"))
+        inme = ck4.checkbox("İnme", value=gc("İnme"))
+        sigara = ck5.checkbox("Sigara", value=gc("Sigara"))
         diger = st.text_input("Diğer", value=gs("Diğer"))
 
         st.markdown("### 🩸 Laboratuvar")
@@ -599,7 +613,7 @@ else:
         folik = l4.number_input("Folik Asit (ng/mL)", value=gf("Folik Asit"))
         b12 = l4.number_input("B12 (pg/mL)", value=gf("B12"))
 
-        # ===================== EKO (ESKİ PARAMETRELER AYNEN) =====================
+        # EKO parametreleri (eski set geri)
         st.markdown("### 🫀 Eko")
         e1, e2, e3, e4 = st.columns(4)
 
@@ -755,5 +769,5 @@ else:
                 }
                 save_data_row(SHEET_ID, final_data, unique_col="Dosya Numarası", worksheet_index=DATA_WS_INDEX)
                 st.success(f"✅ {dosya_no} kaydedildi / güncellendi!")
-                time.sleep(0.8)
+                time.sleep(0.6)
                 st.rerun()
