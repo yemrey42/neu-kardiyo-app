@@ -258,11 +258,7 @@ with st.sidebar:
         "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
-
-    st.divider()
-    with st.expander("📋 ÇALIŞMA KRİTERLERİ", expanded=True):
-        st.success("**✅ DAHİL:** Son 6 ayda yeni tanı esansiyel HT")
-        st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
+    
 
 # ===================== EKRAN 2: CASE REPORT TAKİP =====================
 if menu == "📝 Case Report Takip":
@@ -363,6 +359,36 @@ else:
     with col_left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed")
+    st.markdown("---")
+    st.markdown("### 📋 Çalışma Kriterleri")
+
+    k1, k2 = st.columns(2)
+
+    with k1:
+        st.success(
+            """
+            **✅ DAHİL KRİTERLER**
+            
+            • Son **6 ay** içinde  
+            • **Yeni tanı esansiyel hipertansiyon**
+            """
+        )
+
+    with k2:
+        st.error(
+            """
+            **⛔ HARİÇ KRİTERLER**
+            
+            • Sekonder HT  
+            • Kalp yetmezliği (KY)  
+            • Akut koroner sendrom (AKS)  
+            • Cerrahi öyküsü  
+            • Konjenital kalp hastalığı  
+            • Pulmoner HT  
+            • ABY  
+            • **AF**
+            """
+        )
 
         current = {}
         if mode == "Düzenleme":
