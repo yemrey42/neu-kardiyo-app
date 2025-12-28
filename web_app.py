@@ -292,7 +292,8 @@ with st.sidebar:
         "Zahmetsiz rahmet olmaz.",
         "Sabır acidir , meyvesi tatlıdır.",
         "Ne doğrarsan aşına, o gelir kaşığa.",
-        "Batı gibi hayvanca kalkınacağımıza, insanca geri kalalım.\n(Barış Manço)",
+        "kısmet etmiş ise mevla; el getirir, yel getirir, sel getirir. kısmet etmez ise mevla; el götürür, yel götürür, sel götürür.",
+        "Beden almakla doyar ruh vermekle",
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
 
@@ -307,7 +308,7 @@ if menu == "📝 Case Report Takip":
     with left:
         with st.form("case_form"):
             n_dosya = st.text_input("Dosya No")
-            n_ad = st.text_input("Hasta")
+            n_ad = st.text_input("Vaka")
             n_dr = st.text_input("Sorumlu Doktor")
             n_not = st.text_area("Not")
 
@@ -332,7 +333,7 @@ if menu == "📝 Case Report Takip":
     with right:
         dfn = load_data(CASE_SHEET_ID, CASE_WS_INDEX, required_col="TarihSaat")
         if not dfn.empty:
-            q = st.text_input("🔎 Arama (dosya no / hasta / doktor)", "")
+            q = st.text_input("🔎 Arama (dosya no / vaka / doktor)", "")
             dfn_show = dfn.copy()
 
             # NOT listelenmesin
