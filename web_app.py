@@ -264,8 +264,8 @@ st.markdown(
 <div class="ecg-container">
     <div class="ecg-line"></div>
     <div class="ecg-text-track">
-        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
-        <div class="ecg-name">FATİH</div><div class="ecg-name">ZEYNEP</div><div class="ecg-name">NURAY</div><div class="ecg-name">LEYLA</div>
+        <div class="ecg-name">Çile</div><div class="ecg-name">yoksa</div><div class="ecg-name">mükafat da</div><div class="ecg-name">yoktur.</div>
+        <div class="ecg-name">Çile</div><div class="ecg-name">yoksa</div><div class="ecg-name">mükafat da</div><div class="ecg-name">yoktur.</div>
     </div>
 </div>
 """,
