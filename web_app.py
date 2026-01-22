@@ -287,7 +287,7 @@ with st.sidebar:
         "Menü",
         [
             "🏥 H-Type HT Çalışması",
-            "📝 Case Report ve Poster Takip",
+            "📝 Case Report Takip",
             "✉️ Editöre Mektup",
             "🫀 Fizyolojik Pacing Çalışması",
         ],
@@ -310,8 +310,8 @@ with st.sidebar:
 # =========================================================
 # ===================== EKRAN 2: CASE REPORT =====================
 # =========================================================
-if menu == "📝 Case Report ve Poster Takip":
-    st.header("📝 Case Report ve poster Takip")
+if menu == "📝 Case Report Takip":
+    st.header("📝 Case Report Takip")
 
     left, right = st.columns([1, 2])
 
@@ -442,7 +442,7 @@ elif menu == "✉️ Editöre Mektup":
 # =========================================================
 # =========== EKRAN 4: FİZYOLOJİK PACING ÇALIŞMASI =========
 # =========================================================
-elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
+elif menu == "🫀 Fizyolojik Pacing Çalışması":
     require_password_gate()
 
     st.header("🫀 Fizyolojik Pacing (LBBAP / HBP) Çalışması")
