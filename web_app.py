@@ -35,18 +35,6 @@ def connect_to_gsheets():
     return gspread.authorize(creds)
 
 # ===================== YARDIMCI =====================
-def safe_float(val):
-    try:
-        return float(val)
-    except:
-        return 0.0
-
-def safe_int(val):
-    try:
-        return int(float(val))
-    except:
-        return 0
-
 def colnum_to_letter(n: int) -> str:
     s = ""
     while n > 0:
@@ -113,6 +101,22 @@ def delete_row_by_value(sheet_id, worksheet_index, col_name, value):
     client = connect_to_gsheets()
     ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
     try:
+        # güvenli: sadece ilgili sütunda ara
+        headers = ws.row_values(1)
+        if col_name in headers:
+            col_idx = headers.index(col_name) + 1
+            col_vals = ws.col_values(col_idx)
+            row_to_delete = None
+            for i, v in enumerate(col_vals[1:], start=2):
+                if str(v).strip() == str(value).strip():
+                    row_to_delete = i
+                    break
+            if row_to_delete:
+                ws.delete_rows(row_to_delete)
+                return True
+            return False
+
+        # fallback: tüm sheet'te find
         cell = ws.find(str(value))
         ws.delete_rows(cell.row)
         return True
@@ -193,14 +197,10 @@ def require_password_gate():
             else:
                 st.error("❌ Şifre yanlış")
     with c2:
-        st.caption("Not: Bu şifre sadece Veri Girişi ekranı için geçerli.")
+        st.caption("Not: Bu şifre sadece veri ekranları için geçerli.")
     st.stop()
 
 def confirm_delete_with_password(context_key: str) -> bool:
-    """
-    Silme işlemlerini şifreler.
-    context_key: 'case' / 'letter' / 'pacing' vb. session_state key için.
-    """
     app_password = st.secrets.get("app_password", None)
     if not app_password:
         st.error('⚠️ Secrets içinde app_password yok.')
@@ -276,7 +276,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
+# ❌ Global başlık kaldırıldı (isteğin)
+# st.title("H-TYPE HİPERTANSİYON ÇALIŞMASI")
 
 # ===================== SIDEBAR =====================
 with st.sidebar:
@@ -345,7 +346,6 @@ if menu == "📝 Case Report Takip":
             q = st.text_input("🔎 Arama (dosya no / vaka / doktor)", "")
             dfn_show = dfn.copy()
 
-            # NOT listelenmesin
             if "Not" in dfn_show.columns:
                 dfn_show = dfn_show.drop(columns=["Not"])
 
@@ -409,7 +409,6 @@ elif menu == "✉️ Editöre Mektup":
         if not dfl.empty:
             dfl_show = dfl.copy()
 
-            # Dergi adı + makale adı maskeli
             if "Dergi Adı" in dfl_show.columns:
                 dfl_show["Dergi Adı"] = dfl_show["Dergi Adı"].apply(mask_text)
             if "Makale İsmi" in dfl_show.columns:
@@ -449,7 +448,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
     st.header("🫀 Fizyolojik Pacing (LBBAP / HBP) Çalışması")
     st.caption("AV blok nedeniyle fizyolojik pacing yapılan hastalarda TTE+STE ile LV/RV fonksiyonları ve klinik sonlanımlar (NT-proBNP, yatış, mortalite).")
 
-    dfp = load_data(PACED_SHEET_ID, PACED_WS_INDEX, required_col="Dosya Numarası")
+    # ✅ Artık unique key KayıtID olacak (DosyaNo + Ziyaret) => çakışma yok
+    dfp = load_data(PACED_SHEET_ID, PACED_WS_INDEX, required_col="KayıtID")
 
     col_left, col_right = st.columns([2, 3])
 
@@ -459,31 +459,27 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
 
         current = {}
         if mode == "Düzenleme":
-            if not dfp.empty and "Dosya Numarası" in dfp.columns:
-                edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", dfp["Dosya Numarası"].unique(), key="pacing_edit_id")
-                if edit_id:
-                    current = dfp[dfp["Dosya Numarası"] == edit_id].iloc[0].to_dict()
-                    st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
+            if not dfp.empty and "KayıtID" in dfp.columns:
+                edit_key = st.selectbox("Düzenlenecek Kayıt (KayıtID):", dfp["KayıtID"].unique(), key="pacing_edit_key")
+                if edit_key:
+                    current = dfp[dfp["KayıtID"] == edit_key].iloc[0].to_dict()
+                    st.success(f"Seçildi: {current.get('Dosya Numarası','')} | {current.get('Ziyaret','')}")
             else:
                 st.warning("Düzenlenecek kayıt yok.")
 
     with col_right:
-        with st.expander("📋 KAYITLI HASTA LİSTESİ / ARAMA / SİLME", expanded=True):
+        with st.expander("📋 KAYITLI LİSTE / ARAMA / SİLME", expanded=True):
             if st.button("🔄 Listeyi Yenile", key="pacing_refresh"):
                 st.rerun()
 
             if dfp.empty:
                 st.info("Kayıt yok (veya 4. sheet yok/başlık uyumsuz).")
             else:
-                q = st.text_input("🔎 Arama (dosya no / hekim)", "", key="pacing_search")
+                q = st.text_input("🔎 Arama (dosya no / hekim / ziyaret)", "", key="pacing_search")
                 show_df = dfp.copy()
 
                 if "Adı Soyadı" in show_df.columns:
                     show_df = show_df.drop(columns=["Adı Soyadı"])
-
-                for c in ["TA Sistol", "TA Diyastol"]:
-                    if c in show_df.columns:
-                        show_df = show_df.drop(columns=[c])
 
                 if q.strip():
                     mask = show_df.apply(
@@ -492,16 +488,16 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
                     )
                     show_df = show_df[mask].copy()
 
-                cols_show = ["Dosya Numarası", "Tarih", "Hekim", "Pacing Tipi"]
+                cols_show = ["KayıtID", "Dosya Numarası", "Ziyaret", "Tarih", "Hekim", "Pacing Tipi"]
                 final_cols = [c for c in cols_show if c in show_df.columns]
                 st.dataframe(show_df[final_cols], use_container_width=True)
 
                 st.divider()
                 st.markdown("##### 🗑️ Silme (Şifreli)")
                 if confirm_delete_with_password("pacing"):
-                    del_id = st.selectbox("Silinecek Dosya No", dfp["Dosya Numarası"].unique(), key="pacing_del_id")
+                    del_key = st.selectbox("Silinecek KayıtID", dfp["KayıtID"].unique(), key="pacing_del_key")
                     if st.button("🗑️ SİL", type="secondary", key="pacing_del_btn"):
-                        if delete_row_by_value(PACED_SHEET_ID, PACED_WS_INDEX, "Dosya Numarası", del_id):
+                        if delete_row_by_value(PACED_SHEET_ID, PACED_WS_INDEX, "KayıtID", del_key):
                             st.success("Silindi!")
                             time.sleep(0.4)
                             st.rerun()
@@ -520,12 +516,26 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
         except: return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
 
+    VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
+    VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
     with st.form("pacing_main_form"):
         st.markdown("### 👤 Klinik")
         c1, c2 = st.columns(2)
 
         with c1:
             dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=gs("Dosya Numarası"))
+
+            # ✅ Ziyaret seçimi (Dosya No'dan hemen sonra)
+            prev_visit = gs("Ziyaret")
+            visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
+            ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
+            # ✅ Çakışmayı önleyen KayıtID
+            kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}".strip("_")
+
+            st.caption(f"🆔 KayıtID: {kayit_id}")
+
             ad_soyad = st.text_input("Adı Soyadı", value=gs("Adı Soyadı"))
 
             try:
@@ -573,13 +583,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
             ta_dia = ct2.number_input("TA Diyastol (mmHg)", value=gi("TA Diyastol"))
 
         st.markdown("---")
-        ekg_l = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
-        try:
-            e_ix = ekg_l.index(gs("EKG"))
-        except:
-            e_ix = 0
-        ekg = st.selectbox("EKG", ekg_l, index=e_ix)
 
+        # ✅ PACING sekmesinde EKG alanı kaldırıldı (isteğin)
         ci1, ci2 = st.columns(2)
         ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
         baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
@@ -621,11 +626,12 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
         hdl = l3.number_input("HDL (mg/dL)", value=gf("HDL"))
         trig = l3.number_input("Trig (mg/dL)", value=gf("Trig"))
 
-        # ✅ NT-proBNP eklendi
         ntprobnp = l4.number_input("NT-proBNP (pg/mL)", value=gf("NT-proBNP"))
-        folik = l4.number_input("Folik Asit (ng/mL)", value=gf("Folik Asit"))
-        b12 = l4.number_input("B12 (pg/mL)", value=gf("B12"))
-        # ❌ Lp(a) ve Homosistein bu sekmede yok
+
+        # ✅ hs-troponin eklendi
+        hs_trop = l4.number_input("hs-Troponin (ng/L)", value=gf("hs-Troponin"))
+
+        # ✅ Folik Asit ve B12 kaldırıldı (isteğin)
 
         st.markdown("### 🫀 Eko / STE")
         e1, e2, e3, e4 = st.columns(4)
@@ -662,10 +668,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
             gls = st.number_input("GLS (%)", value=gf("GLS"))
             gcs = st.number_input("GCS (%)", value=gf("GCS"))
 
-            # ✅ LV-GRS
             lv_grs = st.number_input("LV GRS (%)", value=gf("LV GRS"))
-
-            # ✅ SD-TS-SYST ve SD-LS-SYST
             sd_ts_syst = st.number_input("SD-TS-SYST (%)", value=gf("SD-TS-SYST"))
             sd_ls_syst = st.number_input("SD-LS-SYST (%)", value=gf("SD-LS-SYST"))
 
@@ -693,7 +696,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
             rvot = st.number_input("RVOT VTI (cm)", value=gf("RVOT VTI"))
             rvota = st.number_input("RVOT accT (ms)", value=gf("RVOT accT"))
 
-            # ✅ Yeni RV parametreleri
             rv_fw_ls = st.number_input("RV Free-Wall Longitudinal Strain (%)", value=gf("RV FWLS"))
             rv_fac = st.number_input("RV FAC (%)", value=gf("RV FAC"))
             rv_grs = st.number_input("RV GRS (%)", value=gf("RV GRS"))
@@ -708,7 +710,10 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
                 st.error("Dosya No ve Hekim zorunlu!")
             else:
                 final_data = {
+                    "KayıtID": kayit_id,
                     "Dosya Numarası": dosya_no,
+                    "Ziyaret": ziyaret,
+
                     "Adı Soyadı": ad_soyad,
                     "Tarih": str(basvuru),
                     "Hekim": hekim,
@@ -726,7 +731,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
                     "BSA": bsa,
                     "TA Sistol": ta_sis,
                     "TA Diyastol": ta_dia,
-                    "EKG": ekg,
+
                     "İlaçlar": ilaclar,
                     "Başlanan": baslanan,
 
@@ -763,8 +768,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
                     "Trig": trig,
 
                     "NT-proBNP": ntprobnp,
-                    "Folik Asit": folik,
-                    "B12": b12,
+                    "hs-Troponin": hs_trop,
 
                     "LVEDD": lvedd,
                     "LVESD": lvesd,
@@ -812,8 +816,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
                     "RV GRS": rv_grs,
                 }
 
-                save_data_row(PACED_SHEET_ID, final_data, unique_col="Dosya Numarası", worksheet_index=PACED_WS_INDEX)
-                st.success(f"✅ {dosya_no} kaydedildi / güncellendi!")
+                save_data_row(PACED_SHEET_ID, final_data, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
+                st.success(f"✅ {kayit_id} kaydedildi / güncellendi!")
                 time.sleep(0.6)
                 st.rerun()
 
@@ -822,6 +826,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
 # =========================================================
 else:
     require_password_gate()
+
+    st.header("🏥 H-Type HT – Veri Girişi")  # ✅ eski global başlık yerine sekme içi başlık
 
     df = load_data(SHEET_ID, DATA_WS_INDEX, required_col="Dosya Numarası")
 
@@ -900,6 +906,7 @@ else:
         except: return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
 
+    # ---- H-Type formu (senin eski hali aynen duruyor) ----
     with st.form("main_form"):
         st.markdown("### 👤 Klinik")
         c1, c2 = st.columns(2)
