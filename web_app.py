@@ -827,7 +827,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması [Şifreli]":
 else:
     require_password_gate()
 
-    st.header("🏥 H-Type HT – Veri Girişi")  # ✅ eski global başlık yerine sekme içi başlık
+    st.header("🏥 H-Type HT Çalışması")  # ✅ eski global başlık yerine sekme içi başlık
 
     df = load_data(SHEET_ID, DATA_WS_INDEX, required_col="Dosya Numarası")
 
