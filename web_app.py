@@ -286,10 +286,10 @@ with st.sidebar:
     menu = st.radio(
         "Menü",
         [
-            "🏥 Veri Girişi (H-Type HT) [Şifreli]",
-            "📝 Case Report Takip",
+            "🏥 H-Type HT Çalışması",
+            "📝 Case Report ve Poster Takip",
             "✉️ Editöre Mektup",
-            "🫀 Fizyolojik Pacing Çalışması [Şifreli]",
+            "🫀 Fizyolojik Pacing Çalışması",
         ],
     )
 
@@ -310,8 +310,8 @@ with st.sidebar:
 # =========================================================
 # ===================== EKRAN 2: CASE REPORT =====================
 # =========================================================
-if menu == "📝 Case Report Takip":
-    st.header("📝 Case Report Takip")
+if menu == "📝 Case Report ve Poster Takip":
+    st.header("📝 Case Report ve poster Takip")
 
     left, right = st.columns([1, 2])
 
