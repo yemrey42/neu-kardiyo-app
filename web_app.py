@@ -20,6 +20,9 @@ LETTER_WS_INDEX = 2     # 3. sayfa: Editöre Mektup
 PACED_SHEET_ID = SHEET_ID
 PACED_WS_INDEX = 3      # 4. sayfa: Pacing Study (Google Sheet'te 4. sekme)
 
+AFMR_SHEET_ID = SHEET_ID
+AFMR_WS_INDEX = 4   # AFMR_TEE_LVGLS sekmesinin index'i
+
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
 # ===================== GOOGLE SHEETS BAĞLANTI =====================
@@ -290,6 +293,7 @@ with st.sidebar:
             "📝 Case Report Takip",
             "✉️ Editöre Mektup",
             "🫀 Fizyolojik Pacing Çalışması",
+            "🫀 AFMR – TEE LV-GLS",
         ],
     )
 
@@ -1158,3 +1162,402 @@ else:
                 st.success(f"✅ {dosya_no} kaydedildi / güncellendi!")
                 time.sleep(0.6)
                 st.rerun()
+
+elif menu == "🫀 AFMR – TEE LV-GLS":
+    require_password_gate()
+
+    st.header("🫀 AFMR – TEE ile LV-GLS (TTE ile karşılaştırma)")
+    st.caption("Atrial sekonder MR (AFMR): TEE-LVGLS ↔ TTE-LVGLS uyumu, MR şiddeti ayrımı, AF vs SR alt grupları.")
+
+    # Bu ekranda çakışma olmasın diye KayıtID kullanıyoruz: DosyaNo + Ziyaret + Tarih
+    df = load_data(AFMR_SHEET_ID, AFMR_WS_INDEX, required_col="KayıtID")
+
+    left, right = st.columns([2, 3])
+
+    with left:
+        st.markdown("##### ⚙️ İşlem Seçimi")
+        mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed", key="afmr_mode")
+
+        current = {}
+        if mode == "Düzenleme":
+            if not df.empty and "KayıtID" in df.columns:
+                edit_key = st.selectbox("Düzenlenecek kayıt (KayıtID):", df["KayıtID"].unique(), key="afmr_edit_key")
+                if edit_key:
+                    current = df[df["KayıtID"] == edit_key].iloc[0].to_dict()
+                    st.success(f"Seçildi: {current.get('Dosya No','')} | {current.get('Ziyaret','')} | {current.get('Ritim','')}")
+            else:
+                st.warning("Düzenlenecek kayıt yok (veya sheet boş).")
+
+    with right:
+        with st.expander("📋 Kayıtlı Liste / Arama / Silme", expanded=True):
+            if st.button("🔄 Listeyi Yenile", key="afmr_refresh"):
+                st.rerun()
+
+            if df.empty:
+                st.info("Kayıt yok (veya AFMR sheet index yanlış / başlıklar oluşmadı). İlk kaydı girince başlıklar otomatik oluşur.")
+            else:
+                q = st.text_input("🔎 Arama (dosya no / hekim / ritim)", "", key="afmr_search")
+                show_df = df.copy()
+
+                # isim listede görünmesin
+                for c in ["Hasta", "Adı Soyadı"]:
+                    if c in show_df.columns:
+                        show_df = show_df.drop(columns=[c])
+
+                if q.strip():
+                    mask = show_df.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                    show_df = show_df[mask].copy()
+
+                cols_show = ["KayıtID", "Dosya No", "Tarih", "Ziyaret", "Ritim", "Hekim", "MR (TEE) Derece"]
+                final_cols = [c for c in cols_show if c in show_df.columns]
+                st.dataframe(show_df[final_cols], use_container_width=True)
+
+                st.divider()
+                st.markdown("##### 🗑️ Silme (Şifreli)")
+                if confirm_delete_with_password("afmr"):
+                    del_key = st.selectbox("Silinecek KayıtID", df["KayıtID"].unique(), key="afmr_del_key")
+                    if st.button("🗑️ SİL", type="secondary", key="afmr_del_btn"):
+                        if delete_row_by_value(AFMR_SHEET_ID, AFMR_WS_INDEX, "KayıtID", del_key):
+                            st.success("Silindi!")
+                            time.sleep(0.4)
+                            st.rerun()
+                        else:
+                            st.error("Hata!")
+
+    st.divider()
+
+    # ---- helper ----
+    def gs(k): return str(current.get(k, ""))
+    def gf(k):
+        try: return float(current.get(k, 0))
+        except: return 0.0
+    def gi(k):
+        try: return int(float(current.get(k, 0)))
+        except: return 0
+    def gc(k): return str(current.get(k, "")).lower() == "true"
+
+    VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
+    VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
+    with st.form("afmr_form"):
+        # ===================== 1) Dahil / Dışlama / Ritim =====================
+        st.markdown("### ✅ Dahil / ⛔ Dışlama / Ritim")
+        a1, a2, a3 = st.columns(3)
+
+        with a1:
+            inc_age = st.checkbox("≥18 yaş", value=gc("Dahil: ≥18"))
+            inc_afmr = st.checkbox("AFMR tanısı (primer leaflet patolojisi yok)", value=gc("Dahil: AFMR"))
+            inc_tee_ind = st.checkbox("Klinik TEE endikasyonu mevcut", value=gc("Dahil: TEE endikasyonu"))
+        with a2:
+            inc_mr = st.checkbox("MR: orta/ileri", value=gc("Dahil: MR orta/ileri"))
+            consent = st.checkbox("Gönüllü onam", value=gc("Onam"))
+        with a3:
+            ritim = st.radio("Ritim grubu", ["AF", "SR"], index=(0 if gs("Ritim") != "SR" else 1), horizontal=True)
+
+        # ===================== 2) Demografi / Klinik =====================
+        st.markdown("### 👤 Demografi ve Klinik")
+        c1, c2 = st.columns(2)
+
+        with c1:
+            hasta = st.text_input("Hasta (opsiyonel)", value=gs("Hasta"))
+            dosya_no = st.text_input("Dosya No (Zorunlu)", value=gs("Dosya No"))
+
+            # Ziyaret (baseline / kontrol) + KayıtID
+            prev_visit = gs("Ziyaret")
+            visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
+            ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
+            try:
+                d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
+            except:
+                d_date = datetime.now().date()
+            tarih = st.date_input("Tarih", value=d_date)
+
+            # KayıtID (çakışmasın diye): DosyaNo + Ziyaret + Tarih
+            kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}_{tarih.strftime('%Y%m%d')}".strip("_")
+            st.caption(f"🆔 KayıtID: {kayit_id}")
+
+            hekim = st.text_input("Hekim", value=gs("Hekim"))
+
+            yas = st.number_input("Yaş", step=1, value=gi("Yaş"))
+            cinsiyet = st.radio("Cinsiyet", ["Kadın", "Erkek"], index=(0 if gs("Cinsiyet") != "Erkek" else 1), horizontal=True)
+
+        with c2:
+            boy = st.number_input("Boy (cm)", value=gf("Boy"))
+            kilo = st.number_input("Kilo (kg)", value=gf("Kilo"))
+            bmi = kilo / ((boy / 100) ** 2) if boy > 0 else 0
+            bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
+            st.metric("BMI", f"{bmi:.1f}")
+            st.metric("BSA", f"{bsa:.2f}")
+
+            nyha = st.selectbox("NYHA", ["I", "II", "III", "IV"], index=(["I","II","III","IV"].index(gs("NYHA")) if gs("NYHA") in ["I","II","III","IV"] else 0))
+
+            st.markdown("##### Semptomlar")
+            s1, s2, s3, s4 = st.columns(4)
+            sym_dispne = s1.checkbox("Dispne", value=gc("Semptom: Dispne"))
+            sym_carpinti = s2.checkbox("Çarpıntı", value=gc("Semptom: Çarpıntı"))
+            sym_yorgunluk = s3.checkbox("Yorgunluk", value=gc("Semptom: Yorgunluk"))
+            sym_diger = s4.text_input("Diğer", value=gs("Semptom: Diğer"))
+
+        # AF detayları
+        st.markdown("### 🫀 AF Öyküsü (varsa)")
+        if ritim == "AF":
+            af1, af2, af3 = st.columns(3)
+            af_sure = af1.number_input("AF süresi (ay)", value=gf("AF süresi (ay)"))
+            af_tipi = af2.selectbox("AF tipi", ["Paroksismal", "Persistan", "Permanen"], index=(["Paroksismal","Persistan","Permanen"].index(gs("AF tipi")) if gs("AF tipi") in ["Paroksismal","Persistan","Permanen"] else 0))
+            af_not = af3.text_input("AF not (opsiyonel)", value=gs("AF not"))
+        else:
+            af_sure, af_tipi, af_not = 0, "", ""
+
+        # ===================== 3) Tıbbi Öykü / Komorbiditeler =====================
+        st.markdown("### 🧾 Tıbbi Öykü")
+        k1, k2, k3, k4 = st.columns(4)
+        hx_ht = k1.checkbox("Hipertansiyon", value=gc("Öykü: HT"))
+        hx_dm = k1.checkbox("Diyabet", value=gc("Öykü: DM"))
+        hx_kah = k2.checkbox("KAH / MI", value=gc("Öykü: KAH/MI"))
+        hx_kby = k2.checkbox("KBY (eGFR<60)", value=gc("Öykü: KBY"))
+        hx_koah = k3.checkbox("KOAH/Astım", value=gc("Öykü: KOAH/Astım"))
+        hx_obez = k3.checkbox("Obezite (BMI≥30)", value=gc("Öykü: Obezite"))
+        hx_osa = k4.checkbox("Uyku apnesi", value=gc("Öykü: Uyku apnesi"))
+        hx_tiroid = k4.checkbox("Tiroid hastalığı", value=gc("Öykü: Tiroid"))
+        hx_diger = st.text_input("Diğer (öykü)", value=gs("Öykü: Diğer"))
+
+        # ===================== 4) İlaçlar =====================
+        st.markdown("### 💊 Güncel Tedavi")
+        t1, t2, t3 = st.columns(3)
+        med_bb = t1.checkbox("Beta bloker", value=gc("Tedavi: BB"))
+        med_ace = t1.checkbox("ACEi/ARB/ARNI", value=gc("Tedavi: ACEi/ARB/ARNI"))
+        med_mra = t2.checkbox("MRA", value=gc("Tedavi: MRA"))
+        med_sglt2 = t2.checkbox("SGLT2 inhibitörü", value=gc("Tedavi: SGLT2"))
+        med_diur = t3.checkbox("Diüretik", value=gc("Tedavi: Diüretik"))
+        med_antitrom = t3.checkbox("Antikoagülan/Antiplatelet", value=gc("Tedavi: Antitrombotik"))
+        med_antitrom_detay = st.text_input("Antitrombotik (hangisi?)", value=gs("Tedavi: Antitrombotik detay"))
+        med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
+
+        # ===================== 5) Laboratuvar =====================
+        st.markdown("### 🩸 Laboratuvar (opsiyonel)")
+        l1, l2, l3 = st.columns(3)
+        lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
+        lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
+        lab_egfr = l1.number_input("eGFR (mL/dk/1.73m²)", value=gf("eGFR"))
+
+        bnp_type = l2.selectbox("BNP tipi", ["NT-proBNP", "BNP"], index=(0 if gs("BNP tipi") != "BNP" else 1))
+        lab_bnp = l2.number_input(f"{bnp_type} değeri", value=gf(bnp_type))
+        lab_bnp_unit = l2.text_input("Birim", value=(gs("BNP birim") if gs("BNP birim") else "pg/mL"))
+
+        lab_diger = l3.text_input("Diğer (lab)", value=gs("Lab: Diğer"))
+
+        # ===================== 6) Hemodinami / Sedasyon =====================
+        st.markdown("### 🧠 Görüntüleme Seansı – Hemodinami & Sedasyon")
+        h1, h2, h3 = st.columns(3)
+
+        sed_ilac = h1.text_input("Sedasyon ilacı", value=(gs("Sedasyon ilacı") if gs("Sedasyon ilacı") else "Midazolam"))
+        sed_doz = h1.number_input("Doz (mg)", value=gf("Sedasyon doz (mg)"))
+        sed_saat = h1.text_input("Uygulama saati (HH:MM)", value=gs("Sedasyon saat"))
+
+        pre_bp = h2.text_input("TEE öncesi BP", value=gs("TEE öncesi BP"))
+        pre_hr = h2.text_input("TEE öncesi HR", value=gs("TEE öncesi HR"))
+        pre_spo2 = h2.text_input("TEE öncesi SpO2", value=gs("TEE öncesi SpO2"))
+
+        tee_avg_bp = h3.text_input("TEE sırasında ort. BP", value=gs("TEE ort BP"))
+        tee_avg_hr = h3.text_input("TEE sırasında ort. HR", value=gs("TEE ort HR"))
+        post_bp_hr = h3.text_input("TEE sonrası BP/HR", value=gs("TEE sonrası BP/HR"))
+
+        tte_bp_hr = st.text_input("TTE (TEE hemen sonrası) BP/HR", value=gs("TTE sonrası BP/HR"))
+        tee_rhythm = st.radio("TEE sırasında ritim", ["AF", "SR"], index=(0 if gs("TEE ritim") != "SR" else 1), horizontal=True)
+        tee_hr = st.number_input("TEE sırasında HR", value=gi("TEE HR"))
+
+        # ===================== 7) TEE MR kantitasyon =====================
+        st.markdown("### 🩻 TEE – MR Kantitasyonu & Morfoloji")
+        m1, m2, m3 = st.columns(3)
+
+        mr_deg_tee = m1.selectbox("MR (TEE) Derece (integratif)", ["Orta", "İleri"], index=(["Orta","İleri"].index(gs("MR (TEE) Derece")) if gs("MR (TEE) Derece") in ["Orta","İleri"] else 0))
+        mr_jet = m1.selectbox("MR jet tipi", ["Santral", "Eksantrik", "Multijet"], index=(["Santral","Eksantrik","Multijet"].index(gs("MR jet tipi")) if gs("MR jet tipi") in ["Santral","Eksantrik","Multijet"] else 0))
+        mr_jet_yon = m1.text_input("Jet yön (ops.)", value=gs("Jet yön"))
+
+        vc = m2.number_input("Vena contracta (mm)", value=gf("VC (mm)"))
+        vca3d = m2.number_input("3D VCA (cm²)", value=gf("3D VCA (cm2)"))
+        eroa = m2.number_input("EROA (mm²)", value=gf("EROA (mm2)"))
+
+        rvol = m3.number_input("Regürjitan volüm (mL)", value=gf("RVol (mL)"))
+        rfrac = m3.number_input("Regürjitan fraksiyon (%)", value=gf("RFrac (%)"))
+        pv_flow = m3.selectbox("Pulmoner ven akımı", ["S baskın", "D baskın", "Sistolik reversiyon"], index=(["S baskın","D baskın","Sistolik reversiyon"].index(gs("PV akım")) if gs("PV akım") in ["S baskın","D baskın","Sistolik reversiyon"] else 0))
+        pv_sd = m3.number_input("PV S/D oranı", value=gf("PV S/D"))
+
+        pisa_r = st.number_input("PISA yarıçapı (mm)", value=gf("PISA r (mm)"))
+        alias_v = st.number_input("Aliasing V (cm/sn)", value=gf("Aliasing V (cm/s)"))
+
+        st.markdown("#### Mitral annulus / leaflet ölçümleri")
+        g1, g2, g3, g4 = st.columns(4)
+        ap_d = g1.number_input("AP diameter (mm)", value=gf("AP diameter (mm)"))
+        cc_d = g2.number_input("CC diameter (mm)", value=gf("CC diameter (mm)"))
+        circ = g3.number_input("3D circumference (mm)", value=gf("3D circumference (mm)"))
+        coapt_area = g4.number_input("Coaptation Area (mm²)", value=gf("Coaptation Area (mm2)"))
+
+        g5, g6, g7, g8 = st.columns(4)
+        coapt_len = g5.number_input("Coaptation Length (mm)", value=gf("Coaptation Length (mm)"))
+        coapt_depth = g6.number_input("Coaptation Depth (mm)", value=gf("Coaptation Depth (mm)"))
+        coapt_dist = g7.number_input("Coaptation Distance (posterior) (mm)", value=gf("Coaptation Distance (mm)"))
+        aml_len = g8.number_input("AML Length (mm)", value=gf("AML Length (mm)"))
+        pml_len = st.number_input("PML Length (mm)", value=gf("PML Length (mm)"))
+
+        # ===================== 8) TEE LV fonksiyon/strain =====================
+        st.markdown("### 🫀 TEE – LV Fonksiyon & Strain")
+        s1, s2, s3 = st.columns(3)
+        lvef = s1.number_input("LVEF (%)", value=gf("TEE LVEF"))
+        lvef_met = s1.selectbox("LVEF yöntemi", ["Biplan Simpson", "Gözlemsel", "3D", "Diğer"], index=(["Biplan Simpson","Gözlemsel","3D","Diğer"].index(gs("LVEF yöntem")) if gs("LVEF yöntem") in ["Biplan Simpson","Gözlemsel","3D","Diğer"] else 0))
+        lvedv = s2.number_input("LVEDV (mL)", value=gf("TEE LVEDV"))
+        lvesv = s2.number_input("LVESV (mL)", value=gf("TEE LVESV"))
+        sv = s2.number_input("SV (mL)", value=gf("TEE SV"))
+
+        tee_gls = s3.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
+        fr = s3.number_input("Frame rate (fps)", value=gf("Frame rate"))
+        ivs = s3.number_input("IVS (mm)", value=gf("IVS (mm)"))
+        pw = s3.number_input("PW (mm)", value=gf("PW (mm)"))
+
+        # ===================== 9) TTE (TEE sonrası) =====================
+        st.markdown("### 🫁 TTE (TEE Sonrası) – Karşılaştırma")
+        t1, t2, t3 = st.columns(3)
+        mr_deg_tte = t1.selectbox("MR (TTE) Derece (integratif)", ["Hafif", "Orta", "İleri"], index=(["Hafif","Orta","İleri"].index(gs("MR (TTE) Derece")) if gs("MR (TTE) Derece") in ["Hafif","Orta","İleri"] else 1))
+        tte_lvef = t1.number_input("LVEF (TTE) (%)", value=gf("TTE LVEF"))
+        tte_lvedv = t2.number_input("LVEDV (TTE) (mL)", value=gf("TTE LVEDV"))
+        tte_lvesv = t2.number_input("LVESV (TTE) (mL)", value=gf("TTE LVESV"))
+        tte_sv = t2.number_input("SV (TTE) (mL)", value=gf("TTE SV"))
+
+        tte_gls = t3.number_input("LV-GLS (TTE) (%)", value=gf("TTE LVGLS"))
+        laesv = t3.number_input("LAESV (mL)", value=gf("LAESV"))
+
+        tr_deg = st.selectbox("TY/TR derecesi (integratif)", ["Hafif", "Orta", "İleri"], index=(["Hafif","Orta","İleri"].index(gs("TR derece")) if gs("TR derece") in ["Hafif","Orta","İleri"] else 0))
+        tr_vmax = st.number_input("TR Vmax (m/sn)", value=gf("TR Vmax"))
+        spap = st.number_input("Tahmini sPAP (mmHg)", value=gf("sPAP"))
+        tapse = st.number_input("TAPSE (mm)", value=gf("TAPSE"))
+
+        st.write("")
+        if st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary"):
+            if not dosya_no or not hekim:
+                st.error("Dosya No ve Hekim zorunlu!")
+            else:
+                payload = {
+                    "KayıtID": kayit_id,
+                    "Hasta": hasta,
+                    "Dosya No": dosya_no,
+                    "Tarih": str(tarih),
+                    "Ziyaret": ziyaret,
+                    "Hekim": hekim,
+
+                    "Dahil: ≥18": inc_age,
+                    "Dahil: AFMR": inc_afmr,
+                    "Dahil: TEE endikasyonu": inc_tee_ind,
+                    "Dahil: MR orta/ileri": inc_mr,
+                    "Onam": consent,
+
+                    "Yaş": yas,
+                    "Cinsiyet": cinsiyet,
+                    "Boy": boy,
+                    "Kilo": kilo,
+                    "BMI": bmi,
+                    "BSA": bsa,
+                    "NYHA": nyha,
+
+                    "Semptom: Dispne": sym_dispne,
+                    "Semptom: Çarpıntı": sym_carpinti,
+                    "Semptom: Yorgunluk": sym_yorgunluk,
+                    "Semptom: Diğer": sym_diger,
+
+                    "Ritim": ritim,
+                    "AF süresi (ay)": af_sure,
+                    "AF tipi": af_tipi,
+                    "AF not": af_not,
+
+                    "Öykü: HT": hx_ht,
+                    "Öykü: DM": hx_dm,
+                    "Öykü: KAH/MI": hx_kah,
+                    "Öykü: KBY": hx_kby,
+                    "Öykü: KOAH/Astım": hx_koah,
+                    "Öykü: Obezite": hx_obez,
+                    "Öykü: Uyku apnesi": hx_osa,
+                    "Öykü: Tiroid": hx_tiroid,
+                    "Öykü: Diğer": hx_diger,
+
+                    "Tedavi: BB": med_bb,
+                    "Tedavi: ACEi/ARB/ARNI": med_ace,
+                    "Tedavi: MRA": med_mra,
+                    "Tedavi: SGLT2": med_sglt2,
+                    "Tedavi: Diüretik": med_diur,
+                    "Tedavi: Antitrombotik": med_antitrom,
+                    "Tedavi: Antitrombotik detay": med_antitrom_detay,
+                    "Tedavi: Diğer": med_diger,
+
+                    "Hb": lab_hb,
+                    "Kreatinin": lab_krea,
+                    "eGFR": lab_egfr,
+                    "BNP tipi": bnp_type,
+                    "NT-proBNP": (lab_bnp if bnp_type == "NT-proBNP" else ""),
+                    "BNP": (lab_bnp if bnp_type == "BNP" else ""),
+                    "BNP birim": lab_bnp_unit,
+                    "Lab: Diğer": lab_diger,
+
+                    "Sedasyon ilacı": sed_ilac,
+                    "Sedasyon doz (mg)": sed_doz,
+                    "Sedasyon saat": sed_saat,
+                    "TEE öncesi BP": pre_bp,
+                    "TEE öncesi HR": pre_hr,
+                    "TEE öncesi SpO2": pre_spo2,
+                    "TEE ort BP": tee_avg_bp,
+                    "TEE ort HR": tee_avg_hr,
+                    "TEE sonrası BP/HR": post_bp_hr,
+                    "TTE sonrası BP/HR": tte_bp_hr,
+                    "TEE ritim": tee_rhythm,
+                    "TEE HR": tee_hr,
+
+                    "MR (TEE) Derece": mr_deg_tee,
+                    "MR jet tipi": mr_jet,
+                    "Jet yön": mr_jet_yon,
+                    "VC (mm)": vc,
+                    "3D VCA (cm2)": vca3d,
+                    "EROA (mm2)": eroa,
+                    "RVol (mL)": rvol,
+                    "RFrac (%)": rfrac,
+                    "PV akım": pv_flow,
+                    "PV S/D": pv_sd,
+                    "PISA r (mm)": pisa_r,
+                    "Aliasing V (cm/s)": alias_v,
+
+                    "AP diameter (mm)": ap_d,
+                    "CC diameter (mm)": cc_d,
+                    "3D circumference (mm)": circ,
+                    "Coaptation Area (mm2)": coapt_area,
+                    "Coaptation Length (mm)": coapt_len,
+                    "Coaptation Depth (mm)": coapt_depth,
+                    "Coaptation Distance (mm)": coapt_dist,
+                    "AML Length (mm)": aml_len,
+                    "PML Length (mm)": pml_len,
+
+                    "TEE LVEF": lvef,
+                    "LVEF yöntem": lvef_met,
+                    "TEE LVEDV": lvedv,
+                    "TEE LVESV": lvesv,
+                    "TEE SV": sv,
+                    "TEE LVGLS": tee_gls,
+                    "Frame rate": fr,
+                    "IVS (mm)": ivs,
+                    "PW (mm)": pw,
+
+                    "MR (TTE) Derece": mr_deg_tte,
+                    "TTE LVEF": tte_lvef,
+                    "TTE LVEDV": tte_lvedv,
+                    "TTE LVESV": tte_lvesv,
+                    "TTE SV": tte_sv,
+                    "TTE LVGLS": tte_gls,
+                    "LAESV": laesv,
+                    "TR derece": tr_deg,
+                    "TR Vmax": tr_vmax,
+                    "sPAP": spap,
+                    "TAPSE": tapse,
+                }
+
+                save_data_row(AFMR_SHEET_ID, payload, unique_col="KayıtID", worksheet_index=AFMR_WS_INDEX)
+                st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
+                time.sleep(0.5)
+                st.rerun()
+
