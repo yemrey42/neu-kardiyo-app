@@ -2,29 +2,28 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import random
-from io import BytesIO
+import hmac
 
 # ===================== AYARLAR =====================
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 CASE_SHEET_ID = SHEET_ID
 LETTER_SHEET_ID = SHEET_ID
+PACED_SHEET_ID = SHEET_ID
+AFMR_SHEET_ID = SHEET_ID
 
 DATA_WS_INDEX = 0       # 1. sayfa: Veri Girişi (H-Type HT)
 CASE_WS_INDEX = 1       # 2. sayfa: Case Report Takip
 LETTER_WS_INDEX = 2     # 3. sayfa: Editöre Mektup
-
-# ✅ Fizyolojik Pacing (LBBAP/HBP)
-PACED_SHEET_ID = SHEET_ID
 PACED_WS_INDEX = 3      # 4. sayfa: Pacing Study
-
-# ✅ AFMR – TEE LV-GLS
-AFMR_SHEET_ID = SHEET_ID
 AFMR_WS_INDEX = 4       # 5. sayfa: AFMR_TEE_LVGLS
 
+AUTH_TTL_MINUTES = 10   # tek kullanıcı için yeterli
+
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
+
 
 # ===================== GOOGLE SHEETS BAĞLANTI =====================
 @st.cache_resource
@@ -33,10 +32,22 @@ def connect_to_gsheets():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
+    if "gcp_service_account" not in st.secrets:
+        raise RuntimeError("st.secrets içinde gcp_service_account yok.")
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         st.secrets["gcp_service_account"], scope
     )
     return gspread.authorize(creds)
+
+
+def get_ws(sheet_id: str, worksheet_index: int):
+    client = connect_to_gsheets()
+    sh = client.open_by_key(sheet_id)
+    ws = sh.get_worksheet(worksheet_index)
+    if ws is None:
+        raise RuntimeError(f"Worksheet index bulunamadı: {worksheet_index}")
+    return ws
+
 
 # ===================== YARDIMCI =====================
 def colnum_to_letter(n: int) -> str:
@@ -46,11 +57,6 @@ def colnum_to_letter(n: int) -> str:
         s = chr(65 + r) + s
     return s
 
-def to_excel_bytes(df: pd.DataFrame, sheet_name="Sheet1") -> bytes:
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
-    return output.getvalue()
 
 def mask_text(x: str) -> str:
     """Dergi/Makale adını maskeler: her kelimenin ilk harfi + ***"""
@@ -59,152 +65,187 @@ def mask_text(x: str) -> str:
     parts = str(x).split()
     return " ".join([(w[0] + "***") if len(w) > 0 else "" for w in parts])
 
-# ===================== VERİ ÇEKME =====================
-def load_data(sheet_id, worksheet_index=0, required_col=None):
-    try:
-        client = connect_to_gsheets()
-        ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
-        data = ws.get_all_values()
 
-        if not data or len(data) < 1:
+def normalize_headers(headers):
+    return [str(h).strip() for h in headers]
+
+
+def make_unique_headers(headers):
+    seen = {}
+    unique_headers = []
+    for h in headers:
+        if h in seen:
+            seen[h] += 1
+            unique_headers.append(f"{h}_{seen[h]}")
+        else:
+            seen[h] = 0
+            unique_headers.append(h)
+    return unique_headers
+
+
+def safe_str(v):
+    if v is None:
+        return ""
+    return str(v)
+
+
+# ===================== VERİ ÇEKME =====================
+def load_data(sheet_id, worksheet_index=0, required_col=None) -> pd.DataFrame:
+    try:
+        ws = get_ws(sheet_id, worksheet_index)
+        data = ws.get_all_values()
+        if not data:
             return pd.DataFrame()
 
-        headers = [str(h).strip() for h in data[0]]
-
+        headers = normalize_headers(data[0])
         if required_col and required_col not in headers:
             return pd.DataFrame()
 
+        headers = make_unique_headers(headers)
         rows = data[1:]
+        num_cols = len(headers)
 
-        # Duplicate header fix
-        seen = {}
-        unique_headers = []
-        for h in headers:
-            if h in seen:
-                seen[h] += 1
-                unique_headers.append(f"{h}_{seen[h]}")
-            else:
-                seen[h] = 0
-                unique_headers.append(h)
-
-        num_cols = len(unique_headers)
         fixed_rows = []
         for row in rows:
             if len(row) < num_cols:
-                row += [""] * (num_cols - len(row))
+                row = row + [""] * (num_cols - len(row))
+            elif len(row) > num_cols:
+                row = row[:num_cols]
             fixed_rows.append(row)
 
-        df = pd.DataFrame(fixed_rows, columns=unique_headers)
+        df = pd.DataFrame(fixed_rows, columns=headers)
         return df.astype(str)
-    except:
+    except Exception as e:
+        st.error(f"Sheets okuma hatası: {e}")
         return pd.DataFrame()
 
+
 # ===================== SİLME =====================
-def delete_row_by_value(sheet_id, worksheet_index, col_name, value):
-    client = connect_to_gsheets()
-    ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+def delete_row_by_value(sheet_id, worksheet_index, col_name, value) -> bool:
+    """Sadece hedef sütunda arar. Yanlış kayıt silmesin diye sheet genelinde find() YOK."""
     try:
-        # güvenli: sadece ilgili sütunda ara
+        ws = get_ws(sheet_id, worksheet_index)
         headers = ws.row_values(1)
-        if col_name in headers:
-            col_idx = headers.index(col_name) + 1
-            col_vals = ws.col_values(col_idx)
-            row_to_delete = None
-            for i, v in enumerate(col_vals[1:], start=2):
-                if str(v).strip() == str(value).strip():
-                    row_to_delete = i
-                    break
-            if row_to_delete:
-                ws.delete_rows(row_to_delete)
-                return True
+        headers = normalize_headers(headers)
+
+        if col_name not in headers:
             return False
 
-        # fallback: tüm sheet'te find
-        cell = ws.find(str(value))
-        ws.delete_rows(cell.row)
-        return True
-    except:
+        col_idx = headers.index(col_name) + 1
+        col_vals = ws.col_values(col_idx)
+
+        target = str(value).strip()
+        row_to_delete = None
+        for i, v in enumerate(col_vals[1:], start=2):
+            if str(v).strip() == target:
+                row_to_delete = i
+                break
+
+        if row_to_delete:
+            ws.delete_rows(row_to_delete)
+            return True
         return False
+    except Exception as e:
+        st.error(f"Silme hatası: {e}")
+        return False
+
 
 # ===================== KAYIT / GÜNCELLEME (UPSERT) =====================
 def save_data_row(sheet_id, data_dict, unique_col, worksheet_index=0):
-    client = connect_to_gsheets()
-    ws = client.open_by_key(sheet_id).get_worksheet(worksheet_index)
+    try:
+        ws = get_ws(sheet_id, worksheet_index)
 
-    clean_data = {str(k).strip(): ("" if v is None else str(v)) for k, v in data_dict.items()}
-    all_values = ws.get_all_values()
+        clean_data = {str(k).strip(): safe_str(v) for k, v in data_dict.items()}
+        all_values = ws.get_all_values()
 
-    if not all_values:
-        ws.append_row(list(clean_data.keys()))
-        ws.append_row(list(clean_data.values()))
-        st.toast("✅ İlk kayıt oluşturuldu.", icon="💾")
-        return
+        # boş sheet => header + ilk satır
+        if not all_values:
+            ws.append_row(list(clean_data.keys()))
+            ws.append_row(list(clean_data.values()))
+            st.toast("✅ İlk kayıt oluşturuldu.", icon="💾")
+            return
 
-    headers = [str(h).strip() for h in all_values[0]]
+        headers = normalize_headers(all_values[0])
 
-    if unique_col not in headers:
-        # header'a eklenmesi için missing_cols içinde zaten yakalanacak ama garanti:
-        pass
+        # eksik kolonları ekle
+        missing_cols = [k for k in clean_data.keys() if k not in headers]
+        if missing_cols:
+            headers.extend(missing_cols)
+            ws.update("1:1", [headers])
 
-    missing_cols = [k for k in clean_data.keys() if k not in headers]
-    if missing_cols:
-        headers.extend(missing_cols)
-        ws.update("1:1", [headers])
+        uid = clean_data.get(unique_col, "").strip()
+        if not uid:
+            raise ValueError(f"{unique_col} boş olamaz!")
 
-    row_to_save = [clean_data.get(h, "") for h in headers]
+        uid_col_idx = headers.index(unique_col) + 1
+        col_vals = ws.col_values(uid_col_idx)
 
-    uid = clean_data.get(unique_col, "").strip()
-    if not uid:
-        raise ValueError(f"{unique_col} boş olamaz!")
+        row_index_to_update = None
+        for i, v in enumerate(col_vals[1:], start=2):
+            if str(v).strip() == uid:
+                row_index_to_update = i
+                break
 
-    uid_col_idx = headers.index(unique_col) + 1
-    col_vals = ws.col_values(uid_col_idx)
+        row_to_save = [clean_data.get(h, "") for h in headers]
+        end_col = colnum_to_letter(len(headers))
 
-    row_index_to_update = None
-    for i, v in enumerate(col_vals[1:], start=2):
-        if str(v).strip() == uid:
-            row_index_to_update = i
-            break
+        if row_index_to_update:
+            ws.update(f"A{row_index_to_update}:{end_col}{row_index_to_update}", [row_to_save])
+            st.toast(f"✅ Güncellendi: {uid}", icon="🔄")
+        else:
+            ws.append_row(row_to_save)
+            st.toast(f"✅ Kaydedildi: {uid}", icon="💾")
 
-    end_col = colnum_to_letter(len(headers))
+    except Exception as e:
+        st.error(f"Kayıt hatası: {e}")
+        raise
 
-    if row_index_to_update:
-        ws.update(f"A{row_index_to_update}:{end_col}{row_index_to_update}", [row_to_save])
-        st.toast(f"✅ Güncellendi: {uid}", icon="🔄")
-    else:
-        ws.append_row(row_to_save)
-        st.toast(f"✅ Kaydedildi: {uid}", icon="💾")
 
-# ===================== AUTH (VERİ GİRİŞİ ŞİFRE) =====================
-def require_password_gate():
+# ===================== AUTH =====================
+def _auth_ok_now() -> bool:
     if "auth_ok" not in st.session_state:
-        st.session_state.auth_ok = False
+        return False
+    if not st.session_state.auth_ok:
+        return False
+    exp = st.session_state.get("auth_exp", None)
+    if not exp:
+        return False
+    return datetime.now() < exp
 
+
+def require_password_gate():
     app_password = st.secrets.get("app_password", None)
     if not app_password:
-        st.error('⚠️ Şifre tanımlı değil. Secrets içine:  app_password = "...."  ekle.')
+        st.error('⚠️ Secrets içine:  app_password = "...."  ekle.')
         st.stop()
 
-    if st.session_state.auth_ok:
+    if _auth_ok_now():
         return
+
+    st.session_state.auth_ok = False
+    st.session_state.auth_exp = None
 
     st.subheader("🔐 Veri Girişi (Şifreli)")
     pw = st.text_input("Şifre", type="password")
+
     c1, c2 = st.columns([1, 2])
     with c1:
         if st.button("Giriş", type="primary"):
-            if pw == app_password:
+            if hmac.compare_digest(pw or "", app_password):
                 st.session_state.auth_ok = True
+                st.session_state.auth_exp = datetime.now() + timedelta(minutes=AUTH_TTL_MINUTES)
                 st.success("✅ Giriş başarılı")
-                time.sleep(0.4)
+                time.sleep(0.2)
                 st.rerun()
             else:
                 st.error("❌ Şifre yanlış")
     with c2:
-        st.caption("Not: Bu şifre sadece veri ekranları için geçerli.")
+        st.caption(f"Not: Oturum süresi {AUTH_TTL_MINUTES} dk.")
     st.stop()
 
+
 def confirm_delete_with_password(context_key: str) -> bool:
+    """Silme için ayrı doğrulama (session bazlı)."""
     app_password = st.secrets.get("app_password", None)
     if not app_password:
         st.error('⚠️ Secrets içinde app_password yok.')
@@ -224,15 +265,16 @@ def confirm_delete_with_password(context_key: str) -> bool:
     with st.expander("🔐 Silme için şifre gir", expanded=True):
         pw = st.text_input("Silme Şifresi", type="password", key=f"pw_{context_key}")
         if st.button("Onayla", key=f"ok_{context_key}", type="primary"):
-            if pw == app_password:
+            if hmac.compare_digest(pw or "", app_password):
                 st.session_state[key_ok] = True
                 st.success("✅ Doğrulandı")
-                time.sleep(0.3)
+                time.sleep(0.2)
                 st.rerun()
             else:
                 st.error("❌ Şifre yanlış")
 
     return False
+
 
 # ===================== HEADER / EKG ANİMASYONU =====================
 st.markdown(
@@ -309,6 +351,7 @@ with st.sidebar:
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
 
+
 # =========================================================
 # ===================== EKRAN 2: CASE REPORT =====================
 # =========================================================
@@ -325,29 +368,25 @@ if menu == "📝 Case Report Takip":
             n_not = st.text_area("Not")
 
             if st.form_submit_button("Kaydet", type="primary"):
-                try:
-                    now = datetime.now()
-                    payload = {
-                        "Tarih": str(now.date()),
-                        "TarihSaat": now.isoformat(timespec="seconds"),
-                        "Dosya No": n_dosya,
-                        "Hasta": n_ad,
-                        "Doktor": n_dr,
-                        "Not": n_not,
-                    }
-                    save_data_row(CASE_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=CASE_WS_INDEX)
-                    st.success("✅ Kaydedildi")
-                    time.sleep(0.6)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Hata: {e}")
+                now = datetime.now()
+                payload = {
+                    "Tarih": str(now.date()),
+                    "TarihSaat": now.isoformat(timespec="seconds"),
+                    "Dosya No": n_dosya,
+                    "Vaka": n_ad,
+                    "Doktor": n_dr,
+                    "Not": n_not,
+                }
+                save_data_row(CASE_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=CASE_WS_INDEX)
+                st.success("✅ Kaydedildi")
+                time.sleep(0.2)
+                st.rerun()
 
     with right:
         dfn = load_data(CASE_SHEET_ID, CASE_WS_INDEX, required_col="TarihSaat")
         if not dfn.empty:
             q = st.text_input("🔎 Arama (dosya no / vaka / doktor)", "")
             dfn_show = dfn.copy()
-
             if "Not" in dfn_show.columns:
                 dfn_show = dfn_show.drop(columns=["Not"])
 
@@ -362,18 +401,19 @@ if menu == "📝 Case Report Takip":
 
             st.divider()
             st.markdown("### 🗑️ Silme (Şifreli)")
-
             if confirm_delete_with_password("case"):
                 del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfn["TarihSaat"].unique(), key="case_del_ts")
                 if st.button("🗑️ Sil", key="case_del_btn", type="secondary"):
-                    if delete_row_by_value(SHEET_ID, CASE_WS_INDEX, "TarihSaat", del_ts):
+                    ok = delete_row_by_value(SHEET_ID, CASE_WS_INDEX, "TarihSaat", del_ts)
+                    if ok:
                         st.success("Silindi")
-                        time.sleep(0.4)
+                        time.sleep(0.2)
                         st.rerun()
                     else:
-                        st.error("Hata!")
+                        st.error("Silinemedi (kayıt bulunamadı).")
         else:
             st.info("Henüz case report kaydı yok veya 2. sheet yok/başlık uyumsuz.")
+
 
 # =========================================================
 # ===================== EKRAN 3: EDİTÖRE MEKTUP =====================
@@ -390,21 +430,18 @@ elif menu == "✉️ Editöre Mektup":
             yazarlar = st.text_area("Yazarlar")
 
             if st.form_submit_button("Kaydet", type="primary"):
-                try:
-                    now = datetime.now()
-                    payload = {
-                        "Tarih": str(now.date()),
-                        "TarihSaat": now.isoformat(timespec="seconds"),
-                        "Dergi Adı": dergi,
-                        "Makale İsmi": makale,
-                        "Yazarlar": yazarlar,
-                    }
-                    save_data_row(LETTER_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=LETTER_WS_INDEX)
-                    st.success("✅ Kaydedildi (3. sayfaya yazıldı)")
-                    time.sleep(0.6)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Hata: {e}")
+                now = datetime.now()
+                payload = {
+                    "Tarih": str(now.date()),
+                    "TarihSaat": now.isoformat(timespec="seconds"),
+                    "Dergi Adı": dergi,
+                    "Makale İsmi": makale,
+                    "Yazarlar": yazarlar,
+                }
+                save_data_row(LETTER_SHEET_ID, payload, unique_col="TarihSaat", worksheet_index=LETTER_WS_INDEX)
+                st.success("✅ Kaydedildi (3. sayfaya yazıldı)")
+                time.sleep(0.2)
+                st.rerun()
 
     with right:
         dfl = load_data(LETTER_SHEET_ID, LETTER_WS_INDEX, required_col="TarihSaat")
@@ -428,18 +465,19 @@ elif menu == "✉️ Editöre Mektup":
 
             st.divider()
             st.markdown("### 🗑️ Silme (Şifreli)")
-
             if confirm_delete_with_password("letter"):
                 del_ts = st.selectbox("Silinecek kayıt (TarihSaat)", dfl["TarihSaat"].unique(), key="letter_del_ts")
                 if st.button("🗑️ Sil", key="letter_del_btn", type="secondary"):
-                    if delete_row_by_value(SHEET_ID, LETTER_WS_INDEX, "TarihSaat", del_ts):
+                    ok = delete_row_by_value(SHEET_ID, LETTER_WS_INDEX, "TarihSaat", del_ts)
+                    if ok:
                         st.success("Silindi")
-                        time.sleep(0.4)
+                        time.sleep(0.2)
                         st.rerun()
                     else:
-                        st.error("Hata!")
+                        st.error("Silinemedi (kayıt bulunamadı).")
         else:
             st.info("Henüz editöre mektup kaydı yok veya 3. sheet yok/başlık uyumsuz.")
+
 
 # =========================================================
 # =========== EKRAN 4: FİZYOLOJİK PACING ÇALIŞMASI =========
@@ -448,9 +486,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
     require_password_gate()
 
     st.header("🫀 Fizyolojik Pacing (LBBAP / HBP) Çalışması")
-    st.caption("AV blok nedeniyle fizyolojik pacing yapılan hastalarda TTE+STE ile LV/RV fonksiyonları ve klinik sonlanımlar (NT-proBNP, yatış, mortalite).")
+    st.caption("Fizyolojik pacing sonrası TTE+STE parametreleri ve klinik sonlanımlar.")
 
-    # ✅ Unique key KayıtID olacak (DosyaNo + Ziyaret)
     dfp = load_data(PACED_SHEET_ID, PACED_WS_INDEX, required_col="KayıtID")
 
     col_left, col_right = st.columns([2, 3])
@@ -484,10 +521,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     show_df = show_df.drop(columns=["Adı Soyadı"])
 
                 if q.strip():
-                    mask = show_df.apply(
-                        lambda row: row.astype(str).str.contains(q, case=False, na=False).any(),
-                        axis=1,
-                    )
+                    mask = show_df.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show_df = show_df[mask].copy()
 
                 cols_show = ["KayıtID", "Dosya Numarası", "Ziyaret", "Tarih", "Hekim", "Pacing Tipi"]
@@ -499,16 +533,16 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                 if confirm_delete_with_password("pacing"):
                     del_key = st.selectbox("Silinecek KayıtID", dfp["KayıtID"].unique(), key="pacing_del_key")
                     if st.button("🗑️ SİL", type="secondary", key="pacing_del_btn"):
-                        if delete_row_by_value(PACED_SHEET_ID, PACED_WS_INDEX, "KayıtID", del_key):
+                        ok = delete_row_by_value(PACED_SHEET_ID, PACED_WS_INDEX, "KayıtID", del_key)
+                        if ok:
                             st.success("Silindi!")
-                            time.sleep(0.4)
+                            time.sleep(0.2)
                             st.rerun()
                         else:
-                            st.error("Hata!")
+                            st.error("Silinemedi (kayıt bulunamadı).")
 
     st.divider()
 
-    # ---- FORM HELPER ----
     def gs(k): return str(current.get(k, ""))
     def gf(k):
         try: return float(current.get(k, 0))
@@ -527,7 +561,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
 
         with c1:
             dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=gs("Dosya Numarası"))
-
             prev_visit = gs("Ziyaret")
             visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
             ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
@@ -536,7 +569,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
             st.caption(f"🆔 KayıtID: {kayit_id}")
 
             ad_soyad = st.text_input("Adı Soyadı", value=gs("Adı Soyadı"))
-
             try:
                 d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
             except:
@@ -548,11 +580,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
 
             pacing_tipi_l = ["LBBAP", "HBP", "Diğer"]
             pt = gs("Pacing Tipi")
-            pacing_tipi = st.selectbox(
-                "Pacing Tipi",
-                pacing_tipi_l,
-                index=(pacing_tipi_l.index(pt) if pt in pacing_tipi_l else 0),
-            )
+            pacing_tipi = st.selectbox("Pacing Tipi", pacing_tipi_l, index=(pacing_tipi_l.index(pt) if pt in pacing_tipi_l else 0))
 
             st.markdown("##### Pacing Endikasyonu")
             av_tam = st.checkbox("AV Tam Blok", value=gc("Pacing Endikasyonu: AV Tam Blok"))
@@ -561,13 +589,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
         with c2:
             cy, cc = st.columns(2)
             yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
-
             sex_l = ["Erkek", "Kadın"]
-            try:
-                s_ix = sex_l.index(gs("Cinsiyet"))
-            except:
-                s_ix = 0
-            cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
+            cinsiyet = cc.radio("Cinsiyet", sex_l, index=(sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0), horizontal=True)
 
             cb1, cb2, cb3 = st.columns(3)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
@@ -585,7 +608,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
 
         ci1, ci2 = st.columns(2)
         ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
-        baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
+        baslanan = ci2.text_area("Başlanan", value=gs("Başlanan"))
 
         st.markdown("##### Ek Hastalıklar")
         ck1, ck2, ck3, ck4, ck5 = st.columns(5)
@@ -598,7 +621,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
 
         st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3, l4 = st.columns(4)
-
         hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
         hct = l1.number_input("Hct (%)", value=gf("Hct"))
         wbc = l1.number_input("WBC (10³/µL)", value=gf("WBC"))
@@ -661,7 +683,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
             lvot = st.number_input("LVOT VTI (cm)", value=gf("LVOT VTI"))
             gls = st.number_input("GLS (%)", value=gf("GLS"))
             gcs = st.number_input("GCS (%)", value=gf("GCS"))
-
             lv_grs = st.number_input("LV GRS (%)", value=gf("LV GRS"))
             sd_ts_syst = st.number_input("SD-TS-SYST (%)", value=gf("SD-TS-SYST"))
             sd_ls_syst = st.number_input("SD-LS-SYST (%)", value=gf("SD-LS-SYST"))
@@ -690,7 +711,7 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
             rvot = st.number_input("RVOT VTI (cm)", value=gf("RVOT VTI"))
             rvota = st.number_input("RVOT accT (ms)", value=gf("RVOT accT"))
 
-            rv_fw_ls = st.number_input("RV Free-Wall Longitudinal Strain (%)", value=gf("RV FWLS"))
+            rv_fw_ls = st.number_input("RV FWLS (%)", value=gf("RV FWLS"))
             rv_fac = st.number_input("RV FAC (%)", value=gf("RV FAC"))
             rv_grs = st.number_input("RV GRS (%)", value=gf("RV GRS"))
 
@@ -711,11 +732,9 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "Tarih": str(basvuru),
                     "Hekim": hekim,
                     "İletişim": iletisim,
-
                     "Pacing Tipi": pacing_tipi,
                     "Pacing Endikasyonu: AV Tam Blok": av_tam,
                     "Pacing Endikasyonu: 2. Derece AV Blok": av_2,
-
                     "Yaş": yas,
                     "Cinsiyet": cinsiyet,
                     "Boy": boy,
@@ -724,17 +743,14 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "BSA": bsa,
                     "TA Sistol": ta_sis,
                     "TA Diyastol": ta_dia,
-
                     "İlaçlar": ilaclar,
                     "Başlanan": baslanan,
-
                     "DM": dm,
                     "KAH": kah,
                     "HPL": hpl,
                     "İnme": inme,
                     "Sigara": sigara,
                     "Diğer": diger,
-
                     "Hgb": hgb,
                     "Hct": hct,
                     "WBC": wbc,
@@ -743,7 +759,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "Lym": lym,
                     "MPV": mpv,
                     "RDW": rdw,
-
                     "Glukoz": glukoz,
                     "Üre": ure,
                     "Kreatinin": krea,
@@ -754,15 +769,12 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "AST": ast,
                     "Tot. Prot": prot,
                     "Albümin": alb,
-
                     "Chol": chol,
                     "LDL": ldl,
                     "HDL": hdl,
                     "Trig": trig,
-
                     "NT-proBNP": ntprobnp,
                     "hs-Troponin": hs_trop,
-
                     "LVEDD": lvedd,
                     "LVESD": lvesd,
                     "IVS": ivs,
@@ -773,17 +785,14 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "LVMi": lvmi,
                     "RWT": rwt,
                     "Ao Asc": ao,
-
                     "LVEF": lvef,
                     "SV": sv,
                     "LVOT VTI": lvot,
                     "GLS": gls,
                     "GCS": gcs,
                     "LV GRS": lv_grs,
-
                     "SD-TS-SYST": sd_ts_syst,
                     "SD-LS-SYST": sd_ls_syst,
-
                     "Mitral E": mite,
                     "Mitral A": mita,
                     "Mitral E/A": ea,
@@ -794,7 +803,6 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "LAESV": laesv,
                     "LA Strain": lastr,
                     "LACi": laci,
-
                     "TAPSE": tapse,
                     "RV Sm": rvsm,
                     "TAPSE/Sm": tsm,
@@ -803,16 +811,15 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "TAPSE/sPAP": tspap,
                     "RVOT VTI": rvot,
                     "RVOT accT": rvota,
-
                     "RV FWLS": rv_fw_ls,
                     "RV FAC": rv_fac,
                     "RV GRS": rv_grs,
                 }
-
                 save_data_row(PACED_SHEET_ID, final_data, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
                 st.success(f"✅ {kayit_id} kaydedildi / güncellendi!")
-                time.sleep(0.6)
+                time.sleep(0.2)
                 st.rerun()
+
 
 # =========================================================
 # ===================== EKRAN 5: AFMR – TEE LV-GLS =====================
@@ -821,7 +828,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
     require_password_gate()
 
     st.header("🫀 AFMR – TEE ile LV-GLS (TTE ile karşılaştırma)")
-    st.caption("Atrial sekonder MR (AFMR): TEE-LVGLS ↔ TTE-LVGLS uyumu, MR şiddeti ayrımı, AF vs SR alt grupları.")
+    st.caption("AFMR: TEE-LVGLS ↔ TTE-LVGLS uyumu ve MR şiddeti ayrımı. (Kriterler kaldırıldı; veri analizi odaklı.)")
 
     dfa = load_data(AFMR_SHEET_ID, AFMR_WS_INDEX, required_col="KayıtID")
 
@@ -847,7 +854,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                 st.rerun()
 
             if dfa.empty:
-                st.info("Kayıt yok (veya AFMR sheet index yanlış / başlıklar oluşmadı). İlk kaydı girince başlıklar otomatik oluşur.")
+                st.info("Kayıt yok (veya AFMR sheet index yanlış / başlıklar oluşmadı). İlk kaydı girince başlıklar oluşur.")
             else:
                 q = st.text_input("🔎 Arama (dosya no / hekim / ritim)", "", key="afmr_search")
                 show_df = dfa.copy()
@@ -869,12 +876,13 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                 if confirm_delete_with_password("afmr"):
                     del_key = st.selectbox("Silinecek KayıtID", dfa["KayıtID"].unique(), key="afmr_del_key")
                     if st.button("🗑️ SİL", type="secondary", key="afmr_del_btn"):
-                        if delete_row_by_value(AFMR_SHEET_ID, AFMR_WS_INDEX, "KayıtID", del_key):
+                        ok = delete_row_by_value(AFMR_SHEET_ID, AFMR_WS_INDEX, "KayıtID", del_key)
+                        if ok:
                             st.success("Silindi!")
-                            time.sleep(0.4)
+                            time.sleep(0.2)
                             st.rerun()
                         else:
-                            st.error("Hata!")
+                            st.error("Silinemedi (kayıt bulunamadı).")
 
     st.divider()
 
@@ -891,19 +899,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
     VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
 
     with st.form("afmr_form"):
-        st.markdown("### ✅ Dahil / ⛔ Dışlama / Ritim")
-        a1, a2, a3 = st.columns(3)
-
-        with a1:
-            inc_age = st.checkbox("≥18 yaş", value=gc("Dahil: ≥18"))
-            inc_afmr = st.checkbox("AFMR tanısı (primer leaflet patolojisi yok)", value=gc("Dahil: AFMR"))
-            inc_tee_ind = st.checkbox("Klinik TEE endikasyonu mevcut", value=gc("Dahil: TEE endikasyonu"))
-        with a2:
-            inc_mr = st.checkbox("MR: orta/ileri", value=gc("Dahil: MR orta/ileri"))
-            consent = st.checkbox("Gönüllü onam", value=gc("Onam"))
-        with a3:
-            ritim = st.radio("Ritim grubu", ["AF", "SR"], index=(0 if gs("Ritim") != "SR" else 1), horizontal=True)
-
         st.markdown("### 👤 Demografi ve Klinik")
         c1, c2 = st.columns(2)
 
@@ -924,9 +919,11 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
             kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}_{tarih.strftime('%Y%m%d')}".strip("_")
             st.caption(f"🆔 KayıtID: {kayit_id}")
 
-            hekim = st.text_input("Hekim", value=gs("Hekim"))
+            hekim = st.text_input("Hekim (Zorunlu)", value=gs("Hekim"))
             yas = st.number_input("Yaş", step=1, value=gi("Yaş"))
             cinsiyet = st.radio("Cinsiyet", ["Kadın", "Erkek"], index=(0 if gs("Cinsiyet") != "Erkek" else 1), horizontal=True)
+
+            ritim = st.radio("Ritim", ["AF", "SR"], index=(0 if gs("Ritim") != "SR" else 1), horizontal=True)
 
         with c2:
             boy = st.number_input("Boy (cm)", value=gf("Boy"))
@@ -946,16 +943,15 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
             sym_yorgunluk = s3.checkbox("Yorgunluk", value=gc("Semptom: Yorgunluk"))
             sym_diger = s4.text_input("Diğer", value=gs("Semptom: Diğer"))
 
-        st.markdown("### 🫀 AF Öyküsü (varsa)")
+        st.markdown("### 🫀 AF Öyküsü (sadece AF ise)")
         if ritim == "AF":
-            af1, af2, af3 = st.columns(3)
+            af1, af2 = st.columns(2)
             af_sure = af1.number_input("AF süresi (ay)", value=gf("AF süresi (ay)"))
             af_tipi = af2.selectbox("AF tipi", ["Paroksismal", "Persistan", "Permanen"],
                                     index=(["Paroksismal","Persistan","Permanen"].index(gs("AF tipi"))
                                            if gs("AF tipi") in ["Paroksismal","Persistan","Permanen"] else 0))
-            af_not = af3.text_input("AF not (opsiyonel)", value=gs("AF not"))
         else:
-            af_sure, af_tipi, af_not = 0, "", ""
+            af_sure, af_tipi = 0, ""
 
         st.markdown("### 🧾 Tıbbi Öykü")
         k1, k2, k3, k4 = st.columns(4)
@@ -977,7 +973,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         med_sglt2 = t2.checkbox("SGLT2 inhibitörü", value=gc("Tedavi: SGLT2"))
         med_diur = t3.checkbox("Diüretik", value=gc("Tedavi: Diüretik"))
         med_antitrom = t3.checkbox("Antikoagülan/Antiplatelet", value=gc("Tedavi: Antitrombotik"))
-        med_antitrom_detay = st.text_input("Antitrombotik (hangisi?)", value=gs("Tedavi: Antitrombotik detay"))
         med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
 
         st.markdown("### 🩸 Laboratuvar (opsiyonel)")
@@ -991,21 +986,34 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         lab_bnp_unit = l2.text_input("Birim", value=(gs("BNP birim") if gs("BNP birim") else "pg/mL"))
         lab_diger = l3.text_input("Diğer (lab)", value=gs("Lab: Diğer"))
 
+        # ---- HEMODİNAMİ (TEMİZ / NUMERİK) ----
         st.markdown("### 🧠 Görüntüleme Seansı – Hemodinami & Sedasyon")
-        h1, h2, h3 = st.columns(3)
-        sed_ilac = h1.text_input("Sedasyon ilacı", value=(gs("Sedasyon ilacı") if gs("Sedasyon ilacı") else "Midazolam"))
-        sed_doz = h1.number_input("Doz (mg)", value=gf("Sedasyon doz (mg)"))
-        sed_saat = h1.text_input("Uygulama saati (HH:MM)", value=gs("Sedasyon saat"))
-        pre_bp = h2.text_input("TEE öncesi BP", value=gs("TEE öncesi BP"))
-        pre_hr = h2.text_input("TEE öncesi HR", value=gs("TEE öncesi HR"))
-        pre_spo2 = h2.text_input("TEE öncesi SpO2", value=gs("TEE öncesi SpO2"))
-        tee_avg_bp = h3.text_input("TEE sırasında ort. BP", value=gs("TEE ort BP"))
-        tee_avg_hr = h3.text_input("TEE sırasında ort. HR", value=gs("TEE ort HR"))
-        post_bp_hr = h3.text_input("TEE sonrası BP/HR", value=gs("TEE sonrası BP/HR"))
 
-        tte_bp_hr = st.text_input("TTE (TEE hemen sonrası) BP/HR", value=gs("TTE sonrası BP/HR"))
+        h1, h2, h3, h4 = st.columns(4)
+
+        sed_ilac = h1.text_input("Sedasyon ilacı", value=(gs("Sedasyon ilacı") if gs("Sedasyon ilacı") else "Midazolam"))
+        sed_doz = h1.number_input("Doz (mg)", min_value=0.0, max_value=50.0, step=0.5, value=gf("Sedasyon doz (mg)"))
+
+        pre_sbp = h2.number_input("TEE öncesi SBP (mmHg)", min_value=50, max_value=260, step=1, value=gi("TEE öncesi SBP"))
+        pre_dbp = h2.number_input("TEE öncesi DBP (mmHg)", min_value=30, max_value=160, step=1, value=gi("TEE öncesi DBP"))
+        pre_hr  = h2.number_input("TEE öncesi HR (bpm)", min_value=20, max_value=220, step=1, value=gi("TEE öncesi HR"))
+
+        pre_spo2 = h3.number_input("TEE öncesi SpO₂ (%)", min_value=50, max_value=100, step=1, value=gi("TEE öncesi SpO2"))
+
+        tee_avg_sbp = h3.number_input("TEE sırasında ort. SBP", min_value=50, max_value=260, step=1, value=gi("TEE ort SBP"))
+        tee_avg_dbp = h3.number_input("TEE sırasında ort. DBP", min_value=30, max_value=160, step=1, value=gi("TEE ort DBP"))
+        tee_avg_hr  = h3.number_input("TEE sırasında ort. HR",  min_value=20, max_value=220, step=1, value=gi("TEE ort HR"))
+
+        post_sbp = h4.number_input("TEE sonrası SBP", min_value=50, max_value=260, step=1, value=gi("TEE sonrası SBP"))
+        post_dbp = h4.number_input("TEE sonrası DBP", min_value=30, max_value=160, step=1, value=gi("TEE sonrası DBP"))
+        post_hr  = h4.number_input("TEE sonrası HR",  min_value=20, max_value=220, step=1, value=gi("TEE sonrası HR"))
+
+        tte_post_sbp = h4.number_input("TTE sonrası SBP", min_value=50, max_value=260, step=1, value=gi("TTE sonrası SBP"))
+        tte_post_dbp = h4.number_input("TTE sonrası DBP", min_value=30, max_value=160, step=1, value=gi("TTE sonrası DBP"))
+        tte_post_hr  = h4.number_input("TTE sonrası HR",  min_value=20, max_value=220, step=1, value=gi("TTE sonrası HR"))
+
         tee_rhythm = st.radio("TEE sırasında ritim", ["AF", "SR"], index=(0 if gs("TEE ritim") != "SR" else 1), horizontal=True)
-        tee_hr = st.number_input("TEE sırasında HR", value=gi("TEE HR"))
+        tee_hr = st.number_input("TEE sırasında HR (bpm)", min_value=20, max_value=220, step=1, value=gi("TEE HR"))
 
         st.markdown("### 🩻 TEE – MR Kantitasyonu & Morfoloji")
         m1, m2, m3 = st.columns(3)
@@ -1081,13 +1089,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "Tarih": str(tarih),
                     "Ziyaret": ziyaret,
                     "Hekim": hekim,
-
-                    "Dahil: ≥18": inc_age,
-                    "Dahil: AFMR": inc_afmr,
-                    "Dahil: TEE endikasyonu": inc_tee_ind,
-                    "Dahil: MR orta/ileri": inc_mr,
-                    "Onam": consent,
-
                     "Yaş": yas,
                     "Cinsiyet": cinsiyet,
                     "Boy": boy,
@@ -1095,17 +1096,13 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "BMI": bmi,
                     "BSA": bsa,
                     "NYHA": nyha,
-
                     "Semptom: Dispne": sym_dispne,
                     "Semptom: Çarpıntı": sym_carpinti,
                     "Semptom: Yorgunluk": sym_yorgunluk,
                     "Semptom: Diğer": sym_diger,
-
                     "Ritim": ritim,
                     "AF süresi (ay)": af_sure,
                     "AF tipi": af_tipi,
-                    "AF not": af_not,
-
                     "Öykü: HT": hx_ht,
                     "Öykü: DM": hx_dm,
                     "Öykü: KAH/MI": hx_kah,
@@ -1115,16 +1112,13 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "Öykü: Uyku apnesi": hx_osa,
                     "Öykü: Tiroid": hx_tiroid,
                     "Öykü: Diğer": hx_diger,
-
                     "Tedavi: BB": med_bb,
                     "Tedavi: ACEi/ARB/ARNI": med_ace,
                     "Tedavi: MRA": med_mra,
                     "Tedavi: SGLT2": med_sglt2,
                     "Tedavi: Diüretik": med_diur,
                     "Tedavi: Antitrombotik": med_antitrom,
-                    "Tedavi: Antitrombotik detay": med_antitrom_detay,
                     "Tedavi: Diğer": med_diger,
-
                     "Hb": lab_hb,
                     "Kreatinin": lab_krea,
                     "eGFR": lab_egfr,
@@ -1136,14 +1130,24 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
 
                     "Sedasyon ilacı": sed_ilac,
                     "Sedasyon doz (mg)": sed_doz,
-                    "Sedasyon saat": sed_saat,
-                    "TEE öncesi BP": pre_bp,
+
+                    "TEE öncesi SBP": pre_sbp,
+                    "TEE öncesi DBP": pre_dbp,
                     "TEE öncesi HR": pre_hr,
                     "TEE öncesi SpO2": pre_spo2,
-                    "TEE ort BP": tee_avg_bp,
+
+                    "TEE ort SBP": tee_avg_sbp,
+                    "TEE ort DBP": tee_avg_dbp,
                     "TEE ort HR": tee_avg_hr,
-                    "TEE sonrası BP/HR": post_bp_hr,
-                    "TTE sonrası BP/HR": tte_bp_hr,
+
+                    "TEE sonrası SBP": post_sbp,
+                    "TEE sonrası DBP": post_dbp,
+                    "TEE sonrası HR": post_hr,
+
+                    "TTE sonrası SBP": tte_post_sbp,
+                    "TTE sonrası DBP": tte_post_dbp,
+                    "TTE sonrası HR": tte_post_hr,
+
                     "TEE ritim": tee_rhythm,
                     "TEE HR": tee_hr,
 
@@ -1195,8 +1199,9 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
 
                 save_data_row(AFMR_SHEET_ID, payload, unique_col="KayıtID", worksheet_index=AFMR_WS_INDEX)
                 st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
-                time.sleep(0.5)
+                time.sleep(0.2)
                 st.rerun()
+
 
 # =========================================================
 # ===================== EKRAN 1: H-TYPE VERİ GİRİŞİ =====================
@@ -1251,10 +1256,7 @@ elif menu == "🏥 H-Type HT Çalışması":
                         show_df = show_df.drop(columns=[c])
 
                 if q.strip():
-                    mask = show_df.apply(
-                        lambda row: row.astype(str).str.contains(q, case=False, na=False).any(),
-                        axis=1,
-                    )
+                    mask = show_df.apply(lambda row: row.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show_df = show_df[mask].copy()
 
                 cols_show = ["Dosya Numarası", "Tarih", "Hekim"]
@@ -1265,12 +1267,13 @@ elif menu == "🏥 H-Type HT Çalışması":
                 st.markdown("##### 🗑️ Silme")
                 del_id = st.selectbox("Silinecek Dosya No", df["Dosya Numarası"].unique(), key="data_del_id")
                 if st.button("🗑️ SİL", type="secondary", key="data_del_btn"):
-                    if delete_row_by_value(SHEET_ID, DATA_WS_INDEX, "Dosya Numarası", del_id):
+                    ok = delete_row_by_value(SHEET_ID, DATA_WS_INDEX, "Dosya Numarası", del_id)
+                    if ok:
                         st.success("Silindi!")
-                        time.sleep(0.4)
+                        time.sleep(0.2)
                         st.rerun()
                     else:
-                        st.error("Hata!")
+                        st.error("Silinemedi (kayıt bulunamadı).")
 
     st.divider()
 
@@ -1305,11 +1308,7 @@ elif menu == "🏥 H-Type HT Çalışması":
             yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
 
             sex_l = ["Erkek", "Kadın"]
-            try:
-                s_ix = sex_l.index(gs("Cinsiyet"))
-            except:
-                s_ix = 0
-            cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
+            cinsiyet = cc.radio("Cinsiyet", sex_l, index=(sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0), horizontal=True)
 
             cb1, cb2, cb3 = st.columns(3)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
@@ -1325,15 +1324,11 @@ elif menu == "🏥 H-Type HT Çalışması":
 
         st.markdown("---")
         ekg_l = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
-        try:
-            e_ix = ekg_l.index(gs("EKG"))
-        except:
-            e_ix = 0
-        ekg = st.selectbox("EKG", ekg_l, index=e_ix)
+        ekg = st.selectbox("EKG", ekg_l, index=(ekg_l.index(gs("EKG")) if gs("EKG") in ekg_l else 0))
 
         ci1, ci2 = st.columns(2)
         ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
-        baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
+        baslanan = ci2.text_area("Başlanan", value=gs("Başlanan"))
 
         st.markdown("##### Ek Hastalıklar")
         ck1, ck2, ck3, ck4, ck5 = st.columns(5)
@@ -1346,7 +1341,6 @@ elif menu == "🏥 H-Type HT Çalışması":
 
         st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3, l4 = st.columns(4)
-
         hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
         hct = l1.number_input("Hct (%)", value=gf("Hct"))
         wbc = l1.number_input("WBC (10³/µL)", value=gf("WBC"))
@@ -1532,8 +1526,9 @@ elif menu == "🏥 H-Type HT Çalışması":
                 }
                 save_data_row(SHEET_ID, final_data, unique_col="Dosya Numarası", worksheet_index=DATA_WS_INDEX)
                 st.success(f"✅ {dosya_no} kaydedildi / güncellendi!")
-                time.sleep(0.6)
+                time.sleep(0.2)
                 st.rerun()
+
 
 # =========================================================
 # ===================== FALLBACK ==========================
