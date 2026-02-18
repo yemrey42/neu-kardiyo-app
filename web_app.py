@@ -17,7 +17,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
 # Tek bir Google Sheet içinde sekmeler:
-SHEET_ID = st.secrets.get("sheet_id", "") or "PUT_YOUR_SHEET_ID_HERE"
+SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 DATA_WS_INDEX = int(st.secrets.get("data_ws_index", 0))     # H-Type HT
 CASE_WS_INDEX = int(st.secrets.get("case_ws_index", 1))     # Case Report
 LETTER_WS_INDEX = int(st.secrets.get("letter_ws_index", 2)) # Editöre mektup
