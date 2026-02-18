@@ -834,14 +834,12 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
 
         st.markdown("### 🩸 Laboratuvar (opsiyonel)")
         l1, l2, l3 = st.columns(3)
+
         lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
         lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
         lab_egfr = l1.number_input("eGFR (mL/dk/1.73m²)", value=gf("eGFR"))
-
-        bnp_type = l2.selectbox("BNP tipi", ["NT-proBNP", "BNP"], index=(0 if gs("BNP tipi") != "BNP" else 1))
-        lab_bnp = l2.number_input(f"{bnp_type} değeri", value=gf(bnp_type))
-        lab_bnp_unit = l2.text_input("Birim", value=(gs("BNP birim") if gs("BNP birim") else "pg/mL"))
-        lab_diger = l3.text_input("Diğer (lab)", value=gs("Lab: Diğer"))
+        
+        lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
 
         st.markdown("### 🧠 Sedasyon / Hemodinami (Mantıklı - Temiz)")
         h1, h2, h3 = st.columns(3)
@@ -915,9 +913,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         st.markdown("### 🫀 TEE – LV Fonksiyon & Strain")
         s1, s2, s3 = st.columns(3)
         lvef = s1.number_input("LVEF (%)", value=gf("TEE LVEF"))
-        lvef_met = s1.selectbox("LVEF yöntemi", ["Biplan Simpson", "Gözlemsel", "3D", "Diğer"],
-                                index=(["Biplan Simpson","Gözlemsel","3D","Diğer"].index(gs("LVEF yöntem"))
-                                       if gs("LVEF yöntem") in ["Biplan Simpson","Gözlemsel","3D","Diğer"] else 0))
         lvedv = s2.number_input("LVEDV (mL)", value=gf("TEE LVEDV"))
         lvesv = s2.number_input("LVESV (mL)", value=gf("TEE LVESV"))
         sv = s2.number_input("SV (mL)", value=gf("TEE SV"))
@@ -992,11 +987,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "Hb": lab_hb,
                     "Kreatinin": lab_krea,
                     "eGFR": lab_egfr,
-                    "BNP tipi": bnp_type,
-                    "NT-proBNP": (lab_bnp if bnp_type == "NT-proBNP" else ""),
-                    "BNP": (lab_bnp if bnp_type == "BNP" else ""),
-                    "BNP birim": lab_bnp_unit,
-                    "Lab: Diğer": lab_diger,
+                    "NT-proBNP": lab_ntprobnp,
 
                     "Sedasyon ilacı": sed_ilac,
                     "Sedasyon doz (mg)": sed_doz,
@@ -1037,7 +1028,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "PML Length (mm)": pml_len,
 
                     "TEE LVEF": lvef,
-                    "LVEF yöntem": lvef_met,
                     "TEE LVEDV": lvedv,
                     "TEE LVESV": lvesv,
                     "TEE SV": sv,
