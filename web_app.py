@@ -1032,7 +1032,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
     require_password_gate()
 
     st.header("⚡ Kardiyoversiyon-Ablasyon / TEE-GLS")
-    st.caption("AF hastalarında TEE ile LV-GLS, kardiyoversiyon veya ablasyon başarısını öngörür mü?")
+    st.caption("AF hastalarında TEE ile LV-GLS, kardiyoversiyon veya ablasyon başarısını öngörür mü? (TTE karşılaştırma dahil)")
 
     dfc = load_data(SHEET_ID, CVABL_WS_INDEX, required_col="KayıtID")
 
@@ -1179,19 +1179,15 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         # ===================== ENDPOINT (2 TANE) =====================
         st.markdown("### ✅ Endpoint (basit, literatüre uygun)")
 
-        # Not: Ablasyonda başarı tanımı literatürde genelde:
-        #  - 3 aylık blanking sonrası AF/AFL/AT rekürrensi olmaması (antiaritmik ilaç kullanımı çalışmaya göre değişebilir)
-        # Biz bunu "rekürrens var/yok" şeklinde basit tutuyoruz.
-
         if islem == "Ablasyon":
             primary_endpoint = "Ablasyon başarısı: 3 ay blanking sonrası atriyal taşiaritmi rekürrensi yok (AF/AFL/AT)"
             cA1, cA2, cA3 = st.columns(3)
-            # Blanking sonrası rekürrens
+
             rec_post_blanking = cA1.checkbox(
                 "Blanking sonrası rekürrens var (AF/AFL/AT)",
                 value=gc("Rekürrens (blanking sonrası)")
             )
-            # Takip süresi (ay)
+
             fu_months = cA2.number_input(
                 "Takip süresi (ay)",
                 min_value=0,
@@ -1199,7 +1195,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                 step=1,
                 value=gi("Takip süresi (ay)")
             )
-            # İsteğe bağlı: değerlendirme tarihi
+
             try:
                 d_eval = datetime.strptime(gs("Endpoint değerlendirme tarihi"), "%Y-%m-%d").date()
             except:
@@ -1208,7 +1204,11 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
 
             endpoint_success = (not bool(rec_post_blanking))
 
-        else:  # Kardiyoversiyon
+            # CV alanları
+            early_sr = ""
+            rec_30d = ""
+
+        else:
             primary_endpoint = "Kardiyoversiyon başarısı: 30 gün içinde AF rekürrensi yok"
             cC1, cC2, cC3 = st.columns(3)
 
@@ -1216,20 +1216,21 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                 "Erken başarı: SR sağlandı (işlem sonrası)",
                 value=gc("Başarı (erken)")
             )
+
             rec_30d = cC2.checkbox(
                 "AF rekürrensi 30 gün içinde",
                 value=gc("Rekürrens (30 gün)")
             )
+
             try:
                 d_eval = datetime.strptime(gs("Endpoint değerlendirme tarihi"), "%Y-%m-%d").date()
             except:
                 d_eval = datetime.now().date()
             eval_date = cC3.date_input("Endpoint değerlendirme tarihi (ops.)", value=d_eval)
 
-            # Primer endpoint: 30 gün rekürrens yok
             endpoint_success = (not bool(rec_30d))
 
-            # Ablasyon alanları bu modda 0/boş olsun
+            # Ablasyon alanları
             fu_months = 0
             rec_post_blanking = False
 
@@ -1268,7 +1269,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         lab_egfr = l1.number_input("eGFR (mL/dk/1.73m²)", value=gf("eGFR"))
         lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
 
-        # ===================== TEE GLS (ANA DEĞİŞKEN) =====================
+        # ===================== TEE =====================
         st.markdown("### 🫀 TEE – LV Fonksiyon & Strain (Ana değişken)")
         s1, s2, s3 = st.columns(3)
         tee_lvef = s1.number_input("LVEF (TEE) (%)", value=gf("TEE LVEF"))
@@ -1276,7 +1277,17 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         tee_lvesv = s2.number_input("LVESV (TEE) (mL)", value=gf("TEE LVESV"))
         tee_sv = s2.number_input("SV (TEE) (mL)", value=gf("TEE SV"))
         tee_gls = s3.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
-        fr = s3.number_input("Frame rate (fps)", value=gf("Frame rate"))
+        tee_fr = s3.number_input("Frame rate (TEE) (fps)", value=gf("Frame rate (TEE)"))
+
+        # ===================== TTE (İSTEDİĞİN PARAMETRELER) =====================
+        st.markdown("### 🫁 TTE – Karşılaştırma (yeterli set)")
+        t1, t2, t3 = st.columns(3)
+        tte_lvef = t1.number_input("LVEF (TTE) (%)", value=gf("TTE LVEF"))
+        tte_lvedv = t2.number_input("LVEDV (TTE) (mL)", value=gf("TTE LVEDV"))
+        tte_lvesv = t2.number_input("LVESV (TTE) (mL)", value=gf("TTE LVESV"))
+        tte_laesv = t3.number_input("LAESV (TTE) (mL)", value=gf("TTE LAESV"))
+        tte_gls = t3.number_input("LV-GLS (TTE) (%)", value=gf("TTE LVGLS"))
+        tte_sv = t1.number_input("SV (TTE) (mL)", value=gf("TTE SV"))
 
         # ===================== SAVE =====================
         st.write("")
@@ -1347,19 +1358,27 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                     "eGFR": lab_egfr,
                     "NT-proBNP": lab_ntprobnp,
 
+                    # TEE
                     "TEE LVEF": tee_lvef,
                     "TEE LVEDV": tee_lvedv,
                     "TEE LVESV": tee_lvesv,
                     "TEE SV": tee_sv,
                     "TEE LVGLS": tee_gls,
-                    "Frame rate": fr,
+                    "Frame rate (TEE)": tee_fr,
+
+                    # TTE (sadece istediğin set)
+                    "TTE LVEF": tte_lvef,
+                    "TTE LVEDV": tte_lvedv,
+                    "TTE LVESV": tte_lvesv,
+                    "TTE LAESV": tte_laesv,
+                    "TTE LVGLS": tte_gls,
+                    "TTE SV": tte_sv,
                 }
 
                 save_data_row(SHEET_ID, payload, unique_col="KayıtID", worksheet_index=CVABL_WS_INDEX)
                 st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
                 time.sleep(0.25)
                 st.rerun()
-
 
 # =========================================================
 # ===================== EKRAN 1: H-TYPE HT =====================
