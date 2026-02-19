@@ -1177,7 +1177,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             abl_tip = ""
 
         # ===================== ENDPOINT (2 TANE) =====================
-        st.markdown("### ✅ Endpoint (basit, literatüre uygun)")
+        st.markdown("### ✅ Endpoint")
 
         if islem == "Ablasyon":
             primary_endpoint = "Ablasyon başarısı: 3 ay blanking sonrası atriyal taşiaritmi rekürrensi yok (AF/AFL/AT)"
@@ -1262,7 +1262,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
 
         # ===================== LAB =====================
-        st.markdown("### 🩸 Laboratuvar (opsiyonel)")
+        st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3 = st.columns(3)
         lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
         lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
@@ -1270,7 +1270,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
 
         # ===================== TEE =====================
-        st.markdown("### 🫀 TEE – LV Fonksiyon & Strain (Ana değişken)")
+        st.markdown("### 🫀 TEE – LV Fonksiyon & Strain")
         s1, s2, s3 = st.columns(3)
         tee_lvef = s1.number_input("LVEF (TEE) (%)", value=gf("TEE LVEF"))
         tee_lvedv = s2.number_input("LVEDV (TEE) (mL)", value=gf("TEE LVEDV"))
@@ -1280,7 +1280,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         tee_fr = s3.number_input("Frame rate (TEE) (fps)", value=gf("Frame rate (TEE)"))
 
         # ===================== TTE (İSTEDİĞİN PARAMETRELER) =====================
-        st.markdown("### 🫁 TTE – Karşılaştırma (yeterli set)")
+        st.markdown("### 🫁 TTE – Karşılaştırma")
         t1, t2, t3 = st.columns(3)
         tte_lvef = t1.number_input("LVEF (TTE) (%)", value=gf("TTE LVEF"))
         tte_lvedv = t2.number_input("LVEDV (TTE) (mL)", value=gf("TTE LVEDV"))
