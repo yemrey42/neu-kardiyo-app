@@ -23,6 +23,7 @@ CASE_WS_INDEX = int(st.secrets.get("case_ws_index", 1))     # Case Report
 LETTER_WS_INDEX = int(st.secrets.get("letter_ws_index", 2)) # Editöre mektup
 PACED_WS_INDEX = int(st.secrets.get("paced_ws_index", 3))   # Fizyolojik pacing
 AFMR_WS_INDEX = int(st.secrets.get("afmr_ws_index", 4))     # AFMR
+CVABL_WS_INDEX = int(st.secrets.get("cvabl_ws_index", 5))  # Kardiyoversiyon-Ablasyon / TEE-GLS
 
 APP_TITLE = "❤️ NEÜ-KARDİYO"
 
@@ -323,6 +324,7 @@ with st.sidebar:
             "✉️ Editöre Mektup",
             "🫀 Fizyolojik Pacing Çalışması",
             "🫀 AFMR – TEE LV-GLS",
+            "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS",
         ],
     )
 
@@ -1019,6 +1021,341 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                 }
 
                 save_data_row(SHEET_ID, payload, unique_col="KayıtID", worksheet_index=AFMR_WS_INDEX)
+                st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
+                time.sleep(0.25)
+                st.rerun()
+
+# =========================================================
+# ====== EKRAN X: Kardiyoversiyon-Ablasyon / TEE-GLS =======
+# =========================================================
+elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
+    require_password_gate()
+
+    st.header("⚡ Kardiyoversiyon-Ablasyon / TEE-GLS")
+    st.caption("AF hastalarında TEE ile LV-GLS, kardiyoversiyon veya ablasyon başarısını öngörür mü?")
+
+    dfc = load_data(SHEET_ID, CVABL_WS_INDEX, required_col="KayıtID")
+
+    left, right = st.columns([2, 3])
+
+    # ---- edit seçimi ----
+    with left:
+        st.markdown("##### ⚙️ İşlem Seçimi")
+        mode = st.radio(
+            "Mod:",
+            ["Yeni Kayıt", "Düzenleme"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="cvabl_mode",
+        )
+
+        current = {}
+        if mode == "Düzenleme" and not dfc.empty and "KayıtID" in dfc.columns:
+            edit_key = st.selectbox("Düzenlenecek kayıt (KayıtID):", dfc["KayıtID"].unique(), key="cvabl_edit_key")
+            if edit_key:
+                current = dfc[dfc["KayıtID"] == edit_key].iloc[0].to_dict()
+                st.success(f"Seçildi: {current.get('Dosya No','')} | {current.get('Ziyaret','')} | {current.get('İşlem','')}")
+        elif mode == "Düzenleme":
+            st.warning("Düzenlenecek kayıt yok (veya sheet boş).")
+
+    # ---- liste/arama/silme ----
+    with right:
+        with st.expander("📋 Kayıtlı Liste / Arama / Silme", expanded=True):
+            if st.button("🔄 Listeyi Yenile", key="cvabl_refresh"):
+                st.rerun()
+
+            if dfc.empty:
+                st.info("Kayıt yok (veya sheet index yanlış / başlıklar oluşmadı). İlk kaydı girince başlıklar otomatik oluşur.")
+            else:
+                q = st.text_input("🔎 Arama (dosya no / hekim / işlem)", "", key="cvabl_search")
+                show = dfc.copy()
+                if q.strip():
+                    mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                    show = show[mask].copy()
+
+                cols_show = [c for c in [
+                    "KayıtID", "Dosya No", "Tarih", "Ziyaret", "İşlem", "Hekim",
+                    "Primary endpoint", "Endpoint başarılı"
+                ] if c in show.columns]
+                st.dataframe(show[cols_show] if cols_show else show, use_container_width=True)
+
+                st.divider()
+                st.markdown("##### 🗑️ Silme (Şifreli)")
+                if confirm_delete_with_password("cvabl"):
+                    del_key = st.selectbox("Silinecek KayıtID", dfc["KayıtID"].unique(), key="cvabl_del_key")
+                    if st.button("🗑️ SİL", type="secondary", key="cvabl_del_btn"):
+                        if delete_row_by_value(SHEET_ID, CVABL_WS_INDEX, "KayıtID", del_key):
+                            st.success("Silindi!")
+                            time.sleep(0.2)
+                            st.rerun()
+                        else:
+                            st.error("Hata!")
+
+    st.divider()
+
+    # ---- helpers ----
+    def gs(k): return str(current.get(k, ""))
+    def gf(k):
+        try: return float(current.get(k, 0))
+        except: return 0.0
+    def gi(k):
+        try: return int(float(current.get(k, 0)))
+        except: return 0
+    def gc(k): return str(current.get(k, "")).lower() == "true"
+
+    VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
+    VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
+    with st.form("cvabl_form"):
+        # ===================== DEMOGRAFİ / KLİNİK =====================
+        st.markdown("### 👤 Demografi ve Klinik (AF hasta)")
+        c1, c2 = st.columns(2)
+
+        with c1:
+            dosya_no = st.text_input("Dosya No (Zorunlu)", value=gs("Dosya No"))
+
+            prev_visit = gs("Ziyaret")
+            visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
+            ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
+            try:
+                d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
+            except:
+                d_date = datetime.now().date()
+            tarih = st.date_input("Tarih", value=d_date)
+
+            kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}_{tarih.strftime('%Y%m%d')}".strip("_")
+            st.caption(f"🆔 KayıtID: {kayit_id}")
+
+            hekim = st.text_input("Hekim (Zorunlu)", value=gs("Hekim"))
+            yas = st.number_input("Yaş", step=1, value=gi("Yaş"))
+            cinsiyet = st.radio("Cinsiyet", ["Kadın", "Erkek"], index=(0 if gs("Cinsiyet") != "Erkek" else 1), horizontal=True)
+
+        with c2:
+            boy = st.number_input("Boy (cm)", value=gf("Boy"))
+            kilo = st.number_input("Kilo (kg)", value=gf("Kilo"))
+            bmi = kilo / ((boy / 100) ** 2) if boy > 0 else 0
+            bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
+            st.metric("BMI", f"{bmi:.1f}")
+            st.metric("BSA", f"{bsa:.2f}")
+
+            nyha = st.selectbox(
+                "NYHA",
+                ["I", "II", "III", "IV"],
+                index=(["I","II","III","IV"].index(gs("NYHA")) if gs("NYHA") in ["I","II","III","IV"] else 0)
+            )
+
+            st.markdown("##### Semptomlar")
+            s1, s2, s3, s4 = st.columns(4)
+            sym_dispne = s1.checkbox("Dispne", value=gc("Semptom: Dispne"))
+            sym_carpinti = s2.checkbox("Çarpıntı", value=gc("Semptom: Çarpıntı"))
+            sym_yorgunluk = s3.checkbox("Yorgunluk", value=gc("Semptom: Yorgunluk"))
+            sym_diger = s4.text_input("Diğer", value=gs("Semptom: Diğer"))
+
+        # ===================== İŞLEM =====================
+        st.markdown("### ⚙️ İşlem Bilgisi")
+        p1, p2, p3 = st.columns(3)
+
+        islem_l = ["Elektrik Kardiyoversiyon", "Ablasyon"]
+        islem_prev = gs("İşlem")
+        islem_ix = islem_l.index(islem_prev) if islem_prev in islem_l else 0
+        islem = p1.selectbox("İşlem", islem_l, index=islem_ix)
+
+        try:
+            d_proc = datetime.strptime(gs("İşlem Tarihi"), "%Y-%m-%d").date()
+        except:
+            d_proc = tarih
+        islem_tarih = p2.date_input("İşlem Tarihi", value=d_proc)
+
+        abl_tip = ""
+        if islem == "Ablasyon":
+            abl_l = ["PVI", "PVI + Ek lezyon", "Diğer"]
+            abl_prev = gs("Ablasyon tipi")
+            abl_ix = abl_l.index(abl_prev) if abl_prev in abl_l else 0
+            abl_tip = p3.selectbox("Ablasyon tipi (ops.)", abl_l, index=abl_ix)
+        else:
+            abl_tip = ""
+
+        # ===================== ENDPOINT (2 TANE) =====================
+        st.markdown("### ✅ Endpoint (basit, literatüre uygun)")
+
+        # Not: Ablasyonda başarı tanımı literatürde genelde:
+        #  - 3 aylık blanking sonrası AF/AFL/AT rekürrensi olmaması (antiaritmik ilaç kullanımı çalışmaya göre değişebilir)
+        # Biz bunu "rekürrens var/yok" şeklinde basit tutuyoruz.
+
+        if islem == "Ablasyon":
+            primary_endpoint = "Ablasyon başarısı: 3 ay blanking sonrası atriyal taşiaritmi rekürrensi yok (AF/AFL/AT)"
+            cA1, cA2, cA3 = st.columns(3)
+            # Blanking sonrası rekürrens
+            rec_post_blanking = cA1.checkbox(
+                "Blanking sonrası rekürrens var (AF/AFL/AT)",
+                value=gc("Rekürrens (blanking sonrası)")
+            )
+            # Takip süresi (ay)
+            fu_months = cA2.number_input(
+                "Takip süresi (ay)",
+                min_value=0,
+                max_value=60,
+                step=1,
+                value=gi("Takip süresi (ay)")
+            )
+            # İsteğe bağlı: değerlendirme tarihi
+            try:
+                d_eval = datetime.strptime(gs("Endpoint değerlendirme tarihi"), "%Y-%m-%d").date()
+            except:
+                d_eval = datetime.now().date()
+            eval_date = cA3.date_input("Endpoint değerlendirme tarihi (ops.)", value=d_eval)
+
+            endpoint_success = (not bool(rec_post_blanking))
+
+        else:  # Kardiyoversiyon
+            primary_endpoint = "Kardiyoversiyon başarısı: 30 gün içinde AF rekürrensi yok"
+            cC1, cC2, cC3 = st.columns(3)
+
+            early_sr = cC1.checkbox(
+                "Erken başarı: SR sağlandı (işlem sonrası)",
+                value=gc("Başarı (erken)")
+            )
+            rec_30d = cC2.checkbox(
+                "AF rekürrensi 30 gün içinde",
+                value=gc("Rekürrens (30 gün)")
+            )
+            try:
+                d_eval = datetime.strptime(gs("Endpoint değerlendirme tarihi"), "%Y-%m-%d").date()
+            except:
+                d_eval = datetime.now().date()
+            eval_date = cC3.date_input("Endpoint değerlendirme tarihi (ops.)", value=d_eval)
+
+            # Primer endpoint: 30 gün rekürrens yok
+            endpoint_success = (not bool(rec_30d))
+
+            # Ablasyon alanları bu modda 0/boş olsun
+            fu_months = 0
+            rec_post_blanking = False
+
+        sonuc_not = st.text_input("Sonuç notu (ops.)", value=gs("Sonuç notu"))
+        st.info(f"📌 Primary endpoint: {primary_endpoint}\n\n📌 Endpoint sonucu: {'BAŞARILI' if endpoint_success else 'BAŞARISIZ'}")
+
+        # ===================== TIBBİ ÖYKÜ =====================
+        st.markdown("### 🧾 Tıbbi Öykü")
+        k1, k2, k3, k4 = st.columns(4)
+        hx_ht = k1.checkbox("Hipertansiyon", value=gc("Öykü: HT"))
+        hx_dm = k1.checkbox("Diyabet", value=gc("Öykü: DM"))
+        hx_kah = k2.checkbox("KAH / MI", value=gc("Öykü: KAH/MI"))
+        hx_kby = k2.checkbox("KBY (eGFR<60)", value=gc("Öykü: KBY"))
+        hx_koah = k3.checkbox("KOAH/Astım", value=gc("Öykü: KOAH/Astım"))
+        hx_obez = k3.checkbox("Obezite (BMI≥30)", value=gc("Öykü: Obezite"))
+        hx_osa = k4.checkbox("Uyku apnesi", value=gc("Öykü: Uyku apnesi"))
+        hx_tiroid = k4.checkbox("Tiroid hastalığı", value=gc("Öykü: Tiroid"))
+        hx_diger = st.text_input("Diğer (öykü)", value=gs("Öykü: Diğer"))
+
+        # ===================== TEDAVİ =====================
+        st.markdown("### 💊 Güncel Tedavi")
+        t1, t2, t3 = st.columns(3)
+        med_bb = t1.checkbox("Beta bloker", value=gc("Tedavi: BB"))
+        med_ace = t1.checkbox("ACEi/ARB/ARNI", value=gc("Tedavi: ACEi/ARB/ARNI"))
+        med_mra = t2.checkbox("MRA", value=gc("Tedavi: MRA"))
+        med_sglt2 = t2.checkbox("SGLT2 inhibitörü", value=gc("Tedavi: SGLT2"))
+        med_diur = t3.checkbox("Diüretik", value=gc("Tedavi: Diüretik"))
+        med_antitrom = t3.checkbox("Antikoagülan/Antiplatelet", value=gc("Tedavi: Antitrombotik"))
+        med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
+
+        # ===================== LAB =====================
+        st.markdown("### 🩸 Laboratuvar (opsiyonel)")
+        l1, l2, l3 = st.columns(3)
+        lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
+        lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
+        lab_egfr = l1.number_input("eGFR (mL/dk/1.73m²)", value=gf("eGFR"))
+        lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
+
+        # ===================== TEE GLS (ANA DEĞİŞKEN) =====================
+        st.markdown("### 🫀 TEE – LV Fonksiyon & Strain (Ana değişken)")
+        s1, s2, s3 = st.columns(3)
+        tee_lvef = s1.number_input("LVEF (TEE) (%)", value=gf("TEE LVEF"))
+        tee_lvedv = s2.number_input("LVEDV (TEE) (mL)", value=gf("TEE LVEDV"))
+        tee_lvesv = s2.number_input("LVESV (TEE) (mL)", value=gf("TEE LVESV"))
+        tee_sv = s2.number_input("SV (TEE) (mL)", value=gf("TEE SV"))
+        tee_gls = s3.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
+        fr = s3.number_input("Frame rate (fps)", value=gf("Frame rate"))
+
+        # ===================== SAVE =====================
+        st.write("")
+        submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+
+        if submitted:
+            if not dosya_no or not hekim:
+                st.error("Dosya No ve Hekim zorunlu!")
+            else:
+                payload = {
+                    "KayıtID": kayit_id,
+                    "Dosya No": dosya_no,
+                    "Tarih": str(tarih),
+                    "Ziyaret": ziyaret,
+                    "Hekim": hekim,
+
+                    "Yaş": yas,
+                    "Cinsiyet": cinsiyet,
+                    "Boy": boy,
+                    "Kilo": kilo,
+                    "BMI": bmi,
+                    "BSA": bsa,
+                    "NYHA": nyha,
+
+                    "Semptom: Dispne": sym_dispne,
+                    "Semptom: Çarpıntı": sym_carpinti,
+                    "Semptom: Yorgunluk": sym_yorgunluk,
+                    "Semptom: Diğer": sym_diger,
+
+                    "İşlem": islem,
+                    "İşlem Tarihi": str(islem_tarih),
+                    "Ablasyon tipi": abl_tip,
+
+                    "Primary endpoint": primary_endpoint,
+                    "Endpoint başarılı": endpoint_success,
+                    "Endpoint değerlendirme tarihi": str(eval_date),
+
+                    # Ablasyon endpoint alanları
+                    "Rekürrens (blanking sonrası)": rec_post_blanking,
+                    "Takip süresi (ay)": fu_months,
+
+                    # Kardiyoversiyon endpoint alanları
+                    "Başarı (erken)": (early_sr if islem == "Elektrik Kardiyoversiyon" else ""),
+                    "Rekürrens (30 gün)": (rec_30d if islem == "Elektrik Kardiyoversiyon" else ""),
+
+                    "Sonuç notu": sonuc_not,
+
+                    "Öykü: HT": hx_ht,
+                    "Öykü: DM": hx_dm,
+                    "Öykü: KAH/MI": hx_kah,
+                    "Öykü: KBY": hx_kby,
+                    "Öykü: KOAH/Astım": hx_koah,
+                    "Öykü: Obezite": hx_obez,
+                    "Öykü: Uyku apnesi": hx_osa,
+                    "Öykü: Tiroid": hx_tiroid,
+                    "Öykü: Diğer": hx_diger,
+
+                    "Tedavi: BB": med_bb,
+                    "Tedavi: ACEi/ARB/ARNI": med_ace,
+                    "Tedavi: MRA": med_mra,
+                    "Tedavi: SGLT2": med_sglt2,
+                    "Tedavi: Diüretik": med_diur,
+                    "Tedavi: Antitrombotik": med_antitrom,
+                    "Tedavi: Diğer": med_diger,
+
+                    "Hb": lab_hb,
+                    "Kreatinin": lab_krea,
+                    "eGFR": lab_egfr,
+                    "NT-proBNP": lab_ntprobnp,
+
+                    "TEE LVEF": tee_lvef,
+                    "TEE LVEDV": tee_lvedv,
+                    "TEE LVESV": tee_lvesv,
+                    "TEE SV": tee_sv,
+                    "TEE LVGLS": tee_gls,
+                    "Frame rate": fr,
+                }
+
+                save_data_row(SHEET_ID, payload, unique_col="KayıtID", worksheet_index=CVABL_WS_INDEX)
                 st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
                 time.sleep(0.25)
                 st.rerun()
