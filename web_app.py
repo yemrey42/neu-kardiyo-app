@@ -857,10 +857,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         tee_dbp = int(_clamp_number(gi("TEE sırasında DBP"), min_v=30, max_v=160, default=70))
         tee_hr  = int(_clamp_number(gi("TEE sırasında HR"),  min_v=20, max_v=220, default=80))
 
-        post_sbp = int(_clamp_number(gi("TEE sonrası SBP"), min_v=50, max_v=260, default=120))
-        post_dbp = int(_clamp_number(gi("TEE sonrası DBP"), min_v=30, max_v=160, default=70))
-        post_hr  = int(_clamp_number(gi("TEE sonrası HR"),  min_v=20, max_v=220, default=80))
-
         pre_sbp_in = h2.number_input("TEE öncesi SBP (mmHg)", min_value=50, max_value=260, step=1, value=pre_sbp)
         pre_dbp_in = h2.number_input("TEE öncesi DBP (mmHg)", min_value=30, max_value=160, step=1, value=pre_dbp)
         pre_hr_in  = h2.number_input("TEE öncesi HR (bpm)",   min_value=20, max_value=220, step=1, value=pre_hr)
@@ -868,14 +864,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         tee_sbp_in = h3.number_input("TEE sırasında SBP (mmHg)", min_value=50, max_value=260, step=1, value=tee_sbp)
         tee_dbp_in = h3.number_input("TEE sırasında DBP (mmHg)", min_value=30, max_value=160, step=1, value=tee_dbp)
         tee_hr_in  = h3.number_input("TEE sırasında HR (bpm)",   min_value=20, max_value=220, step=1, value=tee_hr)
-
-        # TEE sonrası BP ve HR AYRI ✅
-        p1, p2 = st.columns(2)
-        post_sbp_in = p1.number_input("TEE sonrası SBP (mmHg)", min_value=50, max_value=260, step=1, value=post_sbp)
-        post_dbp_in = p1.number_input("TEE sonrası DBP (mmHg)", min_value=30, max_value=160, step=1, value=post_dbp)
-        post_hr_in  = p2.number_input("TEE sonrası HR (bpm)",   min_value=20, max_value=220, step=1, value=post_hr)
-
-        tee_rhythm = st.radio("TEE sırasında ritim", ["AF", "SR"], index=(0 if gs("TEE ritim") != "SR" else 1), horizontal=True)
 
         st.markdown("### 🩻 TEE – MR Kantitasyonu & Morfoloji")
         m1, m2, m3 = st.columns(3)
@@ -999,12 +987,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "TEE sırasında SBP": tee_sbp_in,
                     "TEE sırasında DBP": tee_dbp_in,
                     "TEE sırasında HR": tee_hr_in,
-
-                    "TEE sonrası SBP": post_sbp_in,
-                    "TEE sonrası DBP": post_dbp_in,
-                    "TEE sonrası HR": post_hr_in,
-
-                    "TEE ritim": tee_rhythm,
 
                     "MR (TEE) Derece": mr_deg_tee,
                     "MR jet tipi": mr_jet,
