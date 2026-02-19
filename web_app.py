@@ -799,16 +799,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
             sym_carpinti = s2.checkbox("Çarpıntı", value=gc("Semptom: Çarpıntı"))
             sym_yorgunluk = s3.checkbox("Yorgunluk", value=gc("Semptom: Yorgunluk"))
             sym_diger = s4.text_input("Diğer", value=gs("Semptom: Diğer"))
-
-        st.markdown("### 🫀 AF Öyküsü (varsa)")
-        if ritim == "AF":
-            af1, af2 = st.columns(2)
-            af_sure = af1.number_input("AF süresi (ay)", value=gf("AF süresi (ay)"))
-            af_tipi = af2.selectbox("AF tipi", ["Paroksismal", "Persistan", "Permanen"],
-                                    index=(["Paroksismal","Persistan","Permanen"].index(gs("AF tipi"))
-                                           if gs("AF tipi") in ["Paroksismal","Persistan","Permanen"] else 0))
-        else:
-            af_sure, af_tipi = 0, ""
+            
 
         st.markdown("### 🧾 Tıbbi Öykü")
         k1, k2, k3, k4 = st.columns(4)
@@ -841,7 +832,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         
         lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
 
-        st.markdown("### 🧠 Sedasyon / Hemodinami (Mantıklı - Temiz)")
+        st.markdown("### 🧠 Sedasyon / Hemodinami")
         h1, h2, h3 = st.columns(3)
 
         sed_ilac = h1.text_input("Sedasyon ilacı", value=(gs("Sedasyon ilacı") if gs("Sedasyon ilacı") else "Midazolam"))
@@ -951,8 +942,6 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "Semptom: Diğer": sym_diger,
 
                     "Ritim": ritim,
-                    "AF süresi (ay)": af_sure,
-                    "AF tipi": af_tipi,
 
                     "Öykü: HT": hx_ht,
                     "Öykü: DM": hx_dm,
