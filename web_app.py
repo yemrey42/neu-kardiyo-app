@@ -1273,9 +1273,8 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         # ===================== TEE =====================
         # Sadece GLS (TEE'de bu çalışmada LV volüm/EF alınmıyor)
         st.markdown("### 🫀 TEE – LV-GLS (Ana değişken)")
-        s1, s2 = st.columns(2)
+        s1= st.columns(1)
         tee_gls = s1.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
-        tee_fr = s2.number_input("Frame rate (TEE) (fps)", value=gf("Frame rate (TEE)"))
 
         # ===================== TTE (İSTEDİĞİN PARAMETRELER) =====================
         st.markdown("### 🫁 TTE – Karşılaştırma (yeterli set)")
@@ -1361,7 +1360,6 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
 
                     # TEE (sadece GLS)
                     "TEE LVGLS": tee_gls,
-                    "Frame rate (TEE)": tee_fr,
 
                     # TTE (sadece istediğin set)
                     "TTE LVEF": tte_lvef,
