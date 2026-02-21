@@ -1273,8 +1273,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         # ===================== TEE =====================
         # Sadece GLS (TEE'de bu çalışmada LV volüm/EF alınmıyor)
         st.markdown("### 🫀 TEE – LV-GLS (Ana değişken)")
-        s1= st.columns(1)
-        tee_gls = s1.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
+        tee_gls = st.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
 
         # ===================== TTE (İSTEDİĞİN PARAMETRELER) =====================
         st.markdown("### 🫁 TTE – Karşılaştırma (yeterli set)")
