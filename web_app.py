@@ -1128,6 +1128,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             st.caption(f"🆔 KayıtID: {kayit_id}")
 
             hekim = st.text_input("Hekim (Zorunlu)", value=gs("Hekim"))
+            iletisim_no = st.text_input("İletişim No", value=gs("İletişim No"))
             yas = st.number_input("Yaş", step=1, value=gi("Yaş"))
             cinsiyet = st.radio("Cinsiyet", ["Kadın", "Erkek"], index=(0 if gs("Cinsiyet") != "Erkek" else 1), horizontal=True)
 
@@ -1177,7 +1178,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             abl_tip = ""
 
         # ===================== ENDPOINT (2 TANE) =====================
-        st.markdown("### ✅ Endpoint")
+        st.markdown("### ✅ Endpoint (basit, literatüre uygun)")
 
         if islem == "Ablasyon":
             primary_endpoint = "Ablasyon başarısı: 3 ay blanking sonrası atriyal taşiaritmi rekürrensi yok (AF/AFL/AT)"
@@ -1262,7 +1263,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
 
         # ===================== LAB =====================
-        st.markdown("### 🩸 Laboratuvar")
+        st.markdown("### 🩸 Laboratuvar (opsiyonel)")
         l1, l2, l3 = st.columns(3)
         lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
         lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
@@ -1270,24 +1271,23 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
 
         # ===================== TEE =====================
-        st.markdown("### 🫀 TEE – LV Fonksiyon & Strain")
-        s1, s2, s3 = st.columns(3)
-        tee_lvef = s1.number_input("LVEF (TEE) (%)", value=gf("TEE LVEF"))
-        tee_lvedv = s2.number_input("LVEDV (TEE) (mL)", value=gf("TEE LVEDV"))
-        tee_lvesv = s2.number_input("LVESV (TEE) (mL)", value=gf("TEE LVESV"))
-        tee_sv = s2.number_input("SV (TEE) (mL)", value=gf("TEE SV"))
-        tee_gls = s3.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
-        tee_fr = s3.number_input("Frame rate (TEE) (fps)", value=gf("Frame rate (TEE)"))
+        # Sadece GLS (TEE'de bu çalışmada LV volüm/EF alınmıyor)
+        st.markdown("### 🫀 TEE – LV-GLS (Ana değişken)")
+        s1, s2 = st.columns(2)
+        tee_gls = s1.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
+        tee_fr = s2.number_input("Frame rate (TEE) (fps)", value=gf("Frame rate (TEE)"))
 
         # ===================== TTE (İSTEDİĞİN PARAMETRELER) =====================
-        st.markdown("### 🫁 TTE – Karşılaştırma")
+        st.markdown("### 🫁 TTE – Karşılaştırma (yeterli set)")
         t1, t2, t3 = st.columns(3)
         tte_lvef = t1.number_input("LVEF (TTE) (%)", value=gf("TTE LVEF"))
+        tte_sv = t1.number_input("SV (TTE) (mL)", value=gf("TTE SV"))
+
         tte_lvedv = t2.number_input("LVEDV (TTE) (mL)", value=gf("TTE LVEDV"))
         tte_lvesv = t2.number_input("LVESV (TTE) (mL)", value=gf("TTE LVESV"))
+
         tte_laesv = t3.number_input("LAESV (TTE) (mL)", value=gf("TTE LAESV"))
         tte_gls = t3.number_input("LV-GLS (TTE) (%)", value=gf("TTE LVGLS"))
-        tte_sv = t1.number_input("SV (TTE) (mL)", value=gf("TTE SV"))
 
         # ===================== SAVE =====================
         st.write("")
@@ -1303,6 +1303,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                     "Tarih": str(tarih),
                     "Ziyaret": ziyaret,
                     "Hekim": hekim,
+                    "İletişim No": iletisim_no,
 
                     "Yaş": yas,
                     "Cinsiyet": cinsiyet,
@@ -1358,11 +1359,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                     "eGFR": lab_egfr,
                     "NT-proBNP": lab_ntprobnp,
 
-                    # TEE
-                    "TEE LVEF": tee_lvef,
-                    "TEE LVEDV": tee_lvedv,
-                    "TEE LVESV": tee_lvesv,
-                    "TEE SV": tee_sv,
+                    # TEE (sadece GLS)
                     "TEE LVGLS": tee_gls,
                     "Frame rate (TEE)": tee_fr,
 
@@ -1379,7 +1376,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                 st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
                 time.sleep(0.25)
                 st.rerun()
-
+                
 # =========================================================
 # ===================== EKRAN 1: H-TYPE HT =====================
 # =========================================================
