@@ -21,7 +21,7 @@ SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 DATA_WS_INDEX = int(st.secrets.get("data_ws_index", 0))     # H-Type HT
 CASE_WS_INDEX = int(st.secrets.get("case_ws_index", 1))     # Case Report
 LETTER_WS_INDEX = int(st.secrets.get("letter_ws_index", 2)) # Editöre mektup
-PACED_WS_INDEX = int(st.secrets.get("paced_ws_index", 3))   # AV Tam Blok - İleti Sistemi Pacing Çalışması
+PACED_WS_INDEX = int(st.secrets.get("paced_ws_index", 3))   # Fizyolojik pacing
 AFMR_WS_INDEX = int(st.secrets.get("afmr_ws_index", 4))     # AFMR
 CVABL_WS_INDEX = int(st.secrets.get("cvabl_ws_index", 5))  # Kardiyoversiyon-Ablasyon / TEE-GLS
 
@@ -322,7 +322,7 @@ with st.sidebar:
             "🏥 H-Type HT Çalışması",
             "📝 Case Report Takip",
             "✉️ Editöre Mektup",
-            "🫀 AV Tam Blok - İleti Sistemi Pacing Çalışması",
+            "🫀 Fizyolojik Pacing Çalışması",
             "🫀 AFMR – TEE LV-GLS",
             "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS",
         ],
@@ -459,309 +459,234 @@ elif menu == "✉️ Editöre Mektup":
                     else:
                         st.error("Hata!")
 
-import streamlit as st
-import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import time
 
-# ===================== AYARLAR =====================
-st.set_page_config(
-    page_title="NEÜ-KARDİYO | AV Tam Blok - İleti Sistemi Pacing Çalışması",
-    layout="wide",
-)
+# =========================================================
+# =========== EKRAN 4: FİZYOLOJİK PACING ÇALIŞMASI =========
+# =========================================================
+elif menu == "🫀 Fizyolojik Pacing Çalışması":
+    require_password_gate()
 
-SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
+    st.header("🫀 Fizyolojik Pacing (LBBAP / HBP) Çalışması")
+    st.caption("AV blok nedeniyle fizyolojik pacing yapılan hastalarda klinik + RV parametreleri.")
 
-# ✅ AV Tam Blok - İleti Sistemi Pacing sekmesi index'i (0-based)
-PACED_SHEET_ID = SHEET_ID
-PACED_WS_INDEX = 3   # Google Sheet'te 4. sekme ise 3 doğru
+    dfp = load_data(SHEET_ID, PACED_WS_INDEX, required_col="KayıtID")
 
-# ===================== GOOGLE SHEETS BAĞLANTISI =====================
-def connect_to_gsheets(sheet_id: str):
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    sh = client.open_by_key(sheet_id)
-    return sh
+    col_left, col_right = st.columns([2, 3])
 
-def get_ws(sh, ws_index: int):
-    return sh.get_worksheet(ws_index)
+    # ---- edit seçimi ----
+    with col_left:
+        st.markdown("##### ⚙️ İşlem Seçimi")
+        mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed", key="pacing_mode")
 
-def ensure_headers(ws, headers):
-    current = ws.row_values(1)
-    if not current or len(current) == 0:
-        ws.update("A1", [headers])
-        return headers
+        current = {}
+        if mode == "Düzenleme" and not dfp.empty and "KayıtID" in dfp.columns:
+            edit_key = st.selectbox("Düzenlenecek KayıtID", dfp["KayıtID"].unique(), key="pacing_edit_key")
+            if edit_key:
+                current = dfp[dfp["KayıtID"] == edit_key].iloc[0].to_dict()
+                st.success(f"Seçildi: {current.get('Dosya Numarası','')} | {current.get('Ziyaret','')}")
+        elif mode == "Düzenleme":
+            st.warning("Düzenlenecek kayıt yok.")
 
-    missing = [h for h in headers if h not in current]
-    if missing:
-        new_headers = current + missing
-        ws.update("A1", [new_headers])
-        return new_headers
-    return current
+    # ---- liste/arama/silme ----
+    with col_right:
+        with st.expander("📋 KAYITLI LİSTE / ARAMA / SİLME", expanded=True):
+            if st.button("🔄 Listeyi Yenile", key="pacing_refresh"):
+                st.rerun()
 
-def append_row(ws, headers, row_dict):
-    row = [row_dict.get(h, "") for h in headers]
-    ws.append_row(row, value_input_option="USER_ENTERED")
+            if dfp.empty:
+                st.info("Kayıt yok (veya sheet yok/başlık uyumsuz).")
+            else:
+                q = st.text_input("🔎 Arama (dosya no / hekim / ziyaret)", "", key="pacing_search")
+                show = dfp.copy()
+                if q.strip():
+                    mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+                    show = show[mask].copy()
 
-# ===================== HESAPLAMALAR =====================
-def calc_bmi(weight_kg, height_cm):
-    try:
-        if weight_kg and height_cm and height_cm > 0:
-            h_m = height_cm / 100.0
-            return weight_kg / (h_m * h_m)
-    except:
-        pass
-    return None
+                cols_show = [c for c in ["KayıtID", "Dosya Numarası", "Ziyaret", "Tarih", "Hekim", "Pacing Tipi"] if c in show.columns]
+                st.dataframe(show[cols_show] if cols_show else show, use_container_width=True)
 
-def calc_bsa_mosteller(weight_kg, height_cm):
-    try:
-        if weight_kg and height_cm and weight_kg > 0 and height_cm > 0:
-            import math
-            return math.sqrt((height_cm * weight_kg) / 3600.0)
-    except:
-        pass
-    return None
+                st.divider()
+                st.markdown("##### 🗑️ Silme (Şifreli)")
+                if confirm_delete_with_password("pacing"):
+                    del_key = st.selectbox("Silinecek KayıtID", dfp["KayıtID"].unique(), key="pacing_del_key")
+                    if st.button("🗑️ SİL", type="secondary", key="pacing_del_btn"):
+                        if delete_row_by_value(SHEET_ID, PACED_WS_INDEX, "KayıtID", del_key):
+                            st.success("Silindi!")
+                            time.sleep(0.2)
+                            st.rerun()
+                        else:
+                            st.error("Hata!")
 
-def safe_div(a, b):
-    try:
-        if a is None or b is None:
-            return None
-        if b == 0:
-            return None
-        return a / b
-    except:
-        return None
+    st.divider()
 
-# ===================== KOLONLAR =====================
-BASE_HEADERS = [
-    "timestamp",
-    "record_id",
+    # ---- form helpers ----
+    def gs(k): return str(current.get(k, ""))
+    def gf(k):
+        try: return float(current.get(k, 0))
+        except: return 0.0
+    def gi(k):
+        try: return int(float(current.get(k, 0)))
+        except: return 0
+    def gc(k): return str(current.get(k, "")).lower() == "true"
 
-    # Demografi / iletişim
-    "patient_code",
-    "name_surname",
-    "age",
-    "sex",
-    "phone",
-    "communication_no",
+    VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
+    VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
 
-    # Klinik
-    "height_cm",
-    "weight_kg",
-    "bmi",
-    "bsa",
-    "ht",
-    "dm",
-    "cad",
-    "hf",
-    "ckd",
-    "copd",
-    "af",
-    "other_comorbidity",
-    "medications",
+    with st.form("pacing_main_form"):
+        st.markdown("### 👤 Klinik")
+        c1, c2 = st.columns(2)
 
-    # Pacing / Prosedür
-    "pacing_type",          # LBBAP / HBP / others
-    "indication",
-    "implant_date",
-    "device_brand_model",
-    "lead_type",
-    "qrs_baseline_ms",
-    "qrs_post_ms",
-    "threshold_v",
-    "impedance_ohm",
-    "sensing_mv",
-    "complications",
-    "followup_month",
+        with c1:
+            dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=gs("Dosya Numarası"))
+            prev_visit = gs("Ziyaret")
+            visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
+            ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
 
-    # EKO - LV/LA
-    "lvgls",
-    "lvedv_ml",
-    "lvesv_ml",
-    "sv_ml",
-    "lagls",
-    "laesv_ml",
-    "lavi_ml_m2",  # auto: LAESV / BSA
+            kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}".strip("_")
+            st.caption(f"🆔 KayıtID: {kayit_id}")
 
-    # Notlar
-    "notes",
-]
+            try:
+                d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
+            except:
+                d_date = datetime.now().date()
+            basvuru = st.date_input("Başvuru Tarihi", value=d_date)
 
-# ===================== UI =====================
-st.title("🫀 AV Tam Blok - İleti Sistemi Pacing Çalışması")
-st.caption("NEÜ-KARDİYO | AV Tam Blok - İleti Sistemi Pacing Registry")
+            hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)", value=gs("Hekim"))
+            iletisim = st.text_input("İletişim", value=gs("İletişim"))
 
-with st.expander("⚙️ Google Sheets Bağlantı Bilgisi", expanded=False):
-    st.write("Sheet ID:", SHEET_ID)
-    st.write("Worksheet index (PACED_WS_INDEX):", PACED_WS_INDEX)
+            pacing_tipi_l = ["LBBAP", "HBP", "Diğer"]
+            pt = gs("Pacing Tipi")
+            pacing_tipi = st.selectbox("Pacing Tipi", pacing_tipi_l, index=(pacing_tipi_l.index(pt) if pt in pacing_tipi_l else 0))
 
-colA, colB = st.columns([1, 1])
+            st.markdown("##### Pacing Endikasyonu")
+            av_tam = st.checkbox("AV Tam Blok", value=gc("Pacing Endikasyonu: AV Tam Blok"))
+            av_2 = st.checkbox("2. Derece AV Blok", value=gc("Pacing Endikasyonu: 2. Derece AV Blok"))
 
-with colA:
-    st.subheader("🧾 Kayıt Bilgisi")
-    record_id = st.text_input("Kayıt ID (benzersiz)", value=f"PACED-{int(time.time())}")
-    patient_code = st.text_input("Hasta Kodu / Protokol No")
-    name_surname = st.text_input("Ad Soyad (opsiyonel)")
-    age = st.number_input("Yaş", min_value=0, max_value=120, value=0)
-    sex = st.selectbox("Cinsiyet", ["", "Kadın", "Erkek"])
-    phone = st.text_input("Telefon (opsiyonel)")
-    communication_no = st.text_input("İletişim No (opsiyonel)")
+        with c2:
+            cy, cc = st.columns(2)
+            yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
 
-with colB:
-    st.subheader("🩺 Klinik")
-    height_cm = st.number_input("Boy (cm)", min_value=0.0, max_value=250.0, value=0.0, step=1.0)
-    weight_kg = st.number_input("Kilo (kg)", min_value=0.0, max_value=300.0, value=0.0, step=0.5)
+            sex_l = ["Erkek", "Kadın"]
+            s_ix = sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0
+            cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
 
-    bmi_val = calc_bmi(weight_kg if weight_kg > 0 else None, height_cm if height_cm > 0 else None)
-    bsa_val = calc_bsa_mosteller(weight_kg if weight_kg > 0 else None, height_cm if height_cm > 0 else None)
+            cb1, cb2, cb3 = st.columns(3)
+            boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
+            kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
+            bmi = kilo / ((boy / 100) ** 2) if boy > 0 else 0
+            bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
+            cb3.metric("BMI", f"{bmi:.1f}")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("BMI", f"{bmi_val:.2f}" if bmi_val is not None else "—")
-    with c2:
-        st.metric("BSA (Mosteller)", f"{bsa_val:.2f} m²" if bsa_val is not None else "—")
+            ct1, ct2 = st.columns(2)
+            ta_sis = ct1.number_input("TA Sistol (mmHg)", value=gi("TA Sistol"))
+            ta_dia = ct2.number_input("TA Diyastol (mmHg)", value=gi("TA Diyastol"))
 
-    c3, c4, c5 = st.columns(3)
-    with c3:
-        ht = st.checkbox("HT")
-        dm = st.checkbox("DM")
-        cad = st.checkbox("CAD")
-    with c4:
-        hf = st.checkbox("HF")
-        ckd = st.checkbox("CKD")
-        copd = st.checkbox("COPD")
-    with c5:
-        af = st.checkbox("AF")
-        other_comorbidity = st.text_input("Diğer komorbidite (metin)")
-    medications = st.text_area("İlaçlar / tedavi (metin)", height=80)
+        st.markdown("---")
 
-st.divider()
+        ci1, ci2 = st.columns(2)
+        ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
+        baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
 
-st.subheader("⚡ İleti Sistemi Pacing / Prosedür")
-p1, p2, p3 = st.columns(3)
-with p1:
-    pacing_type = st.selectbox("Pacing Tipi", ["", "LBBAP", "HBP", "BiV", "RV apikal", "Diğer"])
-    indication = st.text_input("Endikasyon (AV tam blok, ileri AV blok, bradikardi, CRT vb.)")
-    implant_date = st.date_input("İmplant Tarihi", value=None)
-with p2:
-    device_brand_model = st.text_input("Cihaz marka/model")
-    lead_type = st.text_input("Lead tipi / modeli")
-    followup_month = st.number_input("Takip (ay)", min_value=0, max_value=120, value=0)
-with p3:
-    qrs_baseline_ms = st.number_input("Bazal QRS (ms)", min_value=0, max_value=400, value=0)
-    qrs_post_ms = st.number_input("Pacing sonrası QRS (ms)", min_value=0, max_value=400, value=0)
-    threshold_v = st.number_input("Eşik (V)", min_value=0.0, max_value=10.0, value=0.0, step=0.1)
+        st.markdown("##### Ek Hastalıklar")
+        ck1, ck2, ck3, ck4, ck5 = st.columns(5)
+        dm = ck1.checkbox("DM", value=gc("DM"))
+        kah = ck2.checkbox("KAH", value=gc("KAH"))
+        hpl = ck3.checkbox("HPL", value=gc("HPL"))
+        inme = ck4.checkbox("İnme", value=gc("İnme"))
+        sigara = ck5.checkbox("Sigara", value=gc("Sigara"))
+        diger = st.text_input("Diğer", value=gs("Diğer"))
 
-d1, d2, d3 = st.columns(3)
-with d1:
-    impedance_ohm = st.number_input("Empedans (ohm)", min_value=0, max_value=5000, value=0)
-with d2:
-    sensing_mv = st.number_input("Sensing (mV)", min_value=0.0, max_value=50.0, value=0.0, step=0.1)
-with d3:
-    complications = st.text_input("Komplikasyon (varsa)")
+        st.markdown("### 🩸 Laboratuvar")
+        l1, l2, l3 = st.columns(3)
+        hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
+        wbc = l1.number_input("WBC (10³/µL)", value=gf("WBC"))
+        plt = l1.number_input("PLT (10³/µL)", value=gf("PLT"))
+        krea = l2.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
+        na = l2.number_input("Na (mEq/L)", value=gf("Na"))
+        k_val = l2.number_input("K (mEq/L)", value=gf("K"))
+        ntprobnp = l3.number_input("NT-proBNP (pg/mL)", value=gf("NT-proBNP"))
+        hs_trop = l3.number_input("hs-Troponin (ng/L)", value=gf("hs-Troponin"))
 
-st.divider()
+        st.markdown("### 🫀 Eko / STE — RV (Sadece)")
+        r1, r2, r3, r4 = st.columns(4)
 
-st.subheader("🖥️ EKO Parametreleri")
-st.markdown("### ✅ LV / LA")
+        rv_fwls = r1.number_input("RV FWLS (%)", value=gf("RV FWLS (%)"))
+        endogls = r1.number_input("EndoGLS (%)", value=gf("EndoGLS (%)"))
+        myogls = r1.number_input("MyoGLS (%)", value=gf("MyoGLS (%)"))
 
-e1, e2, e3, e4 = st.columns(4)
-with e1:
-    lvgls = st.number_input("LVGLS (%)", value=0.0, step=0.1)
-with e2:
-    lvedv_ml = st.number_input("LVEDV (mL)", value=0.0, step=1.0)
-with e3:
-    lvesv_ml = st.number_input("LVESV (mL)", value=0.0, step=1.0)
-with e4:
-    sv_ml = st.number_input("SV (mL)", value=0.0, step=1.0)
+        eda = r2.number_input("EDA", value=gf("EDA"))
+        esa = r2.number_input("ESA", value=gf("ESA"))
+        rv_fac = r2.number_input("RV FAC (%)", value=gf("RV FAC (%)"))
 
-e5, e6, e7 = st.columns(3)
-with e5:
-    lagls = st.number_input("LAGLS (%)", value=0.0, step=0.1)
-with e6:
-    laesv_ml = st.number_input("LAESV (mL)", value=0.0, step=1.0)
-with e7:
-    lavi_val = None
-    if laesv_ml and laesv_ml > 0 and bsa_val is not None and bsa_val > 0:
-        lavi_val = safe_div(laesv_ml, bsa_val)
-    st.metric("LAVI (mL/m²) (otomatik)", f"{lavi_val:.1f}" if lavi_val is not None else "—")
+        rv_grs = r3.number_input("RV GRS (%)", value=gf("RV GRS (%)"))
+        tyvel = r3.number_input("TY vel. (m/sn)", value=gf("TY vel. (m/sn)"))
 
-notes = st.text_area("Notlar", height=90)
+        rvsm = r4.number_input("RV Sm (cm/sn)", value=gf("RV Sm (cm/sn)"))
+        tapse = r4.number_input("TAPSE (mm)", value=gf("TAPSE (mm)"))
 
-st.divider()
+        st.write("")
+        submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+        if submitted:
+            if not dosya_no or not hekim:
+                st.error("Dosya No ve Hekim zorunlu!")
+            else:
+                final_data = {
+                    "KayıtID": kayit_id,
+                    "Dosya Numarası": dosya_no,
+                    "Ziyaret": ziyaret,
+                    "Tarih": str(basvuru),
+                    "Hekim": hekim,
+                    "İletişim": iletisim,
 
-# ===================== KAYDET =====================
-st.subheader("💾 Kaydet / Google Sheet'e Yaz")
+                    "Pacing Tipi": pacing_tipi,
+                    "Pacing Endikasyonu: AV Tam Blok": av_tam,
+                    "Pacing Endikasyonu: 2. Derece AV Blok": av_2,
 
-if st.button("✅ Kaydı Google Sheet'e Ekle", type="primary"):
-    try:
-        sh = connect_to_gsheets(PACED_SHEET_ID)
-        ws = get_ws(sh, PACED_WS_INDEX)
-        headers = ensure_headers(ws, BASE_HEADERS)
+                    "Yaş": yas,
+                    "Cinsiyet": cinsiyet,
+                    "Boy": boy,
+                    "Kilo": kilo,
+                    "BMI": bmi,
+                    "BSA": bsa,
+                    "TA Sistol": ta_sis,
+                    "TA Diyastol": ta_dia,
 
-        row = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "record_id": record_id,
+                    "İlaçlar": ilaclar,
+                    "Başlanan": baslanan,
 
-            "patient_code": patient_code,
-            "name_surname": name_surname,
-            "age": age,
-            "sex": sex,
-            "phone": phone,
-            "communication_no": communication_no,
+                    "DM": dm,
+                    "KAH": kah,
+                    "HPL": hpl,
+                    "İnme": inme,
+                    "Sigara": sigara,
+                    "Diğer": diger,
 
-            "height_cm": height_cm if height_cm > 0 else "",
-            "weight_kg": weight_kg if weight_kg > 0 else "",
-            "bmi": round(bmi_val, 2) if bmi_val is not None else "",
-            "bsa": round(bsa_val, 2) if bsa_val is not None else "",
-            "ht": int(ht),
-            "dm": int(dm),
-            "cad": int(cad),
-            "hf": int(hf),
-            "ckd": int(ckd),
-            "copd": int(copd),
-            "af": int(af),
-            "other_comorbidity": other_comorbidity,
-            "medications": medications,
+                    "Hgb": hgb,
+                    "WBC": wbc,
+                    "PLT": plt,
+                    "Kreatinin": krea,
+                    "Na": na,
+                    "K": k_val,
+                    "NT-proBNP": ntprobnp,
+                    "hs-Troponin": hs_trop,
 
-            "pacing_type": pacing_type,
-            "indication": indication,
-            "implant_date": implant_date.strftime("%Y-%m-%d") if implant_date else "",
-            "device_brand_model": device_brand_model,
-            "lead_type": lead_type,
-            "qrs_baseline_ms": qrs_baseline_ms if qrs_baseline_ms > 0 else "",
-            "qrs_post_ms": qrs_post_ms if qrs_post_ms > 0 else "",
-            "threshold_v": threshold_v if threshold_v > 0 else "",
-            "impedance_ohm": impedance_ohm if impedance_ohm > 0 else "",
-            "sensing_mv": sensing_mv if sensing_mv > 0 else "",
-            "complications": complications,
-            "followup_month": followup_month if followup_month > 0 else "",
+                    # RV only
+                    "RV FWLS (%)": rv_fwls,
+                    "EndoGLS (%)": endogls,
+                    "MyoGLS (%)": myogls,
+                    "EDA": eda,
+                    "ESA": esa,
+                    "RV FAC (%)": rv_fac,
+                    "RV GRS (%)": rv_grs,
+                    "TY vel. (m/sn)": tyvel,
+                    "RV Sm (cm/sn)": rvsm,
+                    "TAPSE (mm)": tapse,
+                }
 
-            "lvgls": lvgls if lvgls != 0 else "",
-            "lvedv_ml": lvedv_ml if lvedv_ml != 0 else "",
-            "lvesv_ml": lvesv_ml if lvesv_ml != 0 else "",
-            "sv_ml": sv_ml if sv_ml != 0 else "",
-            "lagls": lagls if lagls != 0 else "",
-            "laesv_ml": laesv_ml if laesv_ml != 0 else "",
-            "lavi_ml_m2": round(lavi_val, 1) if lavi_val is not None else "",
-
-            "notes": notes,
-        }
-
-        append_row(ws, headers, row)
-        st.success("Kayıt başarıyla eklendi ✅")
-
-    except Exception as e:
-        st.error(f"Hata: {e}")
+                save_data_row(SHEET_ID, final_data, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
+                st.success(f"✅ {kayit_id} kaydedildi / güncellendi!")
+                time.sleep(0.25)
+                st.rerun()
 
 
 # =========================================================
