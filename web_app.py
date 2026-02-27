@@ -21,7 +21,7 @@ SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 DATA_WS_INDEX = int(st.secrets.get("data_ws_index", 0))     # H-Type HT
 CASE_WS_INDEX = int(st.secrets.get("case_ws_index", 1))     # Case Report
 LETTER_WS_INDEX = int(st.secrets.get("letter_ws_index", 2)) # Editöre mektup
-PACED_WS_INDEX = int(st.secrets.get("paced_ws_index", 3))   # Fizyolojik pacing
+PACED_WS_INDEX = int(st.secrets.get("paced_ws_index", 3))   # AV Tam Blok - İleti Sistemi Pacing Çalışması
 AFMR_WS_INDEX = int(st.secrets.get("afmr_ws_index", 4))     # AFMR
 CVABL_WS_INDEX = int(st.secrets.get("cvabl_ws_index", 5))  # Kardiyoversiyon-Ablasyon / TEE-GLS
 
@@ -322,7 +322,7 @@ with st.sidebar:
             "🏥 H-Type HT Çalışması",
             "📝 Case Report Takip",
             "✉️ Editöre Mektup",
-            "🫀 Fizyolojik Pacing Çalışması",
+            "🫀 AV Tam Blok - İleti Sistemi Pacing Çalışması",
             "🫀 AFMR – TEE LV-GLS",
             "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS",
         ],
