@@ -322,7 +322,7 @@ with st.sidebar:
             "🏥 H-Type HT Çalışması",
             "📝 Case Report Takip",
             "✉️ Editöre Mektup",
-            "🫀 Fizyolojik Pacing Çalışması",
+            "🫀 AV tam blok-ileti sistemi pacing",
             "🫀 AFMR – TEE LV-GLS",
             "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS",
         ],
@@ -461,13 +461,13 @@ elif menu == "✉️ Editöre Mektup":
 
 
 # =========================================================
-# =========== EKRAN 4: FİZYOLOJİK PACING ÇALIŞMASI =========
+# =========== EKRAN 4: AV TAM BLOK - İLETİ SİSTEMİ PACING ==
 # =========================================================
-elif menu == "🫀 Fizyolojik Pacing Çalışması":
+elif menu == "🫀 AV tam blok-ileti sistemi pacing":
     require_password_gate()
 
-    st.header("🫀 Fizyolojik Pacing (LBBAP / HBP) Çalışması")
-    st.caption("AV blok nedeniyle fizyolojik pacing yapılan hastalarda klinik + RV parametreleri.")
+    st.header("🫀 AV tam blok-ileti sistemi pacing (LBBAP / HBP)")
+    st.caption("AV tam blok nedeniyle ileti sistemi pacing yapılan hastalarda klinik + RV + LV/LA parametreleri.")
 
     dfp = load_data(SHEET_ID, PACED_WS_INDEX, required_col="KayıtID")
 
@@ -476,7 +476,13 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
     # ---- edit seçimi ----
     with col_left:
         st.markdown("##### ⚙️ İşlem Seçimi")
-        mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed", key="pacing_mode")
+        mode = st.radio(
+            "Mod:",
+            ["Yeni Kayıt", "Düzenleme"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="pacing_mode",
+        )
 
         current = {}
         if mode == "Düzenleme" and not dfp.empty and "KayıtID" in dfp.columns:
@@ -502,7 +508,10 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show = show[mask].copy()
 
-                cols_show = [c for c in ["KayıtID", "Dosya Numarası", "Ziyaret", "Tarih", "Hekim", "Pacing Tipi"] if c in show.columns]
+                cols_show = [
+                    c for c in ["KayıtID", "Dosya Numarası", "Ziyaret", "Tarih", "Hekim", "Pacing Tipi"]
+                    if c in show.columns
+                ]
                 st.dataframe(show[cols_show] if cols_show else show, use_container_width=True)
 
                 st.divider()
@@ -522,11 +531,15 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
     # ---- form helpers ----
     def gs(k): return str(current.get(k, ""))
     def gf(k):
-        try: return float(current.get(k, 0))
-        except: return 0.0
+        try:
+            return float(current.get(k, 0))
+        except:
+            return 0.0
     def gi(k):
-        try: return int(float(current.get(k, 0)))
-        except: return 0
+        try:
+            return int(float(current.get(k, 0)))
+        except:
+            return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
 
     VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
@@ -570,12 +583,13 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
             s_ix = sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0
             cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
 
-            cb1, cb2, cb3 = st.columns(3)
+            cb1, cb2, cb3, cb4 = st.columns(4)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
             kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
             bmi = kilo / ((boy / 100) ** 2) if boy > 0 else 0
             bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             cb3.metric("BMI", f"{bmi:.1f}")
+            cb4.metric("BSA", f"{bsa:.2f}")
 
             ct1, ct2 = st.columns(2)
             ta_sis = ct1.number_input("TA Sistol (mmHg)", value=gi("TA Sistol"))
@@ -607,7 +621,8 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
         ntprobnp = l3.number_input("NT-proBNP (pg/mL)", value=gf("NT-proBNP"))
         hs_trop = l3.number_input("hs-Troponin (ng/L)", value=gf("hs-Troponin"))
 
-        st.markdown("### 🫀 Eko / STE — RV (Sadece)")
+        # ===================== EKO =====================
+        st.markdown("### 🫀 Eko / STE — RV")
         r1, r2, r3, r4 = st.columns(4)
 
         rv_fwls = r1.number_input("RV FWLS (%)", value=gf("RV FWLS (%)"))
@@ -624,8 +639,36 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
         rvsm = r4.number_input("RV Sm (cm/sn)", value=gf("RV Sm (cm/sn)"))
         tapse = r4.number_input("TAPSE (mm)", value=gf("TAPSE (mm)"))
 
+        st.markdown("### 🫀 LV / LA")
+        lv1, lv2, lv3 = st.columns(3)
+
+        # LV
+        lv_gls = lv1.number_input("LV-GLS (%)", value=gf("LV-GLS (%)"))
+        lvedv = lv2.number_input("LVEDV (mL)", value=gf("LVEDV (mL)"))
+        lvesv = lv2.number_input("LVESV (mL)", value=gf("LVESV (mL)"))
+        sv_lv = lv3.number_input("SV (mL)", value=gf("SV (mL)"))
+
+        # LA
+        la_gls = lv1.number_input("LA-GLS (%)", value=gf("LA-GLS (%)"))
+        laedv = lv2.number_input("LAEDV (mL)", value=gf("LAEDV (mL)"))  # LACi için gerekli
+        laesv = lv3.number_input("LAESV (mL)", value=gf("LAESV (mL)"))
+
+        # Otomatik indeksler
+        bsa_safe = bsa if (bsa and bsa > 0) else 0.0
+        laedvi = (laedv / bsa_safe) if bsa_safe > 0 else 0.0
+        laesvi = (laesv / bsa_safe) if bsa_safe > 0 else 0.0
+        lavi = laesvi  # LAESV/BSA
+        laci = (laedvi / laesvi) if laesvi > 0 else 0.0
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("LAVI (mL/m²)", f"{lavi:.1f}")
+        m2.metric("LAEDVi (mL/m²)", f"{laedvi:.1f}")
+        m3.metric("LAESVi (mL/m²)", f"{laesvi:.1f}")
+        m4.metric("LACi (LAEDVi/LAESVi)", f"{laci:.2f}")
+
         st.write("")
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+
         if submitted:
             if not dosya_no or not hekim:
                 st.error("Dosya No ve Hekim zorunlu!")
@@ -681,13 +724,27 @@ elif menu == "🫀 Fizyolojik Pacing Çalışması":
                     "TY vel. (m/sn)": tyvel,
                     "RV Sm (cm/sn)": rvsm,
                     "TAPSE (mm)": tapse,
+
+                    # LV / LA
+                    "LV-GLS (%)": lv_gls,
+                    "LVEDV (mL)": lvedv,
+                    "LVESV (mL)": lvesv,
+                    "SV (mL)": sv_lv,
+
+                    "LA-GLS (%)": la_gls,
+                    "LAEDV (mL)": laedv,
+                    "LAESV (mL)": laesv,
+
+                    "LAVI (mL/m2)": lavi,
+                    "LAEDVi (mL/m2)": laedvi,
+                    "LAESVi (mL/m2)": laesvi,
+                    "LACi": laci,
                 }
 
                 save_data_row(SHEET_ID, final_data, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
                 st.success(f"✅ {kayit_id} kaydedildi / güncellendi!")
                 time.sleep(0.25)
                 st.rerun()
-
 
 # =========================================================
 # ===================== EKRAN 5: AFMR – TEE LV-GLS =====================
