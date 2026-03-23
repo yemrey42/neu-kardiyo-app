@@ -34,8 +34,55 @@ def _safe_str(x) -> str:
     if x is None:
         return ""
     return str(x)
+def mask_name(name: str) -> str:
+    name = _safe_str(name).strip()
+    if not name:
+        return ""
+
+    parts = name.split()
+    masked_parts = []
+
+    for part in parts:
+        if len(part) <= 1:
+            masked_parts.append(part)
+        else:
+            masked_parts.append(part[0] + "*" * (len(part) - 1))
+
+    return " ".join(masked_parts)
 
 
+def mask_phone(phone: str) -> str:
+    phone = _safe_str(phone).strip()
+    if not phone:
+        return ""
+
+    digits = [c for c in phone if c.isdigit()]
+    total_digits = len(digits)
+
+    if total_digits == 0:
+        return phone
+
+    visible_prefix = 3
+    visible_suffix = 2
+
+    if total_digits <= visible_prefix + visible_suffix:
+        return "*" * total_digits
+
+    masked = []
+    digit_index = 0
+
+    for ch in phone:
+        if ch.isdigit():
+            digit_index += 1
+            if digit_index <= visible_prefix or digit_index > total_digits - visible_suffix:
+                masked.append(ch)
+            else:
+                masked.append("*")
+        else:
+            masked.append(ch)
+
+    return "".join(masked)
+    
 def _clamp_number(value, min_v=None, max_v=None, default=None):
     """Streamlit number_input min/max hatasını engellemek için."""
     try:
@@ -1417,7 +1464,7 @@ elif menu == "🏥 H-Type HT Çalışması":
             edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique(), key="htype_edit_id")
             if edit_id:
                 current = df[df["Dosya Numarası"] == edit_id].iloc[0].to_dict()
-                st.success(f"Seçildi: {current.get('Adı Soyadı', '')}")
+                st.success(f"Seçildi: {mask_name(current.get('Adı Soyadı', ''))}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok.")
 
@@ -1431,11 +1478,35 @@ elif menu == "🏥 H-Type HT Çalışması":
             else:
                 q = st.text_input("🔎 Arama (dosya no / hekim)", "", key="htype_search")
                 show = df.copy()
-                if q.strip():
-                    mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
+
+                search_cols = [c for c in ["Dosya Numarası", "Hekim", "Tarih"] if c in show.columns]
+                if q.strip() and search_cols:
+                    mask = show[search_cols].apply(
+                        lambda r: r.astype(str).str.contains(q, case=False, na=False).any(),
+                        axis=1
+                    )
                     show = show[mask].copy()
 
-                st.dataframe(show, use_container_width=True)
+                display_df = show.copy()
+
+                if "Adı Soyadı" in display_df.columns:
+                    display_df["Adı Soyadı"] = display_df["Adı Soyadı"].apply(mask_name)
+
+                if "İletişim" in display_df.columns:
+                    display_df["İletişim"] = display_df["İletişim"].apply(mask_phone)
+
+                cols_show = [
+                    c for c in [
+                        "Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "İletişim",
+                        "Yaş", "Cinsiyet", "TA Sistol", "TA Diyastol", "Homosistein"
+                    ]
+                    if c in display_df.columns
+                ]
+
+                st.dataframe(
+                    display_df[cols_show] if cols_show else display_df,
+                    use_container_width=True
+                )
 
                 st.divider()
                 st.markdown("##### 🗑️ Silme")
@@ -1671,8 +1742,7 @@ elif menu == "🏥 H-Type HT Çalışması":
                 st.success(f"✅ {dosya_no} kaydedildi / güncellendi!")
                 time.sleep(0.25)
                 st.rerun()
-
-
+                
 # =========================================================
 # ===================== FALLBACK ==========================
 # =========================================================
