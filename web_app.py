@@ -1,55 +1,21 @@
-Skip to content
-yemrey42
-neu-kardiyo-app
-Repository navigation
-Code
-Issues
-Pull requests
-Actions
-Projects
-Wiki
-Security and quality
-Insights
-Settings
-Commit b33745f
-yemrey42
-yemrey42
-authored
-1 minute ago
-Verified
-Add files via upload
-main
-1 parent 
-d77e951
- commit 
-b33745f
-1 file changed
-
-+2.209
-Lines changed: 2209 additions & 0 deletions
-File tree
-Filter files…
-KARDİYO-APP.py
-Search within code
- 
-‎KARDİYO-APP.py‎
-+2.209
-Lines changed: 2209 additions & 0 deletions
-Original file line number	Diff line number	Diff line change
-@@ -0,0 +1,2209 @@
 # web_app.py
 # NEÜ-KARDİYO | Streamlit + Google Sheets (CRUD)
 # Not: Excel/CSV indirme YOK (isteğe göre kaldırıldı)
+
 import time
 import random
 from datetime import datetime
 from typing import Dict, Any, Optional
+
 import pandas as pd
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
+
 # ===================== AYARLAR =====================
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
+
 # Tek bir Google Sheet içinde sekmeler:
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 DATA_WS_INDEX = int(st.secrets.get("data_ws_index", 0))         # H-Type HT
@@ -60,7 +26,10 @@ AFMR_WS_INDEX = int(st.secrets.get("afmr_ws_index", 4))         # AFMR
 CVABL_WS_INDEX = int(st.secrets.get("cvabl_ws_index", 5))       # Kardiyoversiyon-Ablasyon / TEE-GLS
 PBMV_WS_INDEX = int(st.secrets.get("pbmv_ws_index", 7))         # PBMV – RV-PA Coupling
 FEATURED_WS_INDEX = int(st.secrets.get("featured_ws_index", 6)) # Özellikli Vakalar
+
 APP_TITLE = "❤️ NEÜ-KARDİYO"
+
+
 # ===================== HELPERS =====================
 def _safe_str(x) -> str:
     if x is None:
@@ -70,28 +39,39 @@ def mask_name(name: str) -> str:
     name = _safe_str(name).strip()
     if not name:
         return ""
+
     parts = name.split()
     masked_parts = []
+
     for part in parts:
         if len(part) <= 1:
             masked_parts.append(part)
         else:
             masked_parts.append(part[0] + "*" * (len(part) - 1))
+
     return " ".join(masked_parts)
+
+
 def mask_phone(phone: str) -> str:
     phone = _safe_str(phone).strip()
     if not phone:
         return ""
+
     digits = [c for c in phone if c.isdigit()]
     total_digits = len(digits)
+
     if total_digits == 0:
         return phone
+
     visible_prefix = 3
     visible_suffix = 2
+
     if total_digits <= visible_prefix + visible_suffix:
         return "*" * total_digits
+
     masked = []
     digit_index = 0
+
     for ch in phone:
         if ch.isdigit():
             digit_index += 1
@@ -101,6 +81,7 @@ def mask_phone(phone: str) -> str:
                 masked.append("*")
         else:
             masked.append(ch)
+
     return "".join(masked)
     
 def _clamp_number(value, min_v=None, max_v=None, default=None):
@@ -109,11 +90,14 @@ def _clamp_number(value, min_v=None, max_v=None, default=None):
         v = float(value)
     except Exception:
         v = default if default is not None else 0.0
+
     if min_v is not None and v < min_v:
         v = min_v
     if max_v is not None and v > max_v:
         v = max_v
     return v
+
+
 def colnum_to_letter(n: int) -> str:
     """1->A, 27->AA"""
     s = ""
@@ -121,6 +105,8 @@ def colnum_to_letter(n: int) -> str:
         n, r = divmod(n - 1, 26)
         s = chr(65 + r) + s
     return s
+
+
 def _get_service_account_info() -> Dict[str, Any]:
     """
     Streamlit secrets'ten SA json'ı güvenli şekilde al.
@@ -131,6 +117,7 @@ def _get_service_account_info() -> Dict[str, Any]:
         info = dict(st.secrets["gcp_service_account"])
         info = {k: (_safe_str(v) if v is not None else v) for k, v in info.items()}
         return info
+
     allowed = {
         "type", "project_id", "private_key_id", "private_key", "client_email",
         "client_id", "auth_uri", "token_uri", "auth_provider_x509_cert_url",
@@ -141,6 +128,8 @@ def _get_service_account_info() -> Dict[str, Any]:
         if k in st.secrets:
             info[k] = _safe_str(st.secrets.get(k))
     return info
+
+
 @st.cache_resource(show_spinner=False)
 def connect_to_gsheets() -> gspread.Client:
     scope = [
@@ -148,7 +137,9 @@ def connect_to_gsheets() -> gspread.Client:
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
+
     info = _get_service_account_info()
+
     if not info or info.get("type", "") != "service_account":
         st.error(
             "⚠️ Google Service Account credentials bulunamadı veya hatalı.\n\n"
@@ -162,89 +153,118 @@ def connect_to_gsheets() -> gspread.Client:
             "Ayrıca sheet_id de secrets içinde olmalı."
         )
         st.stop()
+
     creds = ServiceAccountCredentials.from_json_keyfile_dict(info, scope)
     return gspread.authorize(creds)
+
+
 def get_ws(sheet_id: str, worksheet_index: int):
     client = connect_to_gsheets()
     sh = client.open_by_key(sheet_id)
     return sh.get_worksheet(worksheet_index)
+
+
 def load_data(sheet_id: str, worksheet_index: int, required_col: Optional[str] = None) -> pd.DataFrame:
     try:
         ws = get_ws(sheet_id, worksheet_index)
         values = ws.get_all_values()
         if not values:
             return pd.DataFrame()
+
         headers = [str(h).strip() for h in values[0]]
         rows = values[1:]
         df = pd.DataFrame(rows, columns=headers)
         df = df.loc[:, [c for c in df.columns if str(c).strip() != ""]]
+
         if required_col and required_col not in df.columns:
             return pd.DataFrame()
+
         return df
     except Exception:
         return pd.DataFrame()
+
+
 def save_data_row(sheet_id: str, data_dict: Dict[str, Any], unique_col: str, worksheet_index: int = 0):
     ws = get_ws(sheet_id, worksheet_index)
     clean = {str(k).strip(): ("" if v is None else str(v)) for k, v in data_dict.items()}
     all_values = ws.get_all_values()
+
     if not all_values:
         ws.append_row(list(clean.keys()))
         ws.append_row(list(clean.values()))
         st.toast("✅ İlk kayıt oluşturuldu.", icon="💾")
         return
+
     headers = [str(h).strip() for h in all_values[0]]
+
     missing_cols = [k for k in clean.keys() if k not in headers]
     if missing_cols:
         headers.extend(missing_cols)
         ws.update("1:1", [headers])
+
     uid = str(clean.get(unique_col, "")).strip()
     if not uid:
         raise ValueError(f"{unique_col} boş olamaz!")
+
     uid_col_idx = headers.index(unique_col) + 1
     col_vals = ws.col_values(uid_col_idx)
+
     row_idx = None
     for i, v in enumerate(col_vals[1:], start=2):
         if str(v).strip() == uid:
             row_idx = i
             break
+
     row_to_save = [clean.get(h, "") for h in headers]
     end_col = colnum_to_letter(len(headers))
+
     if row_idx:
         ws.update(f"A{row_idx}:{end_col}{row_idx}", [row_to_save])
         st.toast(f"✅ Güncellendi: {uid}", icon="🔄")
     else:
         ws.append_row(row_to_save)
         st.toast(f"✅ Kaydedildi: {uid}", icon="💾")
+
+
 def delete_row_by_value(sheet_id: str, worksheet_index: int, col_name: str, value: str) -> bool:
     try:
         ws = get_ws(sheet_id, worksheet_index)
         values = ws.get_all_values()
         if not values:
             return False
+
         headers = [str(h).strip() for h in values[0]]
         if col_name not in headers:
             return False
+
         col_idx = headers.index(col_name) + 1
         col_vals = ws.col_values(col_idx)
         target = str(value).strip()
+
         for i, v in enumerate(col_vals[1:], start=2):
             if str(v).strip() == target:
                 ws.delete_rows(i)
                 return True
+
         cell = ws.find(target)
         ws.delete_rows(cell.row)
         return True
     except Exception:
         return False
+
+
 def require_password_gate():
     if "auth_ok" not in st.session_state:
         st.session_state.auth_ok = False
+
     app_password = st.secrets.get("app_password", None)
     if not app_password:
         st.error('⚠️ Secrets içine app_password ekle:  app_password="...."')
         st.stop()
+
     if st.session_state.auth_ok:
         return
+
     st.subheader("🔐 Veri Girişi (Şifreli)")
     pw = st.text_input("Şifre", type="password")
     c1, c2 = st.columns([1, 2])
@@ -260,20 +280,25 @@ def require_password_gate():
     with c2:
         st.caption("Not: Bu şifre sadece veri ekranları için geçerli.")
     st.stop()
+
+
 def confirm_delete_with_password(context_key: str) -> bool:
     app_password = st.secrets.get("app_password", None)
     if not app_password:
         st.error("⚠️ Secrets içinde app_password yok.")
         return False
+
     key_ok = f"del_ok_{context_key}"
     if key_ok not in st.session_state:
         st.session_state[key_ok] = False
+
     if st.session_state[key_ok]:
         st.success("✅ Silme yetkisi açık")
         if st.button("🔒 Silme Kilidini Kapat", key=f"lock_{context_key}"):
             st.session_state[key_ok] = False
             st.rerun()
         return True
+
     with st.expander("🔐 Silme için şifre gir", expanded=True):
         pw = st.text_input("Silme Şifresi", type="password", key=f"pw_{context_key}")
         if st.button("Onayla", key=f"ok_{context_key}", type="primary"):
@@ -285,6 +310,8 @@ def confirm_delete_with_password(context_key: str) -> bool:
             else:
                 st.error("❌ Şifre yanlış")
     return False
+
+
 # ===================== HEADER / EKG ANİMASYONU =====================
 st.markdown(
     """
@@ -330,9 +357,12 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.title(APP_TITLE)
+
     menu = st.radio(
         "Menü",
         [
@@ -346,7 +376,9 @@ with st.sidebar:
             "✉️ Editöre Mektup",
         ],
     )
+
     st.divider()
+
     quotes = [
         "Halk içinde muteber bir nesne yok devlet gibi,\nOlmaya devlet cihanda bir nefes sıhhat gibi.\n(Kanuni Sultan Süleyman)",
         "Kalp, aklın bilmediği sebeplere sahiptir.\n(Blaise Pascal)",
@@ -357,15 +389,21 @@ with st.sidebar:
         "Beden almakla doyar ruh vermekle",
     ]
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
+
+
 # =========================================================
 # ===================== EKRAN 4: AV TAM BLOK - İLETİ SİSTEMİ PACING ==
 # =========================================================
 if menu == "🫀 AV tam blok-ileti sistemi pacing":
     require_password_gate()
+
     st.header("🫀 AV tam blok-ileti sistemi pacing (LBBAP / HBP)")
     st.caption("AV tam blok nedeniyle ileti sistemi pacing yapılan hastalarda klinik + RV + LV/LA parametreleri.")
+
     dfp = load_data(SHEET_ID, PACED_WS_INDEX, required_col="KayıtID")
+
     col_left, col_right = st.columns([2, 3])
+
     with col_left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio(
@@ -375,6 +413,7 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
             label_visibility="collapsed",
             key="pacing_mode",
         )
+
         current = {}
         if mode == "Düzenleme" and not dfp.empty and "KayıtID" in dfp.columns:
             edit_key = st.selectbox("Düzenlenecek KayıtID", dfp["KayıtID"].unique(), key="pacing_edit_key")
@@ -383,10 +422,12 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
                 st.success(f"Seçildi: {current.get('Dosya Numarası','')} | {current.get('Ziyaret','')}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok.")
+
     with col_right:
         with st.expander("📋 KAYITLI LİSTE / ARAMA / SİLME", expanded=True):
             if st.button("🔄 Listeyi Yenile", key="pacing_refresh"):
                 st.rerun()
+
             if dfp.empty:
                 st.info("Kayıt yok (veya sheet yok/başlık uyumsuz).")
             else:
@@ -395,11 +436,13 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
                 if q.strip():
                     mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show = show[mask].copy()
+
                 cols_show = [
                     c for c in ["KayıtID", "Dosya Numarası", "Ziyaret", "Tarih", "Hekim", "Pacing Tipi"]
                     if c in show.columns
                 ]
                 st.dataframe(show[cols_show] if cols_show else show, use_container_width=True)
+
                 st.divider()
                 st.markdown("##### 🗑️ Silme (Şifreli)")
                 if confirm_delete_with_password("pacing"):
@@ -411,7 +454,9 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
                             st.rerun()
                         else:
                             st.error("Hata!")
+
     st.divider()
+
     def gs(k): return str(current.get(k, ""))
     def gf(k):
         try:
@@ -424,37 +469,48 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
         except Exception:
             return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
+
     VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
     VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
     with st.form("pacing_main_form"):
         st.markdown("### 👤 Klinik")
         c1, c2 = st.columns(2)
+
         with c1:
             dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=gs("Dosya Numarası"))
             prev_visit = gs("Ziyaret")
             visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
             ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
             kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}".strip("_")
             st.caption(f"🆔 KayıtID: {kayit_id}")
+
             try:
                 d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
             except Exception:
                 d_date = datetime.now().date()
             basvuru = st.date_input("Başvuru Tarihi", value=d_date)
+
             hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)", value=gs("Hekim"))
             iletisim = st.text_input("İletişim", value=gs("İletişim"))
+
             pacing_tipi_l = ["LBBAP", "HBP", "Diğer"]
             pt = gs("Pacing Tipi")
             pacing_tipi = st.selectbox("Pacing Tipi", pacing_tipi_l, index=(pacing_tipi_l.index(pt) if pt in pacing_tipi_l else 0))
+
             st.markdown("##### Pacing Endikasyonu")
             av_tam = st.checkbox("AV Tam Blok", value=gc("Pacing Endikasyonu: AV Tam Blok"))
             av_2 = st.checkbox("2. Derece AV Blok", value=gc("Pacing Endikasyonu: 2. Derece AV Blok"))
+
         with c2:
             cy, cc = st.columns(2)
             yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
+
             sex_l = ["Erkek", "Kadın"]
             s_ix = sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0
             cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
+
             cb1, cb2, cb3, cb4 = st.columns(4)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
             kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
@@ -462,13 +518,17 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
             bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             cb3.metric("BMI", f"{bmi:.1f}")
             cb4.metric("BSA", f"{bsa:.2f}")
+
             ct1, ct2 = st.columns(2)
             ta_sis = ct1.number_input("TA Sistol (mmHg)", value=gi("TA Sistol"))
             ta_dia = ct2.number_input("TA Diyastol (mmHg)", value=gi("TA Diyastol"))
+
         st.markdown("---")
+
         ci1, ci2 = st.columns(2)
         ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
         baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
+
         st.markdown("##### Ek Hastalıklar")
         ck1, ck2, ck3, ck4, ck5 = st.columns(5)
         dm = ck1.checkbox("DM", value=gc("DM"))
@@ -477,6 +537,7 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
         inme = ck4.checkbox("İnme", value=gc("İnme"))
         sigara = ck5.checkbox("Sigara", value=gc("Sigara"))
         diger = st.text_input("Diğer", value=gs("Diğer"))
+
         st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3 = st.columns(3)
         hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
@@ -487,39 +548,51 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
         k_val = l2.number_input("K (mEq/L)", value=gf("K"))
         ntprobnp = l3.number_input("NT-proBNP (pg/mL)", value=gf("NT-proBNP"))
         hs_trop = l3.number_input("hs-Troponin (ng/L)", value=gf("hs-Troponin"))
+
         st.markdown("### 🫀 Eko / STE — RV")
         r1, r2, r3, r4 = st.columns(4)
+
         rv_fwls = r1.number_input("RV FWLS (%)", value=gf("RV FWLS (%)"))
         endogls = r1.number_input("EndoGLS (%)", value=gf("EndoGLS (%)"))
         myogls = r1.number_input("MyoGLS (%)", value=gf("MyoGLS (%)"))
+
         eda = r2.number_input("EDA", value=gf("EDA"))
         esa = r2.number_input("ESA", value=gf("ESA"))
         rv_fac = r2.number_input("RV FAC (%)", value=gf("RV FAC (%)"))
+
         rv_grs = r3.number_input("RV GRS (%)", value=gf("RV GRS (%)"))
         tyvel = r3.number_input("TY vel. (m/sn)", value=gf("TY vel. (m/sn)"))
+
         rvsm = r4.number_input("RV Sm (cm/sn)", value=gf("RV Sm (cm/sn)"))
         tapse = r4.number_input("TAPSE (mm)", value=gf("TAPSE (mm)"))
+
         st.markdown("### 🫀 LV / LA")
         lv1, lv2, lv3 = st.columns(3)
+
         lv_gls = lv1.number_input("LV-GLS (%)", value=gf("LV-GLS (%)"))
         lvedv = lv2.number_input("LVEDV (mL)", value=gf("LVEDV (mL)"))
         lvesv = lv2.number_input("LVESV (mL)", value=gf("LVESV (mL)"))
         sv_lv = lv3.number_input("SV (mL)", value=gf("SV (mL)"))
+
         la_gls = lv1.number_input("LA-GLS (%)", value=gf("LA-GLS (%)"))
         laedv = lv2.number_input("LAEDV (mL)", value=gf("LAEDV (mL)"))
         laesv = lv3.number_input("LAESV (mL)", value=gf("LAESV (mL)"))
+
         bsa_safe = bsa if (bsa and bsa > 0) else 0.0
         laedvi = (laedv / bsa_safe) if bsa_safe > 0 else 0.0
         laesvi = (laesv / bsa_safe) if bsa_safe > 0 else 0.0
         lavi = laesvi
         laci = (laedvi / laesvi) if laesvi > 0 else 0.0
+
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("LAVI (mL/m²)", f"{lavi:.1f}")
         m2.metric("LAEDVi (mL/m²)", f"{laedvi:.1f}")
         m3.metric("LAESVi (mL/m²)", f"{laesvi:.1f}")
         m4.metric("LACi (LAEDVi/LAESVi)", f"{laci:.2f}")
+
         st.write("")
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+
         if submitted:
             if not dosya_no or not hekim:
                 st.error("Dosya No ve Hekim zorunlu!")
@@ -580,22 +653,30 @@ if menu == "🫀 AV tam blok-ileti sistemi pacing":
                     "LAESVi (mL/m2)": laesvi,
                     "LACi": laci,
                 }
+
                 save_data_row(SHEET_ID, final_data, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
                 st.success(f"✅ {kayit_id} kaydedildi / güncellendi!")
                 time.sleep(0.25)
                 st.rerun()
+
+
 # =========================================================
 # ===================== EKRAN 5: AFMR – TEE LV-GLS =====================
 # =========================================================
 elif menu == "🫀 AFMR – TEE LV-GLS":
     require_password_gate()
+
     st.header("🫀 AFMR – TEE ile LV-GLS (TTE ile karşılaştırma)")
     st.caption("AFMR: TEE-LVGLS ↔ TTE-LVGLS uyumu, MR şiddeti ayrımı, AF vs SR alt grupları.")
+
     dfa = load_data(SHEET_ID, AFMR_WS_INDEX, required_col="KayıtID")
+
     left, right = st.columns([2, 3])
+
     with left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed", key="afmr_mode")
+
         current = {}
         if mode == "Düzenleme" and not dfa.empty and "KayıtID" in dfa.columns:
             edit_key = st.selectbox("Düzenlenecek kayıt (KayıtID):", dfa["KayıtID"].unique(), key="afmr_edit_key")
@@ -604,10 +685,12 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                 st.success(f"Seçildi: {current.get('Dosya No','')} | {current.get('Ziyaret','')} | {current.get('Ritim','')}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok (veya sheet boş).")
+
     with right:
         with st.expander("📋 Kayıtlı Liste / Arama / Silme", expanded=True):
             if st.button("🔄 Listeyi Yenile", key="afmr_refresh"):
                 st.rerun()
+
             if dfa.empty:
                 st.info("Kayıt yok (veya AFMR sheet index yanlış / başlıklar oluşmadı). İlk kaydı girince başlıklar otomatik oluşur.")
             else:
@@ -616,8 +699,10 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                 if q.strip():
                     mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show = show[mask].copy()
+
                 cols_show = [c for c in ["KayıtID", "Dosya No", "Tarih", "Ziyaret", "Ritim", "Hekim", "MR (TEE) Derece"] if c in show.columns]
                 st.dataframe(show[cols_show] if cols_show else show, use_container_width=True)
+
                 st.divider()
                 st.markdown("##### 🗑️ Silme (Şifreli)")
                 if confirm_delete_with_password("afmr"):
@@ -629,7 +714,9 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                             st.rerun()
                         else:
                             st.error("Hata!")
+
     st.divider()
+
     def gs(k): return str(current.get(k, ""))
     def gf(k):
         try: return float(current.get(k, 0))
@@ -638,27 +725,35 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         try: return int(float(current.get(k, 0)))
         except Exception: return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
+
     VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
     VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
     with st.form("afmr_form"):
         st.markdown("### 👤 Demografi ve Klinik")
         c1, c2 = st.columns(2)
+
         with c1:
             dosya_no = st.text_input("Dosya No (Zorunlu)", value=gs("Dosya No"))
+
             prev_visit = gs("Ziyaret")
             visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
             ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
             try:
                 d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
             except Exception:
                 d_date = datetime.now().date()
             tarih = st.date_input("Tarih", value=d_date)
+
             kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}_{tarih.strftime('%Y%m%d')}".strip("_")
             st.caption(f"🆔 KayıtID: {kayit_id}")
+
             hekim = st.text_input("Hekim (Zorunlu)", value=gs("Hekim"))
             yas = st.number_input("Yaş", step=1, value=gi("Yaş"))
             cinsiyet = st.radio("Cinsiyet", ["Kadın", "Erkek"], index=(0 if gs("Cinsiyet") != "Erkek" else 1), horizontal=True)
             ritim = st.radio("Ritim grubu", ["AF", "SR"], index=(0 if gs("Ritim") != "SR" else 1), horizontal=True)
+
         with c2:
             boy = st.number_input("Boy (cm)", value=gf("Boy"))
             kilo = st.number_input("Kilo (kg)", value=gf("Kilo"))
@@ -666,14 +761,17 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
             bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             st.metric("BMI", f"{bmi:.1f}")
             st.metric("BSA", f"{bsa:.2f}")
+
             nyha = st.selectbox("NYHA", ["I", "II", "III", "IV"],
                                 index=(["I","II","III","IV"].index(gs("NYHA")) if gs("NYHA") in ["I","II","III","IV"] else 0))
+
             st.markdown("##### Semptomlar")
             sx1, sx2, sx3, sx4 = st.columns(4)
             sym_dispne = sx1.checkbox("Dispne", value=gc("Semptom: Dispne"))
             sym_carpinti = sx2.checkbox("Çarpıntı", value=gc("Semptom: Çarpıntı"))
             sym_yorgunluk = sx3.checkbox("Yorgunluk", value=gc("Semptom: Yorgunluk"))
             sym_diger = sx4.text_input("Diğer", value=gs("Semptom: Diğer"))
+
         st.markdown("### 🧾 Tıbbi Öykü")
         k1, k2, k3, k4 = st.columns(4)
         hx_ht = k1.checkbox("Hipertansiyon", value=gc("Öykü: HT"))
@@ -685,6 +783,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         hx_osa = k4.checkbox("Uyku apnesi", value=gc("Öykü: Uyku apnesi"))
         hx_tiroid = k4.checkbox("Tiroid hastalığı", value=gc("Öykü: Tiroid"))
         hx_diger = st.text_input("Diğer (öykü)", value=gs("Öykü: Diğer"))
+
         st.markdown("### 💊 Güncel Tedavi")
         t1, t2, t3 = st.columns(3)
         med_bb = t1.checkbox("Beta bloker", value=gc("Tedavi: BB"))
@@ -694,28 +793,33 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         med_diur = t3.checkbox("Diüretik", value=gc("Tedavi: Diüretik"))
         med_antitrom = t3.checkbox("Antikoagülan/Antiplatelet", value=gc("Tedavi: Antitrombotik"))
         med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
+
         st.markdown("### 🩸 Laboratuvar (opsiyonel)")
         l1, l2, l3 = st.columns(3)
         lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
         lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
         lab_egfr = l1.number_input("eGFR (mL/dk/1.73m²)", value=gf("eGFR"))
         lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
+
         st.markdown("### 🧠 Sedasyon / Hemodinami")
         h1, h2, h3 = st.columns(3)
         sed_ilac = h1.text_input("Sedasyon ilacı", value=(gs("Sedasyon ilacı") if gs("Sedasyon ilacı") else "Midazolam"))
         sed_doz = h1.number_input("Doz (mg)", value=gf("Sedasyon doz (mg)"))
+
         pre_sbp = int(_clamp_number(gi("TEE öncesi SBP"), min_v=50, max_v=260, default=120))
         pre_dbp = int(_clamp_number(gi("TEE öncesi DBP"), min_v=30, max_v=160, default=70))
         pre_hr  = int(_clamp_number(gi("TEE öncesi HR"),  min_v=20, max_v=220, default=80))
         tee_sbp = int(_clamp_number(gi("TEE sırasında SBP"), min_v=50, max_v=260, default=120))
         tee_dbp = int(_clamp_number(gi("TEE sırasında DBP"), min_v=30, max_v=160, default=70))
         tee_hr  = int(_clamp_number(gi("TEE sırasında HR"),  min_v=20, max_v=220, default=80))
+
         pre_sbp_in = h2.number_input("TEE öncesi SBP (mmHg)", min_value=50, max_value=260, step=1, value=pre_sbp)
         pre_dbp_in = h2.number_input("TEE öncesi DBP (mmHg)", min_value=30, max_value=160, step=1, value=pre_dbp)
         pre_hr_in  = h2.number_input("TEE öncesi HR (bpm)", min_value=20, max_value=220, step=1, value=pre_hr)
         tee_sbp_in = h3.number_input("TEE sırasında SBP (mmHg)", min_value=50, max_value=260, step=1, value=tee_sbp)
         tee_dbp_in = h3.number_input("TEE sırasında DBP (mmHg)", min_value=30, max_value=160, step=1, value=tee_dbp)
         tee_hr_in  = h3.number_input("TEE sırasında HR (bpm)", min_value=20, max_value=220, step=1, value=tee_hr)
+
         st.markdown("### 🩻 TEE – MR Kantitasyonu & Morfoloji")
         m1, m2, m3 = st.columns(3)
         mr_deg_tee = m1.selectbox("MR (TEE) Derece (integratif)", ["Orta", "İleri"],
@@ -732,6 +836,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                                index=(["S baskın","D baskın","Sistolik reversiyon"].index(gs("PV akım"))
                                       if gs("PV akım") in ["S baskın","D baskın","Sistolik reversiyon"] else 0))
         pv_sd = m3.number_input("PV S/D oranı", value=gf("PV S/D"))
+
         st.markdown("#### Mitral annulus / leaflet ölçümleri")
         g1, g2, g3, g4 = st.columns(4)
         ap_d = g1.number_input("AP diameter (mm)", value=gf("AP diameter (mm)"))
@@ -744,6 +849,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         coapt_dist = g7.number_input("Coaptation Distance (posterior) (mm)", value=gf("Coaptation Distance (mm)"))
         aml_len = g8.number_input("AML Length (mm)", value=gf("AML Length (mm)"))
         pml_len = st.number_input("PML Length (mm)", value=gf("PML Length (mm)"))
+
         st.markdown("### 🫀 TEE – LV Fonksiyon & Strain")
         s1, s2, s3 = st.columns(3)
         lvef = s1.number_input("LVEF (%)", value=gf("TEE LVEF"))
@@ -752,6 +858,7 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         sv = s2.number_input("SV (mL)", value=gf("TEE SV"))
         tee_gls = s3.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
         fr = s3.number_input("Frame rate (fps)", value=gf("Frame rate"))
+
         st.markdown("### 🫁 TTE (TEE Sonrası) – Karşılaştırma")
         tte1, tte2, tte3 = st.columns(3)
         mr_deg_tte = tte1.selectbox("MR (TTE) Derece (integratif)", ["Hafif", "Orta", "İleri"],
@@ -762,11 +869,13 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
         tte_sv = tte2.number_input("SV (TTE) (mL)", value=gf("TTE SV"))
         tte_gls = tte3.number_input("LV-GLS (TTE) (%)", value=gf("TTE LVGLS"))
         laesv = tte3.number_input("LAESV (mL)", value=gf("LAESV"))
+
         tr_deg = st.selectbox("TY/TR derecesi (integratif)", ["Hafif", "Orta", "İleri"],
                               index=(["Hafif","Orta","İleri"].index(gs("TR derece")) if gs("TR derece") in ["Hafif","Orta","İleri"] else 0))
         tr_vmax = st.number_input("TR Vmax (m/sn)", value=gf("TR Vmax"))
         spap = st.number_input("Tahmini sPAP (mmHg)", value=gf("sPAP"))
         tapse = st.number_input("TAPSE (mm)", value=gf("TAPSE"))
+
         st.write("")
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         if submitted:
@@ -856,19 +965,26 @@ elif menu == "🫀 AFMR – TEE LV-GLS":
                     "sPAP": spap,
                     "TAPSE": tapse,
                 }
+
                 save_data_row(SHEET_ID, payload, unique_col="KayıtID", worksheet_index=AFMR_WS_INDEX)
                 st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
                 time.sleep(0.25)
                 st.rerun()
+
+
 # =========================================================
 # ====== EKRAN X: Kardiyoversiyon-Ablasyon / TEE-GLS =======
 # =========================================================
 elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
     require_password_gate()
+
     st.header("⚡ Kardiyoversiyon-Ablasyon / TEE-GLS")
     st.caption("AF hastalarında TEE ile LV-GLS, kardiyoversiyon veya ablasyon başarısını öngörür mü? (TTE karşılaştırma dahil)")
+
     dfc = load_data(SHEET_ID, CVABL_WS_INDEX, required_col="KayıtID")
+
     left, right = st.columns([2, 3])
+
     with left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio(
@@ -878,6 +994,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             label_visibility="collapsed",
             key="cvabl_mode",
         )
+
         current = {}
         if mode == "Düzenleme" and not dfc.empty and "KayıtID" in dfc.columns:
             edit_key = st.selectbox("Düzenlenecek kayıt (KayıtID):", dfc["KayıtID"].unique(), key="cvabl_edit_key")
@@ -886,10 +1003,12 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                 st.success(f"Seçildi: {current.get('Dosya No','')} | {current.get('Ziyaret','')} | {current.get('İşlem','')}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok (veya sheet boş).")
+
     with right:
         with st.expander("📋 Kayıtlı Liste / Arama / Silme", expanded=True):
             if st.button("🔄 Listeyi Yenile", key="cvabl_refresh"):
                 st.rerun()
+
             if dfc.empty:
                 st.info("Kayıt yok (veya sheet index yanlış / başlıklar oluşmadı). İlk kaydı girince başlıklar otomatik oluşur.")
             else:
@@ -898,11 +1017,13 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                 if q.strip():
                     mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show = show[mask].copy()
+
                 cols_show = [c for c in [
                     "KayıtID", "Dosya No", "Tarih", "Ziyaret", "İşlem", "Hekim",
                     "Primary endpoint", "Endpoint başarılı"
                 ] if c in show.columns]
                 st.dataframe(show[cols_show] if cols_show else show, use_container_width=True)
+
                 st.divider()
                 st.markdown("##### 🗑️ Silme (Şifreli)")
                 if confirm_delete_with_password("cvabl"):
@@ -914,7 +1035,9 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                             st.rerun()
                         else:
                             st.error("Hata!")
+
     st.divider()
+
     def gs(k): return str(current.get(k, ""))
     def gf(k):
         try: return float(current.get(k, 0))
@@ -923,27 +1046,34 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         try: return int(float(current.get(k, 0)))
         except Exception: return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
+
     VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
     VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
     with st.form("cvabl_form"):
         st.markdown("### 👤 Demografi ve Klinik (AF hasta)")
         c1, c2 = st.columns(2)
+
         with c1:
             dosya_no = st.text_input("Dosya No (Zorunlu)", value=gs("Dosya No"))
             prev_visit = gs("Ziyaret")
             visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
             ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
             try:
                 d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
             except Exception:
                 d_date = datetime.now().date()
             tarih = st.date_input("Tarih", value=d_date)
+
             kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'BASLANGIC')}_{tarih.strftime('%Y%m%d')}".strip("_")
             st.caption(f"🆔 KayıtID: {kayit_id}")
+
             hekim = st.text_input("Hekim (Zorunlu)", value=gs("Hekim"))
             iletisim_no = st.text_input("İletişim No", value=gs("İletişim No"))
             yas = st.number_input("Yaş", step=1, value=gi("Yaş"))
             cinsiyet = st.radio("Cinsiyet", ["Kadın", "Erkek"], index=(0 if gs("Cinsiyet") != "Erkek" else 1), horizontal=True)
+
         with c2:
             boy = st.number_input("Boy (cm)", value=gf("Boy"))
             kilo = st.number_input("Kilo (kg)", value=gf("Kilo"))
@@ -951,28 +1081,33 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             st.metric("BMI", f"{bmi:.1f}")
             st.metric("BSA", f"{bsa:.2f}")
+
             nyha = st.selectbox(
                 "NYHA",
                 ["I", "II", "III", "IV"],
                 index=(["I","II","III","IV"].index(gs("NYHA")) if gs("NYHA") in ["I","II","III","IV"] else 0)
             )
+
             st.markdown("##### Semptomlar")
             sx1, sx2, sx3, sx4 = st.columns(4)
             sym_dispne = sx1.checkbox("Dispne", value=gc("Semptom: Dispne"))
             sym_carpinti = sx2.checkbox("Çarpıntı", value=gc("Semptom: Çarpıntı"))
             sym_yorgunluk = sx3.checkbox("Yorgunluk", value=gc("Semptom: Yorgunluk"))
             sym_diger = sx4.text_input("Diğer", value=gs("Semptom: Diğer"))
+
         st.markdown("### ⚙️ İşlem Bilgisi")
         p1, p2, p3 = st.columns(3)
         islem_l = ["Elektrik Kardiyoversiyon", "Ablasyon"]
         islem_prev = gs("İşlem")
         islem_ix = islem_l.index(islem_prev) if islem_prev in islem_l else 0
         islem = p1.selectbox("İşlem", islem_l, index=islem_ix)
+
         try:
             d_proc = datetime.strptime(gs("İşlem Tarihi"), "%Y-%m-%d").date()
         except Exception:
             d_proc = tarih
         islem_tarih = p2.date_input("İşlem Tarihi", value=d_proc)
+
         abl_tip = ""
         if islem == "Ablasyon":
             abl_l = ["PVI", "PVI + Ek lezyon", "Diğer"]
@@ -981,7 +1116,9 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             abl_tip = p3.selectbox("Ablasyon tipi (ops.)", abl_l, index=abl_ix)
         else:
             abl_tip = ""
+
         st.markdown("### ✅ Endpoint (basit, literatüre uygun)")
+
         if islem == "Ablasyon":
             primary_endpoint = "Ablasyon başarısı: 3 ay blanking sonrası atriyal taşiaritmi rekürrensi yok (AF/AFL/AT)"
             cA1, cA2, cA3 = st.columns(3)
@@ -1011,8 +1148,10 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
             endpoint_success = (not bool(rec_30d))
             fu_months = 0
             rec_post_blanking = False
+
         sonuc_not = st.text_input("Sonuç notu (ops.)", value=gs("Sonuç notu"))
         st.info(f"📌 Primary endpoint: {primary_endpoint}\n\n📌 Endpoint sonucu: {'BAŞARILI' if endpoint_success else 'BAŞARISIZ'}")
+
         st.markdown("### 🧾 Tıbbi Öykü")
         k1, k2, k3, k4 = st.columns(4)
         hx_ht = k1.checkbox("Hipertansiyon", value=gc("Öykü: HT"))
@@ -1024,6 +1163,7 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         hx_osa = k4.checkbox("Uyku apnesi", value=gc("Öykü: Uyku apnesi"))
         hx_tiroid = k4.checkbox("Tiroid hastalığı", value=gc("Öykü: Tiroid"))
         hx_diger = st.text_input("Diğer (öykü)", value=gs("Öykü: Diğer"))
+
         st.markdown("### 💊 Güncel Tedavi")
         t1, t2, t3 = st.columns(3)
         med_bb = t1.checkbox("Beta bloker", value=gc("Tedavi: BB"))
@@ -1033,14 +1173,17 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         med_diur = t3.checkbox("Diüretik", value=gc("Tedavi: Diüretik"))
         med_antitrom = t3.checkbox("Antikoagülan/Antiplatelet", value=gc("Tedavi: Antitrombotik"))
         med_diger = st.text_input("Diğer (tedavi)", value=gs("Tedavi: Diğer"))
+
         st.markdown("### 🩸 Laboratuvar (opsiyonel)")
         l1, l2, l3 = st.columns(3)
         lab_hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
         lab_krea = l1.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
         lab_egfr = l1.number_input("eGFR (mL/dk/1.73m²)", value=gf("eGFR"))
         lab_ntprobnp = l2.number_input("NT-proBNP", value=gf("NT-proBNP"))
+
         st.markdown("### 🫀 TEE – LV-GLS (Ana değişken)")
         tee_gls = st.number_input("LV-GLS (TEE) (%)", value=gf("TEE LVGLS"))
+
         st.markdown("### 🫁 TTE – Karşılaştırma (yeterli set)")
         tt1, tt2, tt3 = st.columns(3)
         tte_lvef = tt1.number_input("LVEF (TTE) (%)", value=gf("TTE LVEF"))
@@ -1049,8 +1192,10 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
         tte_lvesv = tt2.number_input("LVESV (TTE) (mL)", value=gf("TTE LVESV"))
         tte_laesv = tt3.number_input("LAESV (TTE) (mL)", value=gf("TTE LAESV"))
         tte_gls = tt3.number_input("LV-GLS (TTE) (%)", value=gf("TTE LVGLS"))
+
         st.write("")
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+
         if submitted:
             if not dosya_no or not hekim:
                 st.error("Dosya No ve Hekim zorunlu!")
@@ -1112,19 +1257,28 @@ elif menu == "⚡ Kardiyoversiyon-Ablasyon / TEE-GLS":
                     "TTE LVGLS": tte_gls,
                     "TTE SV": tte_sv,
                 }
+
                 save_data_row(SHEET_ID, payload, unique_col="KayıtID", worksheet_index=CVABL_WS_INDEX)
                 st.success(f"✅ Kaydedildi/Güncellendi: {kayit_id}")
                 time.sleep(0.25)
                 st.rerun()
+
+
+
+
 # =========================================================
 # ===================== EKRAN PBMV: RV-PA COUPLING =========
 # =========================================================
 elif menu == "🫁 PBMV – RV-PA Coupling":
     require_password_gate()
+
     st.header("🫁 PBMV – RV-PA Coupling")
     st.caption("Romatizmal mitral darlığında PBMV öncesi ve erken dönem sonrası (24–72 saat) RV–PA coupling, sağ kalp yanıtı ve işlem başarısı takibi.")
+
     dfm = load_data(SHEET_ID, PBMV_WS_INDEX, required_col="KayıtID")
+
     left, right = st.columns([2, 3])
+
     with left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio(
@@ -1134,6 +1288,7 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             label_visibility="collapsed",
             key="pbmv_mode",
         )
+
         current = {}
         if mode == "Düzenleme" and not dfm.empty and "KayıtID" in dfm.columns:
             edit_key = st.selectbox("Düzenlenecek KayıtID", dfm["KayıtID"].unique(), key="pbmv_edit_key")
@@ -1142,10 +1297,12 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
                 st.success(f"Seçildi: {current.get('Dosya No','')} | {current.get('Ziyaret','')} | {current.get('Hekim','')}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok veya sheet başlığı henüz oluşmadı.")
+
     with right:
         with st.expander("📋 KAYITLI LİSTE / ARAMA / SİLME", expanded=True):
             if st.button("🔄 Listeyi Yenile", key="pbmv_refresh"):
                 st.rerun()
+
             if dfm.empty:
                 st.info("Kayıt yok. İlk kaydı girince başlıklar otomatik oluşur. Google Sheet içinde PBMV için yeni worksheet açıp pbmv_ws_index değerini kontrol et.")
             else:
@@ -1154,17 +1311,20 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
                 if q.strip():
                     mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                     show = show[mask].copy()
+
                 display_df = show.copy()
                 if "Adı Soyadı" in display_df.columns:
                     display_df["Adı Soyadı"] = display_df["Adı Soyadı"].apply(mask_name)
                 if "İletişim" in display_df.columns:
                     display_df["İletişim"] = display_df["İletişim"].apply(mask_phone)
+
                 cols_show = [c for c in [
                     "KayıtID", "Dosya No", "Adı Soyadı", "Tarih", "Ziyaret", "Hekim", "Ritim",
                     "NYHA", "6DYT (m)", "MVA final (cm2)", "Mean MG (mmHg)", "PASP final (mmHg)",
                     "TAPSE/PASP", "RVFWLS/PASP", "İşlem başarısı"
                 ] if c in display_df.columns]
                 st.dataframe(display_df[cols_show] if cols_show else display_df, use_container_width=True)
+
                 st.divider()
                 st.markdown("##### 🗑️ Silme (Şifreli)")
                 if confirm_delete_with_password("pbmv"):
@@ -1176,7 +1336,9 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
                             st.rerun()
                         else:
                             st.error("Hata!")
+
     st.divider()
+
     def gs(k): return str(current.get(k, ""))
     def gf(k):
         try: return float(current.get(k, 0))
@@ -1185,39 +1347,49 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
         try: return int(float(current.get(k, 0)))
         except Exception: return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
+
     VISIT_LABELS = ["1. PBMV Öncesi", "2. PBMV Sonrası Erken (24-72 saat)", "3. Kontrol"]
     VISIT_CODE = {
         "1. PBMV Öncesi": "PRE",
         "2. PBMV Sonrası Erken (24-72 saat)": "POST_24_72H",
         "3. Kontrol": "KONTROL",
     }
+
     with st.form("pbmv_main_form"):
         st.markdown("### 👤 Demografi ve Klinik")
         c1, c2 = st.columns(2)
+
         with c1:
             dosya_no = st.text_input("Dosya No (Zorunlu)", value=gs("Dosya No"))
             ad_soyad = st.text_input("Adı Soyadı", value=gs("Adı Soyadı"))
+
             prev_visit = gs("Ziyaret")
             visit_ix = VISIT_LABELS.index(prev_visit) if prev_visit in VISIT_LABELS else 0
             ziyaret = st.selectbox("Ziyaret", VISIT_LABELS, index=visit_ix)
+
             try:
                 d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
             except Exception:
                 d_date = datetime.now().date()
             tarih = st.date_input("Değerlendirme Tarihi", value=d_date)
+
             kayit_id = f"{dosya_no.strip()}_{VISIT_CODE.get(ziyaret,'PRE')}_{tarih.strftime('%Y%m%d')}".strip("_")
             st.caption(f"🆔 KayıtID: {kayit_id}")
+
             hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)", value=gs("Hekim"))
             iletisim = st.text_input("İletişim", value=gs("İletişim"))
+
             ritim_l = ["Sinüs", "AF", "Atriyal flutter", "Pacemaker", "Diğer"]
             ritim_prev = gs("Ritim")
             ritim = st.selectbox("Ritim", ritim_l, index=(ritim_l.index(ritim_prev) if ritim_prev in ritim_l else 0))
             ekg = st.text_input("EKG notu", value=gs("EKG"))
+
         with c2:
             cy, cc = st.columns(2)
             yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
             sex_l = ["Kadın", "Erkek"]
             cinsiyet = cc.radio("Cinsiyet", sex_l, index=(sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0), horizontal=True)
+
             cb1, cb2, cb3, cb4 = st.columns(4)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
             kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
@@ -1225,14 +1397,17 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             cb3.metric("BMI", f"{bmi:.1f}")
             cb4.metric("BSA", f"{bsa:.2f}")
+
             v1, v2, v3 = st.columns(3)
             ta_sis = v1.number_input("TA Sistol (mmHg)", value=gi("TA Sistol"))
             ta_dia = v2.number_input("TA Diyastol (mmHg)", value=gi("TA Diyastol"))
             nabiz = v3.number_input("Nabız (/dk)", value=gi("Nabız"))
+
             nyha_l = ["I", "II", "III", "IV"]
             nyha_prev = gs("NYHA")
             nyha = st.selectbox("NYHA", nyha_l, index=(nyha_l.index(nyha_prev) if nyha_prev in nyha_l else 1))
             six_mwt = st.number_input("6DYT (m)", value=gf("6DYT (m)"))
+
         st.markdown("### ✅ Çalışma Uygunluk Kriterleri")
         k1, k2, k3 = st.columns(3)
         with k1:
@@ -1247,8 +1422,10 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             excl_cong = st.checkbox("Dışla: Konjenital kardiyak anomali", value=gc("Dışla: Konjenital"))
             excl_av = st.checkbox("Dışla: Ciddi aort kapak hastalığı", value=gc("Dışla: Ciddi aort kapak"))
             excl_bad_img = st.checkbox("Dışla: Yetersiz eko görüntü", value=gc("Dışla: Yetersiz görüntü"))
+
         eligible = bool(ms_modsev and pbmv_suitable and onam and not any([excl_mr, excl_pulm, excl_tr, excl_cong, excl_av, excl_bad_img]))
         st.info(f"📌 Çalışma uygunluğu: {'UYGUN' if eligible else 'KONTROL ET / UYGUN DEĞİL'}")
+
         st.markdown("### 🧾 Öykü ve Tedavi")
         h1, h2, h3, h4 = st.columns(4)
         hx_ht = h1.checkbox("HT", value=gc("Öykü: HT"))
@@ -1260,38 +1437,46 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
         hx_stroke = h4.checkbox("İnme/TIA", value=gc("Öykü: İnme/TIA"))
         hx_smoke = h4.checkbox("Sigara", value=gc("Sigara"))
         hx_other = st.text_input("Diğer öykü", value=gs("Öykü: Diğer"))
+
         t1, t2, t3 = st.columns(3)
         med_bb = t1.checkbox("Beta bloker", value=gc("Tedavi: BB"))
         med_diur = t1.checkbox("Diüretik", value=gc("Tedavi: Diüretik"))
         med_oac = t2.checkbox("OAK / VKA / DOAC", value=gc("Tedavi: OAK"))
         med_antiarr = t2.checkbox("Anti-aritmik", value=gc("Tedavi: Anti-aritmik"))
         med_diger = t3.text_area("Diğer ilaçlar", value=gs("Tedavi: Diğer"))
+
         st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3, l4 = st.columns(4)
         hb = l1.number_input("Hb (g/dL)", value=gf("Hb"))
         hct = l1.number_input("Hct (%)", value=gf("Hct"))
         wbc = l1.number_input("WBC (10³/µL)", value=gf("WBC"))
         plt = l1.number_input("PLT (10³/µL)", value=gf("PLT"))
+
         glucose = l2.number_input("Glukoz (mg/dL)", value=gf("Glukoz"))
         urea = l2.number_input("Üre (mg/dL)", value=gf("Üre"))
         creat = l2.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
         egfr = l2.number_input("eGFR", value=gf("eGFR"))
+
         na = l3.number_input("Na (mEq/L)", value=gf("Na"))
         k_val = l3.number_input("K (mEq/L)", value=gf("K"))
         crp = l3.number_input("CRP", value=gf("CRP"))
         albumin = l3.number_input("Albümin (g/dL)", value=gf("Albümin"))
+
         ntprobnp = l4.number_input("NT-proBNP (pg/mL)", value=gf("NT-proBNP"))
         inr = l4.number_input("INR", value=gf("INR"))
         tsh = l4.number_input("TSH", value=gf("TSH"))
+
         st.markdown("### 🫀 Mitral Kapak / PBMV Başarı Parametreleri")
         m1, m2, m3, m4 = st.columns(4)
         mva_plan = m1.number_input("MVA planimetri (cm²)", value=gf("MVA planimetri (cm2)"))
         mva_pht = m1.number_input("MVA PHT (cm²)", value=gf("MVA PHT (cm2)"))
         mva_final = mva_plan if mva_plan > 0 else mva_pht
         m1.metric("MVA final", f"{mva_final:.2f} cm²")
+
         mean_mg = m2.number_input("Transmitral mean MG (mmHg)", value=gf("Mean MG (mmHg)"))
         max_mg = m2.number_input("Transmitral max MG (mmHg)", value=gf("Max MG (mmHg)"))
         pht_ms = m2.number_input("PHT (ms)", value=gf("PHT (ms)"))
+
         wilkins = m3.number_input("Wilkins skoru", value=gf("Wilkins skoru"))
         commissural_calc = m3.selectbox(
             "Komissür kalsifikasyonu",
@@ -1308,6 +1493,7 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             ["Yok", "Hafif", "Orta", "Yoğun", "Trombüs"],
             index=(["Yok", "Hafif", "Orta", "Yoğun", "Trombüs"].index(gs("LAA/LA SEC")) if gs("LAA/LA SEC") in ["Yok", "Hafif", "Orta", "Yoğun", "Trombüs"] else 0),
         )
+
         st.markdown("### 🫁 Sağ Kalp / RV–PA Coupling")
         r1, r2, r3, r4 = st.columns(4)
         tr_vmax = r1.number_input("TR Vmax (m/sn)", value=gf("TR Vmax"))
@@ -1316,6 +1502,7 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
         pasp_manual = r1.number_input("PASP/sPAP manuel (mmHg)", value=gf("PASP manuel (mmHg)"))
         pasp_final = pasp_manual if pasp_manual > 0 else pasp_calc
         r1.metric("PASP final", f"{pasp_final:.1f} mmHg")
+
         tapse = r2.number_input("TAPSE (mm)", value=gf("TAPSE"))
         rv_s = r2.number_input("RV S' (cm/sn)", value=gf("RV S'"))
         rv_fac = r2.number_input("RV FAC (%)", value=gf("RV FAC (%)"))
@@ -1324,35 +1511,42 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             ["Yok/Eser", "Hafif", "Orta", "İleri"],
             index=(["Yok/Eser", "Hafif", "Orta", "İleri"].index(gs("TY/TR derecesi")) if gs("TY/TR derecesi") in ["Yok/Eser", "Hafif", "Orta", "İleri"] else 1),
         )
+
         rv_fwls = r3.number_input("RV FWLS (%)", value=gf("RV FWLS (%)"))
         rv_gls = r3.number_input("RV GLS (%)", value=gf("RV GLS (%)"))
         rv_eda = r3.number_input("RV EDA (cm²)", value=gf("RV EDA (cm2)"))
         rv_esa = r3.number_input("RV ESA (cm²)", value=gf("RV ESA (cm2)"))
+
         rv_basal = r4.number_input("RV basal çap (mm)", value=gf("RV basal çap (mm)"))
         ra_area = r4.number_input("RA alanı (cm²)", value=gf("RA alanı (cm2)"))
         rvot_acct = r4.number_input("RVOT AccT (ms)", value=gf("RVOT AccT (ms)"))
         rvot_vti = r4.number_input("RVOT VTI (cm)", value=gf("RVOT VTI (cm)"))
+
         tapse_pasp = (tapse / pasp_final) if pasp_final > 0 else 0.0
         rvfwls_pasp = (abs(rv_fwls) / pasp_final) if pasp_final > 0 else 0.0
         rvgls_pasp = (abs(rv_gls) / pasp_final) if pasp_final > 0 else 0.0
         rv_fac_calc = ((rv_eda - rv_esa) / rv_eda * 100) if rv_eda > 0 and rv_esa >= 0 else rv_fac
+
         cm1, cm2, cm3, cm4 = st.columns(4)
         cm1.metric("TAPSE/PASP", f"{tapse_pasp:.3f}")
         cm2.metric("RVFWLS/PASP", f"{rvfwls_pasp:.3f}")
         cm3.metric("RVGLS/PASP", f"{rvgls_pasp:.3f}")
         cm4.metric("FAC hesap", f"{rv_fac_calc:.1f}%")
+
         st.markdown("### 🫀 LV / LA / Diğer Eko")
         e1, e2, e3, e4 = st.columns(4)
         lvef = e1.number_input("LVEF (%)", value=gf("LVEF"))
         lv_gls = e1.number_input("LV GLS (%)", value=gf("LV GLS (%)"))
         lvedv = e1.number_input("LVEDV (mL)", value=gf("LVEDV (mL)"))
         lvesv = e1.number_input("LVESV (mL)", value=gf("LVESV (mL)"))
+
         la_ap = e2.number_input("LA AP çap (mm)", value=gf("LA AP çap (mm)"))
         laesv = e2.number_input("LAESV (mL)", value=gf("LAESV (mL)"))
         la_gls = e2.number_input("LA strain (%)", value=gf("LA strain (%)"))
         bsa_safe = bsa if bsa and bsa > 0 else 0.0
         lavi = (laesv / bsa_safe) if bsa_safe > 0 else 0.0
         e2.metric("LAVI", f"{lavi:.1f} mL/m²")
+
         lvot_vti = e3.number_input("LVOT VTI (cm)", value=gf("LVOT VTI (cm)"))
         sv = e3.number_input("SV (mL)", value=gf("SV (mL)"))
         av_vmax = e3.number_input("AV Vmax (m/sn)", value=gf("AV Vmax"))
@@ -1361,6 +1555,7 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             ["Yok/Eser", "Hafif", "Orta", "İleri"],
             index=(["Yok/Eser", "Hafif", "Orta", "İleri"].index(gs("AY derecesi")) if gs("AY derecesi") in ["Yok/Eser", "Hafif", "Orta", "İleri"] else 0),
         )
+
         frame_rate = e4.number_input("Strain frame rate (fps)", value=gf("Frame rate"))
         echo_quality = e4.selectbox(
             "Eko görüntü kalitesi",
@@ -1368,6 +1563,7 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             index=(["İyi", "Orta", "Kötü"].index(gs("Eko görüntü kalitesi")) if gs("Eko görüntü kalitesi") in ["İyi", "Orta", "Kötü"] else 0),
         )
         echo_note = e4.text_area("Eko notu", value=gs("Eko notu"))
+
         st.markdown("### ⚙️ İşlem Bilgisi ve Klinik Sonlanım")
         p1, p2, p3 = st.columns(3)
         try:
@@ -1377,9 +1573,11 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
         pbmv_date = p1.date_input("PBMV tarihi", value=proc_date_prev)
         balloon_type = p1.text_input("Balon tipi", value=gs("Balon tipi"))
         balloon_size = p1.number_input("Balon boyutu (mm)", value=gf("Balon boyutu (mm)"))
+
         la_pressure_pre = p2.number_input("LA basınç pre (mmHg)", value=gf("LA basınç pre"))
         la_pressure_post = p2.number_input("LA basınç post (mmHg)", value=gf("LA basınç post"))
         invasive_pap = p2.number_input("İnvaziv PAP/sPAP (ops.)", value=gf("İnvaziv PAP/sPAP"))
+
         success_auto = bool(mva_final >= 1.5 and mr_deg not in ["Orta-ileri", "İleri"])
         success_manual = p3.checkbox("İşlem başarısı (manuel)", value=(gc("İşlem başarısı") if gs("İşlem başarısı") else success_auto))
         complication = p3.selectbox(
@@ -1390,8 +1588,10 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
         hospital = p3.checkbox("Takipte hastaneye yatış", value=gc("Hastaneye yatış"))
         mortality = p3.checkbox("Mortalite", value=gc("Mortalite"))
         outcome_note = st.text_area("Sonuç / takip notu", value=gs("Sonuç notu"))
+
         st.write("")
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
+
         if submitted:
             if not dosya_no or not hekim:
                 st.error("Dosya No ve Hekim zorunlu!")
@@ -1514,20 +1714,26 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
                     "Mortalite": mortality,
                     "Sonuç notu": outcome_note,
                 }
+
                 save_data_row(SHEET_ID, payload, unique_col="KayıtID", worksheet_index=PBMV_WS_INDEX)
                 st.success(f"✅ Kaydedildi / güncellendi: {kayit_id}")
                 time.sleep(0.25)
                 st.rerun()
+
+
 # =========================================================
 # ===================== EKRAN Y: ÖZELLİKLİ VAKALAR =====================
 # =========================================================
 elif menu == "⭐ Özellikli Vakalar":
     st.header("⭐ Özellikli Vakalar")
+
     left, right = st.columns([1, 2])
+
     with left:
         with st.form("featured_form"):
             n_dosya = st.text_input("Dosya No")
             n_not = st.text_area("Not")
+
             submitted = st.form_submit_button("Kaydet", type="primary")
             if submitted:
                 try:
@@ -1544,6 +1750,7 @@ elif menu == "⭐ Özellikli Vakalar":
                     st.rerun()
                 except Exception as e:
                     st.error(f"Hata: {e}")
+
     with right:
         df = load_data(SHEET_ID, FEATURED_WS_INDEX, required_col="TarihSaat")
         if df.empty:
@@ -1554,7 +1761,9 @@ elif menu == "⭐ Özellikli Vakalar":
             if q.strip():
                 mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                 show = show[mask].copy()
+
             st.dataframe(show, use_container_width=True)
+
             st.divider()
             st.markdown("### 🗑️ Silme (Şifreli)")
             if confirm_delete_with_password("featured"):
@@ -1566,18 +1775,23 @@ elif menu == "⭐ Özellikli Vakalar":
                         st.rerun()
                     else:
                         st.error("Hata!")
+
+
 # =========================================================
 # ===================== EKRAN 2: CASE REPORT =====================
 # =========================================================
 elif menu == "📝 Case Report Takip":
     st.header("📝 Case Report Takip")
+
     left, right = st.columns([1, 2])
+
     with left:
         with st.form("case_form"):
             n_dosya = st.text_input("Dosya No")
             n_vaka = st.text_input("Vaka")
             n_dr = st.text_input("Sorumlu Doktor")
             n_not = st.text_area("Not")
+
             submitted = st.form_submit_button("Kaydet", type="primary")
             if submitted:
                 try:
@@ -1596,6 +1810,7 @@ elif menu == "📝 Case Report Takip":
                     st.rerun()
                 except Exception as e:
                     st.error(f"Hata: {e}")
+
     with right:
         df = load_data(SHEET_ID, CASE_WS_INDEX, required_col="TarihSaat")
         if df.empty:
@@ -1606,7 +1821,9 @@ elif menu == "📝 Case Report Takip":
             if q.strip():
                 mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                 show = show[mask].copy()
+
             st.dataframe(show, use_container_width=True)
+
             st.divider()
             st.markdown("### 🗑️ Silme (Şifreli)")
             if confirm_delete_with_password("case"):
@@ -1618,17 +1835,22 @@ elif menu == "📝 Case Report Takip":
                         st.rerun()
                     else:
                         st.error("Hata!")
+
+
 # =========================================================
 # ===================== EKRAN 3: EDİTÖRE MEKTUP =====================
 # =========================================================
 elif menu == "✉️ Editöre Mektup":
     st.header("✉️ Editöre Mektup Takip")
+
     left, right = st.columns([1, 2])
+
     with left:
         with st.form("letter_form"):
             dergi = st.text_input("Dergi Adı")
             makale = st.text_input("Makale İsmi")
             yazarlar = st.text_area("Yazarlar")
+
             submitted = st.form_submit_button("Kaydet", type="primary")
             if submitted:
                 try:
@@ -1646,6 +1868,7 @@ elif menu == "✉️ Editöre Mektup":
                     st.rerun()
                 except Exception as e:
                     st.error(f"Hata: {e}")
+
     with right:
         df = load_data(SHEET_ID, LETTER_WS_INDEX, required_col="TarihSaat")
         if df.empty:
@@ -1656,7 +1879,9 @@ elif menu == "✉️ Editöre Mektup":
             if q.strip():
                 mask = show.apply(lambda r: r.astype(str).str.contains(q, case=False, na=False).any(), axis=1)
                 show = show[mask].copy()
+
             st.dataframe(show, use_container_width=True)
+
             st.divider()
             st.markdown("### 🗑️ Silme (Şifreli)")
             if confirm_delete_with_password("letter"):
@@ -1668,13 +1893,17 @@ elif menu == "✉️ Editöre Mektup":
                         st.rerun()
                     else:
                         st.error("Hata!")
+
+
 # =========================================================
 # ===================== EKRAN 1: H-TYPE HT =====================
 # =========================================================
 elif menu == "🏥 H-Type HT Çalışması":
     require_password_gate()
+
     st.header("🏥 H-Type HT Çalışması")
     df = load_data(SHEET_ID, DATA_WS_INDEX, required_col="Dosya Numarası")
+
     st.markdown("### 📋 Çalışma Kriterleri")
     k1, k2 = st.columns(2)
     with k1:
@@ -1682,10 +1911,13 @@ elif menu == "🏥 H-Type HT Çalışması":
     with k2:
         st.error("**⛔ HARİÇ:** Sekonder HT, KY, AKS, Cerrahi, Konjenital, Pulmoner HT, ABY, **AF**")
     st.markdown("---")
+
     col_left, col_right = st.columns([2, 3])
+
     with col_left:
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio("Mod:", ["Yeni Kayıt", "Düzenleme"], horizontal=True, label_visibility="collapsed", key="htype_mode")
+
         current = {}
         if mode == "Düzenleme" and not df.empty:
             edit_id = st.selectbox("Düzenlenecek Hasta (Dosya No):", df["Dosya Numarası"].unique(), key="htype_edit_id")
@@ -1694,15 +1926,18 @@ elif menu == "🏥 H-Type HT Çalışması":
                 st.success(f"Seçildi: {mask_name(current.get('Adı Soyadı', ''))}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok.")
+
     with col_right:
         with st.expander("📋 KAYITLI HASTA LİSTESİ / ARAMA / SİLME", expanded=True):
             if st.button("🔄 Listeyi Yenile", key="htype_refresh"):
                 st.rerun()
+
             if df.empty:
                 st.info("Kayıt yok.")
             else:
                 q = st.text_input("🔎 Arama (dosya no / hekim)", "", key="htype_search")
                 show = df.copy()
+
                 search_cols = [c for c in ["Dosya Numarası", "Hekim", "Tarih"] if c in show.columns]
                 if q.strip() and search_cols:
                     mask = show[search_cols].apply(
@@ -1710,11 +1945,15 @@ elif menu == "🏥 H-Type HT Çalışması":
                         axis=1
                     )
                     show = show[mask].copy()
+
                 display_df = show.copy()
+
                 if "Adı Soyadı" in display_df.columns:
                     display_df["Adı Soyadı"] = display_df["Adı Soyadı"].apply(mask_name)
+
                 if "İletişim" in display_df.columns:
                     display_df["İletişim"] = display_df["İletişim"].apply(mask_phone)
+
                 cols_show = [
                     c for c in [
                         "Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "İletişim",
@@ -1722,10 +1961,12 @@ elif menu == "🏥 H-Type HT Çalışması":
                     ]
                     if c in display_df.columns
                 ]
+
                 st.dataframe(
                     display_df[cols_show] if cols_show else display_df,
                     use_container_width=True
                 )
+
                 st.divider()
                 st.markdown("##### 🗑️ Silme")
                 del_id = st.selectbox("Silinecek Dosya No", df["Dosya Numarası"].unique(), key="data_del_id")
@@ -1736,7 +1977,9 @@ elif menu == "🏥 H-Type HT Çalışması":
                         st.rerun()
                     else:
                         st.error("Hata!")
+
     st.divider()
+
     def gs(k): return str(current.get(k, ""))
     def gf(k):
         try: return float(current.get(k, 0))
@@ -1745,40 +1988,51 @@ elif menu == "🏥 H-Type HT Çalışması":
         try: return int(float(current.get(k, 0)))
         except Exception: return 0
     def gc(k): return str(current.get(k, "")).lower() == "true"
+
     with st.form("main_form"):
         st.markdown("### 👤 Klinik")
         c1, c2 = st.columns(2)
+
         with c1:
             dosya_no = st.text_input("Dosya Numarası (Zorunlu)", value=gs("Dosya Numarası"))
             ad_soyad = st.text_input("Adı Soyadı", value=gs("Adı Soyadı"))
+
             try:
                 d_date = datetime.strptime(gs("Tarih"), "%Y-%m-%d").date()
             except Exception:
                 d_date = datetime.now().date()
             basvuru = st.date_input("Başvuru Tarihi", value=d_date)
+
             hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)", value=gs("Hekim"))
             iletisim = st.text_input("İletişim", value=gs("İletişim"))
+
         with c2:
             cy, cc = st.columns(2)
             yas = cy.number_input("Yaş", step=1, value=gi("Yaş"))
+
             sex_l = ["Erkek", "Kadın"]
             s_ix = sex_l.index(gs("Cinsiyet")) if gs("Cinsiyet") in sex_l else 0
             cinsiyet = cc.radio("Cinsiyet", sex_l, index=s_ix, horizontal=True)
+
             cb1, cb2, cb3 = st.columns(3)
             boy = cb1.number_input("Boy (cm)", value=gf("Boy"))
             kilo = cb2.number_input("Kilo (kg)", value=gf("Kilo"))
             bmi = kilo / ((boy / 100) ** 2) if boy > 0 else 0
             bsa = (boy * kilo / 3600) ** 0.5 if (boy > 0 and kilo > 0) else 0
             cb3.metric("BMI", f"{bmi:.1f}")
+
             ct1, ct2 = st.columns(2)
             ta_sis = ct1.number_input("TA Sistol (mmHg)", value=gi("TA Sistol"))
             ta_dia = ct2.number_input("TA Diyastol (mmHg)", value=gi("TA Diyastol"))
+
         st.markdown("---")
         ekg_l = ["NSR", "LBBB", "RBBB", "VPB", "SVT", "Diğer"]
         ekg = st.selectbox("EKG", ekg_l, index=(ekg_l.index(gs("EKG")) if gs("EKG") in ekg_l else 0))
+
         ci1, ci2 = st.columns(2)
         ilaclar = ci1.text_area("Kullandığı İlaçlar", value=gs("İlaçlar"))
         baslanan = ci2.text_area("Başlanan İlaçlar", value=gs("Başlanan"))
+
         st.markdown("##### Ek Hastalıklar")
         ck1, ck2, ck3, ck4, ck5 = st.columns(5)
         dm = ck1.checkbox("DM", value=gc("DM"))
@@ -1787,6 +2041,7 @@ elif menu == "🏥 H-Type HT Çalışması":
         inme = ck4.checkbox("İnme", value=gc("İnme"))
         sigara = ck5.checkbox("Sigara", value=gc("Sigara"))
         diger = st.text_input("Diğer", value=gs("Diğer"))
+
         st.markdown("### 🩸 Laboratuvar")
         l1, l2, l3, l4 = st.columns(4)
         hgb = l1.number_input("Hgb (g/dL)", value=gf("Hgb"))
@@ -1797,6 +2052,7 @@ elif menu == "🏥 H-Type HT Çalışması":
         lym = l1.number_input("Lenfosit (%)", value=gf("Lym"))
         mpv = l1.number_input("MPV (fL)", value=gf("MPV"))
         rdw = l1.number_input("RDW (%)", value=gf("RDW"))
+
         glukoz = l2.number_input("Glukoz (mg/dL)", value=gf("Glukoz"))
         ure = l2.number_input("Üre (mg/dL)", value=gf("Üre"))
         krea = l2.number_input("Kreatinin (mg/dL)", value=gf("Kreatinin"))
@@ -1807,16 +2063,20 @@ elif menu == "🏥 H-Type HT Çalışması":
         ast = l2.number_input("AST (U/L)", value=gf("AST"))
         prot = l2.number_input("Tot Prot (g/dL)", value=gf("Tot. Prot"))
         alb = l2.number_input("Albümin (g/dL)", value=gf("Albümin"))
+
         chol = l3.number_input("Chol (mg/dL)", value=gf("Chol"))
         ldl = l3.number_input("LDL (mg/dL)", value=gf("LDL"))
         hdl = l3.number_input("HDL (mg/dL)", value=gf("HDL"))
         trig = l3.number_input("Trig (mg/dL)", value=gf("Trig"))
+
         homo = l4.number_input("Homosistein (µmol/L)", value=gf("Homosistein"))
         lpa = l4.number_input("Lp(a) (mg/dL)", value=gf("Lp(a)"))
         folik = l4.number_input("Folik Asit (ng/mL)", value=gf("Folik Asit"))
         b12 = l4.number_input("B12 (pg/mL)", value=gf("B12"))
+
         st.markdown("### 🫀 Eko")
         e1, e2, e3, e4 = st.columns(4)
+
         with e1:
             st.caption("Yapısal")
             lvedd = st.number_input("LVEDD (mm)", value=gf("LVEDD"))
@@ -1826,6 +2086,7 @@ elif menu == "🏥 H-Type HT Çalışması":
             lvedv = st.number_input("LVEDV (mL)", value=gf("LVEDV"))
             lvesv = st.number_input("LVESV (mL)", value=gf("LVESV"))
             ao = st.number_input("Ao Asc (mm)", value=gf("Ao Asc"))
+
         with e2:
             st.caption("Sistolik")
             lvef = st.number_input("LVEF (%)", value=gf("LVEF"))
@@ -1834,6 +2095,7 @@ elif menu == "🏥 H-Type HT Çalışması":
             gls = st.number_input("GLS (%)", value=gf("GLS"))
             gcs = st.number_input("GCS (%)", value=gf("GCS"))
             sdls = st.number_input("SD-LS (%)", value=gf("SD-LS"))
+
         with e3:
             st.caption("Diyastolik")
             mite = st.number_input("Mitral E (cm/sn)", value=gf("Mitral E"))
@@ -1843,6 +2105,7 @@ elif menu == "🏥 H-Type HT Çalışması":
             laedv = st.number_input("LAEDV (mL)", value=gf("LAEDV"))
             laesv = st.number_input("LAESV (mL)", value=gf("LAESV"))
             lastr = st.number_input("LA Strain (%)", value=gf("LA Strain"))
+
         with e4:
             st.caption("Sağ Kalp")
             tapse = st.number_input("TAPSE (mm)", value=gf("TAPSE"))
@@ -1851,6 +2114,7 @@ elif menu == "🏥 H-Type HT Çalışması":
             tyvel = st.number_input("TY vel. (m/sn)", value=gf("TY vel."))
             rvot = st.number_input("RVOT VTI (cm)", value=gf("RVOT VTI"))
             rvota = st.number_input("RVOT accT (ms)", value=gf("RVOT accT"))
+
         st.write("")
         submitted = st.form_submit_button("💾 KAYDET / GÜNCELLE", type="primary")
         if submitted:
@@ -1943,11 +2207,3 @@ elif menu == "🏥 H-Type HT Çalışması":
 # =========================================================
 else:
     st.warning("Menü seçimi tanınmadı.")
-0 commit comments
-Comments
-0
- (0)
-Comment
-You're not receiving notifications from this thread.
-
-There are no files selected for viewing
