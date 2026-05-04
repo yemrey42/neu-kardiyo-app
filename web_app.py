@@ -1382,7 +1382,6 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             ritim_l = ["Sinüs", "AF", "Atriyal flutter", "Pacemaker", "Diğer"]
             ritim_prev = gs("Ritim")
             ritim = st.selectbox("Ritim", ritim_l, index=(ritim_l.index(ritim_prev) if ritim_prev in ritim_l else 0))
-            ekg = st.text_input("EKG notu", value=gs("EKG"))
 
         with c2:
             cy, cc = st.columns(2)
@@ -1407,24 +1406,6 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
             nyha_prev = gs("NYHA")
             nyha = st.selectbox("NYHA", nyha_l, index=(nyha_l.index(nyha_prev) if nyha_prev in nyha_l else 1))
             six_mwt = st.number_input("6DYT (m)", value=gf("6DYT (m)"))
-
-        st.markdown("### ✅ Çalışma Uygunluk Kriterleri")
-        k1, k2, k3 = st.columns(3)
-        with k1:
-            ms_modsev = st.checkbox("Orta-ileri / ileri romatizmal MD", value=gc("Dahil: Orta-ileri/ileri MD"))
-            pbmv_suitable = st.checkbox("PBMV için uygun kapak anatomisi", value=gc("Dahil: PBMV uygun anatomi"))
-            onam = st.checkbox("Yazılı onam alındı", value=gc("Dahil: Onam"))
-        with k2:
-            excl_mr = st.checkbox("Dışla: Orta-ileri/ileri MY", value=gc("Dışla: Orta-ileri/ileri MY"))
-            excl_pulm = st.checkbox("Dışla: Sağ kalbi etkileyen pulmoner patoloji", value=gc("Dışla: Pulmoner patoloji"))
-            excl_tr = st.checkbox("Dışla: Primer ileri TY", value=gc("Dışla: Primer ileri TY"))
-        with k3:
-            excl_cong = st.checkbox("Dışla: Konjenital kardiyak anomali", value=gc("Dışla: Konjenital"))
-            excl_av = st.checkbox("Dışla: Ciddi aort kapak hastalığı", value=gc("Dışla: Ciddi aort kapak"))
-            excl_bad_img = st.checkbox("Dışla: Yetersiz eko görüntü", value=gc("Dışla: Yetersiz görüntü"))
-
-        eligible = bool(ms_modsev and pbmv_suitable and onam and not any([excl_mr, excl_pulm, excl_tr, excl_cong, excl_av, excl_bad_img]))
-        st.info(f"📌 Çalışma uygunluğu: {'UYGUN' if eligible else 'KONTROL ET / UYGUN DEĞİL'}")
 
         st.markdown("### 🧾 Öykü ve Tedavi")
         h1, h2, h3, h4 = st.columns(4)
@@ -1571,12 +1552,8 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
         except Exception:
             proc_date_prev = tarih
         pbmv_date = p1.date_input("PBMV tarihi", value=proc_date_prev)
-        balloon_type = p1.text_input("Balon tipi", value=gs("Balon tipi"))
         balloon_size = p1.number_input("Balon boyutu (mm)", value=gf("Balon boyutu (mm)"))
 
-        la_pressure_pre = p2.number_input("LA basınç pre (mmHg)", value=gf("LA basınç pre"))
-        la_pressure_post = p2.number_input("LA basınç post (mmHg)", value=gf("LA basınç post"))
-        invasive_pap = p2.number_input("İnvaziv PAP/sPAP (ops.)", value=gf("İnvaziv PAP/sPAP"))
 
         success_auto = bool(mva_final >= 1.5 and mr_deg not in ["Orta-ileri", "İleri"])
         success_manual = p3.checkbox("İşlem başarısı (manuel)", value=(gc("İşlem başarısı") if gs("İşlem başarısı") else success_auto))
@@ -1614,19 +1591,8 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
                     "TA Diyastol": ta_dia,
                     "Nabız": nabiz,
                     "Ritim": ritim,
-                    "EKG": ekg,
                     "NYHA": nyha,
                     "6DYT (m)": six_mwt,
-                    "Dahil: Orta-ileri/ileri MD": ms_modsev,
-                    "Dahil: PBMV uygun anatomi": pbmv_suitable,
-                    "Dahil: Onam": onam,
-                    "Dışla: Orta-ileri/ileri MY": excl_mr,
-                    "Dışla: Pulmoner patoloji": excl_pulm,
-                    "Dışla: Primer ileri TY": excl_tr,
-                    "Dışla: Konjenital": excl_cong,
-                    "Dışla: Ciddi aort kapak": excl_av,
-                    "Dışla: Yetersiz görüntü": excl_bad_img,
-                    "Çalışma uygunluğu": eligible,
                     "Öykü: HT": hx_ht,
                     "Öykü: DM": hx_dm,
                     "Öykü: KAH/MI": hx_kah,
@@ -1703,11 +1669,7 @@ elif menu == "🫁 PBMV – RV-PA Coupling":
                     "Eko görüntü kalitesi": echo_quality,
                     "Eko notu": echo_note,
                     "PBMV tarihi": str(pbmv_date),
-                    "Balon tipi": balloon_type,
                     "Balon boyutu (mm)": balloon_size,
-                    "LA basınç pre": la_pressure_pre,
-                    "LA basınç post": la_pressure_post,
-                    "İnvaziv PAP/sPAP": invasive_pap,
                     "İşlem başarısı": success_manual,
                     "Komplikasyon": complication,
                     "Hastaneye yatış": hospital,
@@ -2135,7 +2097,6 @@ elif menu == "🏥 H-Type HT Çalışması":
                     "BSA": bsa,
                     "TA Sistol": ta_sis,
                     "TA Diyastol": ta_dia,
-                    "EKG": ekg,
                     "İlaçlar": ilaclar,
                     "Başlanan": baslanan,
                     "DM": dm,
