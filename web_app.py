@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -544,82 +545,129 @@ if menu == "🧠 Soru Bankası":
             net_label = "Net: 0"
             net_emoji = "⚪"
 
-        st.markdown(
-            textwrap.dedent(f"""
-            <div style="margin-top: 10px; margin-bottom: 22px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:13px; color:inherit; margin-bottom:7px;">
-                    <span><b>🎮 Performans barı</b> &nbsp; {answered_count}/{total_count} soru çözüldü (%{done_pct:.0f})</span>
-                    <span>✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; {net_emoji} {net_label} &nbsp; | &nbsp; Başarı: %{success_pct}</span>
-                </div>
-
-                <div style="
-                    position:relative;
-                    width:100%;
-                    height:30px;
-                    background:rgba(128,128,128,0.18);
-                    border:1px solid rgba(128,128,128,0.35);
-                    border-radius:18px;
-                    overflow:hidden;
-                    box-shadow: inset 0 1px 3px rgba(0,0,0,0.18);
-                ">
-                    <!-- Sol kırmızı alan: yanlışlar -->
-                    <div title="Yanlış cevaplar" style="
-                        position:absolute;
-                        right:50%;
-                        top:0;
-                        width:{wrong_half_width:.4f}%;
-                        height:100%;
-                        background:linear-gradient(270deg,#ff6b6b,#c92a2a);
-                        border-radius:18px 0 0 18px;
-                    "></div>
-
-                    <!-- Sağ yeşil alan: doğrular -->
-                    <div title="Doğru cevaplar" style="
-                        position:absolute;
-                        left:50%;
-                        top:0;
-                        width:{correct_half_width:.4f}%;
-                        height:100%;
-                        background:linear-gradient(90deg,#69db7c,#2f9e44);
-                        border-radius:0 18px 18px 0;
-                    "></div>
-
-                    <!-- Orta sıfır çizgisi -->
-                    <div style="
-                        position:absolute;
-                        left:50%;
-                        top:0;
-                        width:4px;
-                        height:100%;
-                        background:rgba(255,255,255,0.92);
-                        transform:translateX(-50%);
-                        box-shadow:0 0 0 1px rgba(0,0,0,0.25), 0 0 8px rgba(255,255,255,0.35);
-                    "></div>
-
-                    <!-- Orta 0 etiketi -->
-                    <div style="
-                        position:absolute;
-                        left:50%;
-                        top:50%;
-                        transform:translate(-50%,-50%);
-                        font-size:11px;
-                        font-weight:700;
-                        color:#212529;
-                        background:rgba(255,255,255,0.88);
-                        padding:1px 6px;
-                        border-radius:999px;
-                    ">0</div>
-                </div>
-
-                <div style="display:flex; justify-content:space-between; font-size:12px; color:#868e96; margin-top:5px;">
-                    <span>❌ Yanlış: -{total_count}</span>
-                    <span>Kalan: {remaining_count}</span>
-                    <span>✅ Doğru: +{total_count}</span>
-                </div>
-            </div>
-            """),
-            unsafe_allow_html=True,
-        )
+        html = f"""
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body {{
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #f8f9fa;
+  }}
+  .quiz-wrap {{
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0;
+  }}
+  .quiz-head {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 15px;
+    line-height: 1.35;
+    margin-bottom: 8px;
+    color: #f8f9fa;
+    font-weight: 600;
+    white-space: nowrap;
+  }}
+  .quiz-stats {{
+    font-weight: 600;
+  }}
+  .quiz-bar {{
+    position: relative;
+    width: 100%;
+    height: 32px;
+    background: rgba(160,160,160,0.18);
+    border: 1px solid rgba(180,180,180,0.38);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.22);
+    box-sizing: border-box;
+  }}
+  .wrong {{
+    position: absolute;
+    right: 50%;
+    top: 0;
+    width: {wrong_half_width:.4f}%;
+    height: 100%;
+    background: linear-gradient(270deg, #ff6b6b, #c92a2a);
+    border-radius: 18px 0 0 18px;
+  }}
+  .correct {{
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: {correct_half_width:.4f}%;
+    height: 100%;
+    background: linear-gradient(90deg, #69db7c, #2f9e44);
+    border-radius: 0 18px 18px 0;
+  }}
+  .zero-line {{
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: rgba(255,255,255,0.95);
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 0 8px rgba(255,255,255,0.35);
+  }}
+  .zero-label {{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    font-weight: 800;
+    color: #212529;
+    background: rgba(255,255,255,0.90);
+    padding: 1px 7px;
+    border-radius: 999px;
+  }}
+  .quiz-foot {{
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #adb5bd;
+    margin-top: 5px;
+    line-height: 1.25;
+  }}
+  @media (prefers-color-scheme: light) {{
+    html, body {{ color: #212529; }}
+    .quiz-head {{ color: #212529; }}
+    .quiz-foot {{ color: #6c757d; }}
+    .quiz-bar {{ background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.18); }}
+    .zero-line {{ background: rgba(33,37,41,0.9); }}
+  }}
+</style>
+</head>
+<body>
+  <div class="quiz-wrap">
+    <div class="quiz-head">
+      <div>Performans barı &nbsp; {answered_count}/{total_count} soru çözüldü (%{done_pct:.0f})</div>
+      <div class="quiz-stats">✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; {net_emoji} {net_label} &nbsp; | &nbsp; Başarı: %{success_pct}</div>
+    </div>
+    <div class="quiz-bar">
+      <div class="wrong" title="Yanlış cevaplar"></div>
+      <div class="correct" title="Doğru cevaplar"></div>
+      <div class="zero-line"></div>
+      <div class="zero-label">0</div>
+    </div>
+    <div class="quiz-foot">
+      <span>❌ Yanlış: -{total_count}</span>
+      <span>Kalan: {remaining_count}</span>
+      <span>✅ Doğru: +{total_count}</span>
+    </div>
+  </div>
+</body>
+</html>
+"""
+        components.html(html, height=96, scrolling=False)
 
     # Test bitti ekranı
     if st.session_state.quiz_done:
