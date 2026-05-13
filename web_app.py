@@ -516,9 +516,9 @@ if menu == "🧠 Soru Bankası":
         """
         Oyunlaştırılmış performans barı:
         - Ortada 0 çizgisi vardır.
-        - Doğru cevaplar sağa doğru yeşil dolar.
-        - Yanlış cevaplar sola doğru kırmızı dolar.
-        - Ölçek toplam soru sayısına göre ayarlanır; 10'da bitmez.
+        - Net doğru-yanlış skoru + yönde sağa yeşil, - yönde sola kırmızı dolar.
+        - Bar ölçeği -10 ile +10 arasında sabittir; net skor bunun üzerine çıkarsa bar uçta sabit kalır.
+        - Doğru/yanlış sayıları üstte artmaya devam eder.
         """
         total_count = max(int(total_count), 1)
         answered_count = max(0, min(int(answered_count), total_count))
@@ -530,10 +530,21 @@ if menu == "🧠 Soru Bankası":
         done_pct = (answered_count / total_count) * 100
         success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
 
-        # Her iki taraf yarım bar kullanır: sol taraf yanlışlar, sağ taraf doğrular.
-        # Tüm sorular doğru yapılırsa sağ yarı tamamen dolar; tümü yanlışsa sol yarı tamamen dolar.
-        correct_half_width = (correct_count / total_count) * 50
-        wrong_half_width = (wrong_count / total_count) * 50
+        # Oyun barı sabit -10 / +10 ölçeğinde çalışır.
+        # Net +10 ve üzeri: sağ yarı tamamen yeşil.
+        # Net -10 ve altı: sol yarı tamamen kırmızı.
+        bar_target = 10
+        capped_net = max(-bar_target, min(bar_target, net_score))
+
+        if capped_net > 0:
+            correct_half_width = (capped_net / bar_target) * 50
+            wrong_half_width = 0
+        elif capped_net < 0:
+            correct_half_width = 0
+            wrong_half_width = (abs(capped_net) / bar_target) * 50
+        else:
+            correct_half_width = 0
+            wrong_half_width = 0
 
         if net_score > 0:
             net_label = f"Net: +{net_score}"
@@ -659,9 +670,9 @@ if menu == "🧠 Soru Bankası":
       <div class="zero-label">0</div>
     </div>
     <div class="quiz-foot">
-      <span>❌ Yanlış: -{total_count}</span>
+      <span>❌ -10</span>
       <span>Kalan: {remaining_count}</span>
-      <span>✅ Doğru: +{total_count}</span>
+      <span>✅ +10</span>
     </div>
   </div>
 </body>
