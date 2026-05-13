@@ -26,6 +26,7 @@ AFMR_WS_INDEX = int(st.secrets.get("afmr_ws_index", 4))         # AFMR
 CVABL_WS_INDEX = int(st.secrets.get("cvabl_ws_index", 5))       # Kardiyoversiyon-Ablasyon / TEE-GLS
 PBMV_WS_INDEX = int(st.secrets.get("pbmv_ws_index", 7))         # PBMV – RV-PA Coupling
 FEATURED_WS_INDEX = int(st.secrets.get("featured_ws_index", 6)) # Özellikli Vakalar
+QUESTION_WS_INDEX = int(st.secrets.get("question_ws_index", 8)) # Soru Bankası
 
 APP_TITLE = "❤️ NEÜ-KARDİYO"
 
@@ -366,6 +367,7 @@ with st.sidebar:
     menu = st.radio(
         "Menü",
         [
+            "🧠 Soru Bankası",
             "🏥 H-Type HT Çalışması",
             "🫀 AV tam blok-ileti sistemi pacing",
             "🫀 AFMR – TEE LV-GLS",
@@ -375,6 +377,7 @@ with st.sidebar:
             "📝 Case Report Takip",
             "✉️ Editöre Mektup",
         ],
+        index=0,
     )
 
     st.divider()
@@ -391,10 +394,251 @@ with st.sidebar:
     st.info(f"💡 **Günün Sözü:**\n\n_{random.choice(quotes)}_")
 
 
+
+# =========================================================
+# ===================== EKRAN 0: SORU BANKASI / QUIZ =======
+# =========================================================
+if menu == "🧠 Soru Bankası":
+    st.header("🧠 Kardiyoloji Soru Bankası")
+    st.caption(
+        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
+        "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
+    )
+
+    # -----------------------------------------------------
+    # Google Sheets başlık yapısı:
+    # SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak
+    # -----------------------------------------------------
+    dfq = load_data(SHEET_ID, QUESTION_WS_INDEX, required_col="SoruID")
+
+    if dfq.empty:
+        st.warning("Henüz soru yok veya SoruBankasi sekmesi başlıkları uygun değil.")
+        st.info(
+            "Google Sheets içinde `SoruBankasi` isimli sekme açıp ilk satırı şu şekilde yap:\n\n"
+            "`SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`\n\n"
+            "Not: Bu kodda varsayılan `question_ws_index = 8`. "
+            "SoruBankasi farklı sıradaysa Streamlit secrets içine doğru index değerini ekle."
+        )
+        st.stop()
+
+    required_cols = ["SoruID", "Aktif", "Kategori", "Soru", "A", "B", "C", "D", "E", "Dogru", "Aciklama", "Kaynak"]
+    missing_cols = [c for c in required_cols if c not in dfq.columns]
+    if missing_cols:
+        st.error("SoruBankasi sekmesinde eksik kolon var: " + ", ".join(missing_cols))
+        st.info("Başlık satırı birebir şöyle olmalı: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`")
+        st.stop()
+
+    # Sadece aktif sorular. Aktif kolonu TRUE/1/evet/yes/aktif olmalı.
+    dfq = dfq[
+        dfq["Aktif"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .isin(["true", "1", "evet", "yes", "aktif"])
+    ].copy()
+
+    if dfq.empty:
+        st.warning("Aktif soru bulunamadı. Sheet’te Aktif kolonunu TRUE yap.")
+        st.stop()
+
+    # SoruID’ye göre önce standart sıraya al; sonra bu standart liste üzerinden oturumluk karıştır.
+    dfq["_SoruID_num"] = pd.to_numeric(dfq["SoruID"], errors="coerce")
+    dfq = dfq.sort_values(["_SoruID_num", "SoruID"], na_position="last").drop(columns=["_SoruID_num"])
+    dfq = dfq.reset_index(drop=True)
+
+    # SoruID tekrar etse bile oturum sırası bozulmasın diye benzersiz iç UID oluştur.
+    dfq["_quiz_uid"] = dfq["SoruID"].astype(str).str.strip() + "__" + dfq.index.astype(str)
+    question_uids_current = dfq["_quiz_uid"].tolist()
+
+    # Her yeni tarayıcı oturumunda veya soru listesi değişince random sıra üret.
+    # Streamlit rerun oldukça sıra değişmesin diye session_state içinde saklanır.
+    if (
+        "quiz_order" not in st.session_state
+        or "quiz_order_source" not in st.session_state
+        or st.session_state.quiz_order_source != question_uids_current
+    ):
+        shuffled_df = dfq.sample(frac=1).reset_index(drop=True)
+        st.session_state.quiz_order = shuffled_df["_quiz_uid"].tolist()
+        st.session_state.quiz_order_source = question_uids_current
+        st.session_state.quiz_index = 0
+        st.session_state.quiz_answered = False
+        st.session_state.quiz_selected = None
+        st.session_state.quiz_score = 0
+        st.session_state.quiz_done = False
+
+    order_map = {uid: i for i, uid in enumerate(st.session_state.quiz_order)}
+    dfq["_order"] = dfq["_quiz_uid"].map(order_map)
+    dfq = dfq.sort_values("_order").drop(columns=["_order"]).reset_index(drop=True)
+
+    # Session state başlangıç
+    if "quiz_index" not in st.session_state:
+        st.session_state.quiz_index = 0
+    if "quiz_answered" not in st.session_state:
+        st.session_state.quiz_answered = False
+    if "quiz_selected" not in st.session_state:
+        st.session_state.quiz_selected = None
+    if "quiz_score" not in st.session_state:
+        st.session_state.quiz_score = 0
+    if "quiz_done" not in st.session_state:
+        st.session_state.quiz_done = False
+
+    total_q = len(dfq)
+
+    if total_q == 0:
+        st.warning("Gösterilecek soru yok.")
+        st.stop()
+
+    if st.session_state.quiz_index >= total_q:
+        st.session_state.quiz_index = total_q - 1
+
+    def _reset_quiz_with_new_order():
+        shuffled_df = dfq.sample(frac=1).reset_index(drop=True)
+        st.session_state.quiz_order = shuffled_df["_quiz_uid"].tolist()
+        st.session_state.quiz_order_source = question_uids_current
+        st.session_state.quiz_index = 0
+        st.session_state.quiz_answered = False
+        st.session_state.quiz_selected = None
+        st.session_state.quiz_score = 0
+        st.session_state.quiz_done = False
+
+    def _clean_option_text(letter: str, value: str) -> str:
+        """A hücresine yanlışlıkla 'A) metin' yazılırsa ekranda 'A) A) metin' görünmesini engeller."""
+        txt = str(value).strip()
+        prefixes = [f"{letter})", f"{letter}.", f"{letter}-", f"{letter}:"]
+        for pref in prefixes:
+            if txt.upper().startswith(pref.upper()):
+                return txt[len(pref):].strip()
+        return txt
+
+    # Test bitti ekranı
+    if st.session_state.quiz_done:
+        st.markdown("## 🏁 Test tamamlandı")
+        pct = round((st.session_state.quiz_score / total_q) * 100) if total_q else 0
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Toplam soru", total_q)
+        c2.metric("Doğru", st.session_state.quiz_score)
+        c3.metric("Başarı", f"%{pct}")
+
+        st.success(f"Skor: {st.session_state.quiz_score} / {total_q} (%{pct})")
+
+        if st.button("🔁 Yeniden çöz", type="primary"):
+            _reset_quiz_with_new_order()
+            st.rerun()
+
+        st.stop()
+
+    q_index = st.session_state.quiz_index
+    row = dfq.iloc[q_index].to_dict()
+
+    soru_id = str(row.get("SoruID", q_index + 1)).strip()
+    kategori = str(row.get("Kategori", "")).strip()
+    soru = str(row.get("Soru", "")).strip()
+    dogru = str(row.get("Dogru", "")).strip().upper()
+    aciklama = str(row.get("Aciklama", "")).strip()
+    kaynak = str(row.get("Kaynak", "")).strip()
+
+    letters = ["A", "B", "C", "D", "E"]
+    secenekler = []
+    for letter in letters:
+        val = str(row.get(letter, "")).strip()
+        if val:
+            secenekler.append((letter, _clean_option_text(letter, val)))
+
+    valid_letters = [h for h, _ in secenekler]
+
+    if not soru or not secenekler or dogru not in valid_letters:
+        st.error(
+            f"Bu soruda eksik/hatalı veri var. SoruID: {soru_id}\n\n"
+            "Soru, şıklar veya Dogru alanını kontrol et. Dogru alanı A/B/C/D/E olmalı."
+        )
+        st.stop()
+
+    # Üst bilgi kartları
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Soru", f"{q_index + 1} / {total_q}")
+    c2.metric("Skor", f"{st.session_state.quiz_score}")
+    c3.metric("Kategori", kategori if kategori else "-")
+
+    st.progress((q_index + 1) / total_q)
+    st.markdown("---")
+
+    # Soru metni
+    st.markdown(f"### Soru {q_index + 1}")
+    if kategori:
+        st.caption(f"Kategori: {kategori}")
+    st.markdown(f"#### {soru}")
+
+    radio_options = list(range(len(secenekler)))
+
+    selected = st.radio(
+        "Cevabınız:",
+        options=radio_options,
+        format_func=lambda i: f"{secenekler[i][0]}) {secenekler[i][1]}",
+        index=st.session_state.quiz_selected if st.session_state.quiz_selected is not None else None,
+        disabled=st.session_state.quiz_answered,
+        key=f"quiz_radio_{soru_id}_{q_index}",
+    )
+
+    st.session_state.quiz_selected = selected
+
+    # Butonlar
+    col1, col2, col3 = st.columns([1, 1, 2])
+
+    with col1:
+        if st.button("✅ Cevapla", type="primary", disabled=st.session_state.quiz_answered):
+            if st.session_state.quiz_selected is None:
+                st.warning("Önce bir seçenek işaretle kral.")
+            else:
+                st.session_state.quiz_answered = True
+                secilen_harf = secenekler[st.session_state.quiz_selected][0]
+                if secilen_harf == dogru:
+                    st.session_state.quiz_score += 1
+                st.rerun()
+
+    with col2:
+        if st.button("➡️ Sonraki soru", disabled=not st.session_state.quiz_answered):
+            if st.session_state.quiz_index < total_q - 1:
+                st.session_state.quiz_index += 1
+                st.session_state.quiz_answered = False
+                st.session_state.quiz_selected = None
+                st.rerun()
+            else:
+                st.session_state.quiz_done = True
+                st.rerun()
+
+    with col3:
+        if st.button("🔄 Baştan başla"):
+            _reset_quiz_with_new_order()
+            st.rerun()
+
+    # Cevap sonrası geri bildirim
+    if st.session_state.quiz_answered:
+        st.markdown("---")
+
+        secilen_harf = secenekler[st.session_state.quiz_selected][0]
+        secilen_metin = secenekler[st.session_state.quiz_selected][1]
+        dogru_metin = next((metin for h, metin in secenekler if h == dogru), "")
+
+        if secilen_harf == dogru:
+            st.success(f"✅ Doğru cevap: {dogru}) {dogru_metin}")
+        else:
+            st.error(
+                f"❌ Yanlış cevap.\n\n"
+                f"Senin cevabın: {secilen_harf}) {secilen_metin}\n\n"
+                f"Doğru cevap: {dogru}) {dogru_metin}"
+            )
+
+        if aciklama:
+            st.info(f"📌 Açıklama: {aciklama}")
+
+        if kaynak:
+            st.caption(f"📚 Kaynak: {kaynak}")
+
 # =========================================================
 # ===================== EKRAN 4: AV TAM BLOK - İLETİ SİSTEMİ PACING ==
 # =========================================================
-if menu == "🫀 AV tam blok-ileti sistemi pacing":
+elif menu == "🫀 AV tam blok-ileti sistemi pacing":
     require_password_gate()
 
     st.header("🫀 AV tam blok-ileti sistemi pacing (LBBAP / HBP)")
