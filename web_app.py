@@ -401,7 +401,7 @@ with st.sidebar:
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
     st.caption(
-        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
+        "Sorular her yeni oturumda karışık sırayla gelir. "
         "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
     )
 
@@ -510,17 +510,76 @@ if menu == "🧠 Soru Bankası":
                 return txt[len(pref):].strip()
         return txt
 
+    def _render_quiz_completion_bar(correct_count: int, answered_count: int, total_count: int):
+        """
+        Yapılma oranı barı:
+        - Cevaplanan doğru kısmı yeşil
+        - Cevaplanan yanlış kısmı kırmızı
+        - Henüz yapılmayan kısım boş/gri
+        """
+        total_count = max(int(total_count), 1)
+        answered_count = max(0, min(int(answered_count), total_count))
+        correct_count = max(0, min(int(correct_count), answered_count))
+        wrong_count = max(0, answered_count - correct_count)
+        remaining_count = max(0, total_count - answered_count)
+
+        correct_pct = (correct_count / total_count) * 100
+        wrong_pct = (wrong_count / total_count) * 100
+        remaining_pct = (remaining_count / total_count) * 100
+        done_pct = (answered_count / total_count) * 100
+        success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
+
+        st.markdown(
+            f"""
+            <div style="margin-top: 10px; margin-bottom: 20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#495057; margin-bottom:6px;">
+                    <span><b>Yapılma oranı:</b> {answered_count}/{total_count} (%{done_pct:.0f})</span>
+                    <span>✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; Başarı: %{success_pct}</span>
+                </div>
+                <div style="
+                    display:flex;
+                    width:100%;
+                    height:24px;
+                    background:#f1f3f5;
+                    border:1px solid #dee2e6;
+                    border-radius:14px;
+                    overflow:hidden;
+                ">
+                    <div title="Doğru" style="width:{correct_pct:.4f}%; background:linear-gradient(90deg,#69db7c,#2f9e44);"></div>
+                    <div title="Yanlış" style="width:{wrong_pct:.4f}%; background:linear-gradient(90deg,#ff8787,#c92a2a);"></div>
+                    <div title="Kalan" style="width:{remaining_pct:.4f}%; background:#f8f9fa;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:#868e96; margin-top:4px;">
+                    <span>Başlangıç</span>
+                    <span>Kalan: {remaining_count}</span>
+                    <span>Bitiş</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     # Test bitti ekranı
     if st.session_state.quiz_done:
         st.markdown("## 🏁 Test tamamlandı")
-        pct = round((st.session_state.quiz_score / total_q) * 100) if total_q else 0
+
+        correct_count = int(st.session_state.quiz_score)
+        answered_count = total_q
+        wrong_count = max(answered_count - correct_count, 0)
+        success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Toplam soru", total_q)
-        c2.metric("Doğru", st.session_state.quiz_score)
-        c3.metric("Başarı", f"%{pct}")
+        c2.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
+        c3.metric("Başarı", f"%{success_pct}")
 
-        st.success(f"Skor: {st.session_state.quiz_score} / {total_q} (%{pct})")
+        _render_quiz_completion_bar(
+            correct_count=correct_count,
+            answered_count=answered_count,
+            total_count=total_q,
+        )
+
+        st.success(f"Test tamamlandı: {correct_count} doğru, {wrong_count} yanlış, başarı %{success_pct}.")
 
         if st.button("🔁 Yeniden çöz", type="primary"):
             _reset_quiz_with_new_order()
@@ -554,13 +613,21 @@ if menu == "🧠 Soru Bankası":
         )
         st.stop()
 
-    # Üst bilgi kartları
+    # Üst bilgi kartları ve yapılma oranı
+    answered_count = st.session_state.quiz_index + (1 if st.session_state.quiz_answered else 0)
+    correct_count = int(st.session_state.quiz_score)
+
     c1, c2, c3 = st.columns(3)
     c1.metric("Soru", f"{q_index + 1} / {total_q}")
-    c2.metric("Skor", f"{st.session_state.quiz_score}")
+    c2.metric("Cevaplanan", f"{answered_count} / {total_q}")
     c3.metric("Kategori", kategori if kategori else "-")
 
-    st.progress((q_index + 1) / total_q)
+    _render_quiz_completion_bar(
+        correct_count=correct_count,
+        answered_count=answered_count,
+        total_count=total_q,
+    )
+
     st.markdown("---")
 
     # Soru metni
