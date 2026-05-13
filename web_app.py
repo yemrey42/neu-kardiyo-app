@@ -401,7 +401,7 @@ with st.sidebar:
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
     st.caption(
-        "Sorular her yeni oturumda karışık sırayla gelir. "
+        "Sorular karışık sırayla gelir. Baştan başla, barı sıfırlar"
         "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
     )
 
@@ -512,10 +512,11 @@ if menu == "🧠 Soru Bankası":
 
     def _render_quiz_completion_bar(correct_count: int, answered_count: int, total_count: int):
         """
-        Yapılma oranı barı:
-        - Cevaplanan doğru kısmı yeşil
-        - Cevaplanan yanlış kısmı kırmızı
-        - Henüz yapılmayan kısım boş/gri
+        Oyunlaştırılmış performans barı:
+        - Ortada 0 çizgisi vardır.
+        - Doğru cevaplar sağa doğru yeşil dolar.
+        - Yanlış cevaplar sola doğru kırmızı dolar.
+        - Ölçek toplam soru sayısına göre ayarlanır; 10'da bitmez.
         """
         total_count = max(int(total_count), 1)
         answered_count = max(0, min(int(answered_count), total_count))
@@ -523,36 +524,96 @@ if menu == "🧠 Soru Bankası":
         wrong_count = max(0, answered_count - correct_count)
         remaining_count = max(0, total_count - answered_count)
 
-        correct_pct = (correct_count / total_count) * 100
-        wrong_pct = (wrong_count / total_count) * 100
-        remaining_pct = (remaining_count / total_count) * 100
+        net_score = correct_count - wrong_count
         done_pct = (answered_count / total_count) * 100
         success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
 
+        # Her iki taraf yarım bar kullanır: sol taraf yanlışlar, sağ taraf doğrular.
+        # Tüm sorular doğru yapılırsa sağ yarı tamamen dolar; tümü yanlışsa sol yarı tamamen dolar.
+        correct_half_width = (correct_count / total_count) * 50
+        wrong_half_width = (wrong_count / total_count) * 50
+
+        if net_score > 0:
+            net_label = f"Net: +{net_score}"
+            net_emoji = "🟢"
+        elif net_score < 0:
+            net_label = f"Net: {net_score}"
+            net_emoji = "🔴"
+        else:
+            net_label = "Net: 0"
+            net_emoji = "⚪"
+
         st.markdown(
             f"""
-            <div style="margin-top: 10px; margin-bottom: 20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#495057; margin-bottom:6px;">
-                    <span><b>Yapılma oranı:</b> {answered_count}/{total_count} (%{done_pct:.0f})</span>
-                    <span>✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; Başarı: %{success_pct}</span>
+            <div style="margin-top: 10px; margin-bottom: 22px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:13px; color:inherit; margin-bottom:7px;">
+                    <span><b>🎮 Performans düellosu</b> &nbsp; {answered_count}/{total_count} soru çözüldü (%{done_pct:.0f})</span>
+                    <span>✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; {net_emoji} {net_label} &nbsp; | &nbsp; Başarı: %{success_pct}</span>
                 </div>
+
                 <div style="
-                    display:flex;
+                    position:relative;
                     width:100%;
-                    height:24px;
-                    background:#f1f3f5;
-                    border:1px solid #dee2e6;
-                    border-radius:14px;
+                    height:30px;
+                    background:rgba(128,128,128,0.18);
+                    border:1px solid rgba(128,128,128,0.35);
+                    border-radius:18px;
                     overflow:hidden;
+                    box-shadow: inset 0 1px 3px rgba(0,0,0,0.18);
                 ">
-                    <div title="Doğru" style="width:{correct_pct:.4f}%; background:linear-gradient(90deg,#69db7c,#2f9e44);"></div>
-                    <div title="Yanlış" style="width:{wrong_pct:.4f}%; background:linear-gradient(90deg,#ff8787,#c92a2a);"></div>
-                    <div title="Kalan" style="width:{remaining_pct:.4f}%; background:#f8f9fa;"></div>
+                    <!-- Sol kırmızı alan: yanlışlar -->
+                    <div title="Yanlış cevaplar" style="
+                        position:absolute;
+                        right:50%;
+                        top:0;
+                        width:{wrong_half_width:.4f}%;
+                        height:100%;
+                        background:linear-gradient(270deg,#ff6b6b,#c92a2a);
+                        border-radius:18px 0 0 18px;
+                    "></div>
+
+                    <!-- Sağ yeşil alan: doğrular -->
+                    <div title="Doğru cevaplar" style="
+                        position:absolute;
+                        left:50%;
+                        top:0;
+                        width:{correct_half_width:.4f}%;
+                        height:100%;
+                        background:linear-gradient(90deg,#69db7c,#2f9e44);
+                        border-radius:0 18px 18px 0;
+                    "></div>
+
+                    <!-- Orta sıfır çizgisi -->
+                    <div style="
+                        position:absolute;
+                        left:50%;
+                        top:0;
+                        width:4px;
+                        height:100%;
+                        background:rgba(255,255,255,0.92);
+                        transform:translateX(-50%);
+                        box-shadow:0 0 0 1px rgba(0,0,0,0.25), 0 0 8px rgba(255,255,255,0.35);
+                    "></div>
+
+                    <!-- Orta 0 etiketi -->
+                    <div style="
+                        position:absolute;
+                        left:50%;
+                        top:50%;
+                        transform:translate(-50%,-50%);
+                        font-size:11px;
+                        font-weight:700;
+                        color:#212529;
+                        background:rgba(255,255,255,0.88);
+                        padding:1px 6px;
+                        border-radius:999px;
+                    ">0</div>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:12px; color:#868e96; margin-top:4px;">
-                    <span>Başlangıç</span>
+
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:#868e96; margin-top:5px;">
+                    <span>❌ Yanlış alanı: -{total_count}</span>
                     <span>Kalan: {remaining_count}</span>
-                    <span>Bitiş</span>
+                    <span>✅ Doğru alanı: +{total_count}</span>
                 </div>
             </div>
             """,
