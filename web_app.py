@@ -256,6 +256,72 @@ def delete_row_by_value(sheet_id: str, worksheet_index: int, col_name: str, valu
         return False
 
 
+
+
+def flag_question_for_review(
+    sheet_id: str,
+    worksheet_index: int,
+    soru_id: str,
+    soru_text: str = "",
+    flag_col: str = "Soru Düzelt",
+) -> bool:
+    """
+    Soru Bankası'nda ilgili soru satırının sonuna uyarı koyar.
+    Kolon yoksa en sona 'Soru Düzelt' kolonunu ekler.
+    Aynı SoruID tekrar ederse, mümkünse Soru metniyle eşleşeni işaretler.
+    """
+    try:
+        ws = get_ws(sheet_id, worksheet_index)
+        values = ws.get_all_values()
+        if not values:
+            return False
+
+        headers = [str(h).strip() for h in values[0]]
+
+        if "SoruID" not in headers:
+            return False
+
+        # Uyarı kolonu yoksa en sona ekle
+        if flag_col not in headers:
+            headers.append(flag_col)
+            ws.update("1:1", [headers])
+
+        values = ws.get_all_values()
+        headers = [str(h).strip() for h in values[0]]
+
+        soru_id_col = headers.index("SoruID") + 1
+        flag_col_idx = headers.index(flag_col) + 1
+        soru_col_idx = headers.index("Soru") + 1 if "Soru" in headers else None
+
+        target_id = str(soru_id).strip()
+        target_soru = str(soru_text).strip()
+
+        candidate_rows = []
+        for row_idx, row in enumerate(values[1:], start=2):
+            row_soru_id = str(row[soru_id_col - 1]).strip() if len(row) >= soru_id_col else ""
+            if row_soru_id == target_id:
+                candidate_rows.append((row_idx, row))
+
+        if not candidate_rows:
+            return False
+
+        selected_row_idx = candidate_rows[0][0]
+
+        # SoruID tekrar ederse soru metniyle disambiguate et
+        if target_soru and soru_col_idx:
+            for row_idx, row in candidate_rows:
+                row_soru = str(row[soru_col_idx - 1]).strip() if len(row) >= soru_col_idx else ""
+                if row_soru == target_soru:
+                    selected_row_idx = row_idx
+                    break
+
+        cell_a1 = f"{colnum_to_letter(flag_col_idx)}{selected_row_idx}"
+        ws.update(cell_a1, "Soru düzelt")
+        return True
+    except Exception:
+        return False
+
+
 def require_password_gate():
     if "auth_ok" not in st.session_state:
         st.session_state.auth_ok = False
@@ -771,7 +837,7 @@ if menu == "🧠 Soru Bankası":
     st.session_state.quiz_selected = selected
 
     # Butonlar
-    col1, col2, col3 = st.columns([1, 1, 2])
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
 
     with col1:
         if st.button("✅ Cevapla", type="primary", disabled=st.session_state.quiz_answered):
@@ -796,6 +862,21 @@ if menu == "🧠 Soru Bankası":
                 st.rerun()
 
     with col3:
+        if st.button("☑️ Soru düzelt", help="Bu soruyu Google Sheets'te 'Soru Düzelt' kolonu altında işaretler."):
+            ok = flag_question_for_review(
+                SHEET_ID,
+                QUESTION_WS_INDEX,
+                soru_id=soru_id,
+                soru_text=soru,
+                flag_col="Soru Düzelt",
+            )
+            if ok:
+                st.toast("☑️ Soru düzelt uyarısı Sheet'e işlendi.", icon="☑️")
+                st.success("Bu soru Sheet'te `Soru Düzelt` olarak işaretlendi.")
+            else:
+                st.error("Uyarı Sheet'e yazılamadı. SoruID veya Sheet başlıklarını kontrol et.")
+
+    with col4:
         if st.button("🔄 Baştan başla"):
             _reset_quiz_with_new_order()
             st.rerun()
