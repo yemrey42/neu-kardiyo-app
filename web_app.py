@@ -258,69 +258,106 @@ def delete_row_by_value(sheet_id: str, worksheet_index: int, col_name: str, valu
 
 
 
+def _norm_header_name(x: str) -> str:
+    """Sheet başlıklarını küçük farklardan bağımsız karşılaştırmak için."""
+    return "".join(ch for ch in str(x).strip().casefold() if ch.isalnum())
+
+
+def _find_header_col(headers, possible_names):
+    wanted = {_norm_header_name(x) for x in possible_names}
+    for idx, header in enumerate(headers, start=1):
+        if _norm_header_name(header) in wanted:
+            return idx
+    return None
+
+
+def _same_soru_id(a, b) -> bool:
+    """Sheet'teki 1 ile uygulamadaki 1.0 gibi küçük format farklarını tolere eder."""
+    aa = str(a).strip()
+    bb = str(b).strip()
+    if aa == bb:
+        return True
+    try:
+        return float(aa) == float(bb)
+    except Exception:
+        return False
+
+
 def flag_question_for_review(
     sheet_id: str,
     worksheet_index: int,
     soru_id: str,
     soru_text: str = "",
     flag_col: str = "Soru Düzelt",
-) -> bool:
+) -> tuple[bool, str]:
     """
-    Soru Bankası'nda ilgili soru satırının sonuna uyarı koyar.
+    Soru Bankası'nda ilgili soru satırına uyarı koyar.
     Kolon yoksa en sona 'Soru Düzelt' kolonunu ekler.
-    Aynı SoruID tekrar ederse, mümkünse Soru metniyle eşleşeni işaretler.
+
+    Eski hata büyük ihtimalle ws.update(cell, "Soru düzelt") satırından geliyordu;
+    tek hücre yazımı için update_cell kullanmak daha güvenli.
     """
     try:
         ws = get_ws(sheet_id, worksheet_index)
         values = ws.get_all_values()
         if not values:
-            return False
+            return False, "SoruBankasi worksheet boş görünüyor."
 
         headers = [str(h).strip() for h in values[0]]
 
-        if "SoruID" not in headers:
-            return False
+        # SoruID başlığını küçük yazım farklarına toleranslı bul
+        soru_id_col = _find_header_col(headers, ["SoruID", "Soru ID", "Soru_ID", "id", "ID"])
+        if not soru_id_col:
+            return False, "SoruID başlığı bulunamadı. İlk satırdaki başlıkları kontrol et."
 
-        # Uyarı kolonu yoksa en sona ekle
-        if flag_col not in headers:
-            headers.append(flag_col)
-            ws.update("1:1", [headers])
+        # Soru metni başlığını da toleranslı bul
+        soru_col_idx = _find_header_col(headers, ["Soru", "Question", "soru"])
 
-        values = ws.get_all_values()
-        headers = [str(h).strip() for h in values[0]]
-
-        soru_id_col = headers.index("SoruID") + 1
-        flag_col_idx = headers.index(flag_col) + 1
-        soru_col_idx = headers.index("Soru") + 1 if "Soru" in headers else None
+        # Uyarı kolonu yoksa en sona tek hücre olarak ekle
+        flag_col_idx = _find_header_col(headers, [flag_col, "Soru Duzelt", "SoruDuzelt", "Düzelt", "Duzelt"])
+        if not flag_col_idx:
+            flag_col_idx = len(headers) + 1
+            ws.update_cell(1, flag_col_idx, flag_col)
+            values = ws.get_all_values()
+            headers = [str(h).strip() for h in values[0]]
 
         target_id = str(soru_id).strip()
-        target_soru = str(soru_text).strip()
+        target_soru = " ".join(str(soru_text).strip().split())
 
         candidate_rows = []
         for row_idx, row in enumerate(values[1:], start=2):
             row_soru_id = str(row[soru_id_col - 1]).strip() if len(row) >= soru_id_col else ""
-            if row_soru_id == target_id:
+            if _same_soru_id(row_soru_id, target_id):
                 candidate_rows.append((row_idx, row))
 
+        # SoruID ile bulamazsa soru metni üzerinden yedek arama yap
+        if not candidate_rows and target_soru and soru_col_idx:
+            for row_idx, row in enumerate(values[1:], start=2):
+                row_soru = str(row[soru_col_idx - 1]).strip() if len(row) >= soru_col_idx else ""
+                row_soru_norm = " ".join(row_soru.split())
+                if row_soru_norm == target_soru:
+                    candidate_rows.append((row_idx, row))
+
         if not candidate_rows:
-            return False
+            return False, f"Bu soru satırı Sheet'te bulunamadı. SoruID: {target_id}"
 
         selected_row_idx = candidate_rows[0][0]
 
-        # SoruID tekrar ederse soru metniyle disambiguate et
-        if target_soru and soru_col_idx:
+        # SoruID tekrar ederse soru metniyle doğru satırı seç
+        if target_soru and soru_col_idx and len(candidate_rows) > 1:
             for row_idx, row in candidate_rows:
                 row_soru = str(row[soru_col_idx - 1]).strip() if len(row) >= soru_col_idx else ""
-                if row_soru == target_soru:
+                row_soru_norm = " ".join(row_soru.split())
+                if row_soru_norm == target_soru:
                     selected_row_idx = row_idx
                     break
 
-        cell_a1 = f"{colnum_to_letter(flag_col_idx)}{selected_row_idx}"
-        ws.update(cell_a1, "Soru düzelt")
-        return True
-    except Exception:
-        return False
+        now_txt = datetime.now().strftime("%Y-%m-%d %H:%M")
+        ws.update_cell(selected_row_idx, flag_col_idx, f"Soru düzelt - {now_txt}")
+        return True, f"Sheet'te {colnum_to_letter(flag_col_idx)}{selected_row_idx} hücresine uyarı yazıldı."
 
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
 
 def require_password_gate():
     if "auth_ok" not in st.session_state:
@@ -469,8 +506,8 @@ with st.sidebar:
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
     st.caption(
-        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
-        "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
+        "Kılavuzlardan sorular. Her yeni oturumda karışık sırayla gelir. "
+        "Cevap sonrası doğru/yanlış, açıklama ve kaynak gösterilir."
     )
 
     # -----------------------------------------------------
@@ -863,7 +900,7 @@ if menu == "🧠 Soru Bankası":
 
     with col3:
         if st.button("☑️ Soru düzelt", help="Bu soruyu Google Sheets'te 'Soru Düzelt' kolonu altında işaretler."):
-            ok = flag_question_for_review(
+            ok, msg = flag_question_for_review(
                 SHEET_ID,
                 QUESTION_WS_INDEX,
                 soru_id=soru_id,
@@ -872,9 +909,9 @@ if menu == "🧠 Soru Bankası":
             )
             if ok:
                 st.toast("☑️ Soru düzelt uyarısı Sheet'e işlendi.", icon="☑️")
-                st.success("Bu soru Sheet'te `Soru Düzelt` olarak işaretlendi.")
+                st.success(msg)
             else:
-                st.error("Uyarı Sheet'e yazılamadı. SoruID veya Sheet başlıklarını kontrol et.")
+                st.error(f"Uyarı Sheet'e yazılamadı: {msg}")
 
     with col4:
         if st.button("🔄 Baştan başla"):
