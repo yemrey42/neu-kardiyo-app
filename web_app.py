@@ -506,8 +506,8 @@ with st.sidebar:
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
     st.caption(
-        "Kılavuzlardan sorular. Her yeni oturumda karışık sırayla gelir. "
-        "Cevap sonrası doğru/yanlış, açıklama ve kaynak gösterilir."
+        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
+        "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
     )
 
     # -----------------------------------------------------
@@ -841,10 +841,8 @@ if menu == "🧠 Soru Bankası":
     answered_count = st.session_state.quiz_index + (1 if st.session_state.quiz_answered else 0)
     correct_count = int(st.session_state.quiz_score)
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Soru", f"{q_index + 1} / {total_q}")
-    c2.metric("Cevaplanan", f"{answered_count} / {total_q}")
-    c3.metric("Kategori", kategori if kategori else "-")
+    # Üstteki sayaç kartları (Soru / Cevaplanan / Kategori) kaldırıldı.
+    # Performans barı tek başına yeterli olacak.
 
     _render_quiz_completion_bar(
         correct_count=correct_count,
