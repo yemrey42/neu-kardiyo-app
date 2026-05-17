@@ -506,7 +506,7 @@ with st.sidebar:
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
     st.caption(
-        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
+        "Kılavuzlardan sorular. Her yeni oturumda karışık sırayla gelir. "
         "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
     )
 
@@ -763,7 +763,7 @@ if menu == "🧠 Soru Bankası":
 <body>
   <div class="quiz-wrap">
     <div class="quiz-head">
-      <div>Performans barı &nbsp; {answered_count}/{total_count} soru çözüldü (%{done_pct:.0f})</div>
+      <div>Performans barı</div>
       <div class="quiz-stats">✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; {net_emoji} {net_label} &nbsp; | &nbsp; Başarı: %{success_pct}</div>
     </div>
     <div class="quiz-bar">
@@ -774,7 +774,7 @@ if menu == "🧠 Soru Bankası":
     </div>
     <div class="quiz-foot">
       <span>❌ -10</span>
-      <span>Kalan: {remaining_count}</span>
+      <span></span>
       <span>✅ +10</span>
     </div>
   </div>
@@ -792,10 +792,9 @@ if menu == "🧠 Soru Bankası":
         wrong_count = max(answered_count - correct_count, 0)
         success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Toplam soru", total_q)
-        c2.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
-        c3.metric("Başarı", f"%{success_pct}")
+        c1, c2 = st.columns(2)
+        c1.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
+        c2.metric("Başarı", f"%{success_pct}")
 
         _render_quiz_completion_bar(
             correct_count=correct_count,
