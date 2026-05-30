@@ -258,106 +258,69 @@ def delete_row_by_value(sheet_id: str, worksheet_index: int, col_name: str, valu
 
 
 
-def _norm_header_name(x: str) -> str:
-    """Sheet başlıklarını küçük farklardan bağımsız karşılaştırmak için."""
-    return "".join(ch for ch in str(x).strip().casefold() if ch.isalnum())
-
-
-def _find_header_col(headers, possible_names):
-    wanted = {_norm_header_name(x) for x in possible_names}
-    for idx, header in enumerate(headers, start=1):
-        if _norm_header_name(header) in wanted:
-            return idx
-    return None
-
-
-def _same_soru_id(a, b) -> bool:
-    """Sheet'teki 1 ile uygulamadaki 1.0 gibi küçük format farklarını tolere eder."""
-    aa = str(a).strip()
-    bb = str(b).strip()
-    if aa == bb:
-        return True
-    try:
-        return float(aa) == float(bb)
-    except Exception:
-        return False
-
-
 def flag_question_for_review(
     sheet_id: str,
     worksheet_index: int,
     soru_id: str,
     soru_text: str = "",
     flag_col: str = "Soru Düzelt",
-) -> tuple[bool, str]:
+) -> bool:
     """
-    Soru Bankası'nda ilgili soru satırına uyarı koyar.
+    Soru Bankası'nda ilgili soru satırının sonuna uyarı koyar.
     Kolon yoksa en sona 'Soru Düzelt' kolonunu ekler.
-
-    Eski hata büyük ihtimalle ws.update(cell, "Soru düzelt") satırından geliyordu;
-    tek hücre yazımı için update_cell kullanmak daha güvenli.
+    Aynı SoruID tekrar ederse, mümkünse Soru metniyle eşleşeni işaretler.
     """
     try:
         ws = get_ws(sheet_id, worksheet_index)
         values = ws.get_all_values()
         if not values:
-            return False, "SoruBankasi worksheet boş görünüyor."
+            return False
 
         headers = [str(h).strip() for h in values[0]]
 
-        # SoruID başlığını küçük yazım farklarına toleranslı bul
-        soru_id_col = _find_header_col(headers, ["SoruID", "Soru ID", "Soru_ID", "id", "ID"])
-        if not soru_id_col:
-            return False, "SoruID başlığı bulunamadı. İlk satırdaki başlıkları kontrol et."
+        if "SoruID" not in headers:
+            return False
 
-        # Soru metni başlığını da toleranslı bul
-        soru_col_idx = _find_header_col(headers, ["Soru", "Question", "soru"])
+        # Uyarı kolonu yoksa en sona ekle
+        if flag_col not in headers:
+            headers.append(flag_col)
+            ws.update("1:1", [headers])
 
-        # Uyarı kolonu yoksa en sona tek hücre olarak ekle
-        flag_col_idx = _find_header_col(headers, [flag_col, "Soru Duzelt", "SoruDuzelt", "Düzelt", "Duzelt"])
-        if not flag_col_idx:
-            flag_col_idx = len(headers) + 1
-            ws.update_cell(1, flag_col_idx, flag_col)
-            values = ws.get_all_values()
-            headers = [str(h).strip() for h in values[0]]
+        values = ws.get_all_values()
+        headers = [str(h).strip() for h in values[0]]
+
+        soru_id_col = headers.index("SoruID") + 1
+        flag_col_idx = headers.index(flag_col) + 1
+        soru_col_idx = headers.index("Soru") + 1 if "Soru" in headers else None
 
         target_id = str(soru_id).strip()
-        target_soru = " ".join(str(soru_text).strip().split())
+        target_soru = str(soru_text).strip()
 
         candidate_rows = []
         for row_idx, row in enumerate(values[1:], start=2):
             row_soru_id = str(row[soru_id_col - 1]).strip() if len(row) >= soru_id_col else ""
-            if _same_soru_id(row_soru_id, target_id):
+            if row_soru_id == target_id:
                 candidate_rows.append((row_idx, row))
 
-        # SoruID ile bulamazsa soru metni üzerinden yedek arama yap
-        if not candidate_rows and target_soru and soru_col_idx:
-            for row_idx, row in enumerate(values[1:], start=2):
-                row_soru = str(row[soru_col_idx - 1]).strip() if len(row) >= soru_col_idx else ""
-                row_soru_norm = " ".join(row_soru.split())
-                if row_soru_norm == target_soru:
-                    candidate_rows.append((row_idx, row))
-
         if not candidate_rows:
-            return False, f"Bu soru satırı Sheet'te bulunamadı. SoruID: {target_id}"
+            return False
 
         selected_row_idx = candidate_rows[0][0]
 
-        # SoruID tekrar ederse soru metniyle doğru satırı seç
-        if target_soru and soru_col_idx and len(candidate_rows) > 1:
+        # SoruID tekrar ederse soru metniyle disambiguate et
+        if target_soru and soru_col_idx:
             for row_idx, row in candidate_rows:
                 row_soru = str(row[soru_col_idx - 1]).strip() if len(row) >= soru_col_idx else ""
-                row_soru_norm = " ".join(row_soru.split())
-                if row_soru_norm == target_soru:
+                if row_soru == target_soru:
                     selected_row_idx = row_idx
                     break
 
-        now_txt = datetime.now().strftime("%Y-%m-%d %H:%M")
-        ws.update_cell(selected_row_idx, flag_col_idx, f"Soru düzelt - {now_txt}")
-        return True, f"Sheet'te {colnum_to_letter(flag_col_idx)}{selected_row_idx} hücresine uyarı yazıldı."
+        cell_a1 = f"{colnum_to_letter(flag_col_idx)}{selected_row_idx}"
+        ws.update(cell_a1, "Soru düzelt")
+        return True
+    except Exception:
+        return False
 
-    except Exception as e:
-        return False, f"{type(e).__name__}: {e}"
 
 def require_password_gate():
     if "auth_ok" not in st.session_state:
@@ -473,6 +436,7 @@ with st.sidebar:
         "Menü",
         [
             "🧠 Soru Bankası",
+            "🧮 Mitral Yetmezlik Hesaplayıcı",
             "🏥 H-Type HT Çalışması",
             "🫀 AV tam blok-ileti sistemi pacing",
             "🫀 AFMR – TEE LV-GLS",
@@ -506,7 +470,7 @@ with st.sidebar:
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
     st.caption(
-        "Kılavuzlardan sorular. Her yeni oturumda karışık sırayla gelir. "
+        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
         "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
     )
 
@@ -763,7 +727,7 @@ if menu == "🧠 Soru Bankası":
 <body>
   <div class="quiz-wrap">
     <div class="quiz-head">
-      <div>Performans barı</div>
+      <div>Performans barı &nbsp; {answered_count}/{total_count} soru çözüldü (%{done_pct:.0f})</div>
       <div class="quiz-stats">✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; {net_emoji} {net_label} &nbsp; | &nbsp; Başarı: %{success_pct}</div>
     </div>
     <div class="quiz-bar">
@@ -774,7 +738,7 @@ if menu == "🧠 Soru Bankası":
     </div>
     <div class="quiz-foot">
       <span>❌ -10</span>
-      <span></span>
+      <span>Kalan: {remaining_count}</span>
       <span>✅ +10</span>
     </div>
   </div>
@@ -792,9 +756,10 @@ if menu == "🧠 Soru Bankası":
         wrong_count = max(answered_count - correct_count, 0)
         success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
 
-        c1, c2 = st.columns(2)
-        c1.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
-        c2.metric("Başarı", f"%{success_pct}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Toplam soru", total_q)
+        c2.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
+        c3.metric("Başarı", f"%{success_pct}")
 
         _render_quiz_completion_bar(
             correct_count=correct_count,
@@ -840,8 +805,10 @@ if menu == "🧠 Soru Bankası":
     answered_count = st.session_state.quiz_index + (1 if st.session_state.quiz_answered else 0)
     correct_count = int(st.session_state.quiz_score)
 
-    # Üstteki sayaç kartları (Soru / Cevaplanan / Kategori) kaldırıldı.
-    # Performans barı tek başına yeterli olacak.
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Soru", f"{q_index + 1} / {total_q}")
+    c2.metric("Cevaplanan", f"{answered_count} / {total_q}")
+    c3.metric("Kategori", kategori if kategori else "-")
 
     _render_quiz_completion_bar(
         correct_count=correct_count,
@@ -897,7 +864,7 @@ if menu == "🧠 Soru Bankası":
 
     with col3:
         if st.button("☑️ Soru düzelt", help="Bu soruyu Google Sheets'te 'Soru Düzelt' kolonu altında işaretler."):
-            ok, msg = flag_question_for_review(
+            ok = flag_question_for_review(
                 SHEET_ID,
                 QUESTION_WS_INDEX,
                 soru_id=soru_id,
@@ -906,9 +873,9 @@ if menu == "🧠 Soru Bankası":
             )
             if ok:
                 st.toast("☑️ Soru düzelt uyarısı Sheet'e işlendi.", icon="☑️")
-                st.success(msg)
+                st.success("Bu soru Sheet'te `Soru Düzelt` olarak işaretlendi.")
             else:
-                st.error(f"Uyarı Sheet'e yazılamadı: {msg}")
+                st.error("Uyarı Sheet'e yazılamadı. SoruID veya Sheet başlıklarını kontrol et.")
 
     with col4:
         if st.button("🔄 Baştan başla"):
@@ -937,6 +904,372 @@ if menu == "🧠 Soru Bankası":
 
         if kaynak:
             st.caption(f"📚 Kaynak: {kaynak}")
+
+
+# =========================================================
+# ===================== EKRAN MR: MİTRAL YETMEZLİK HESAPLAYICI =====
+# =========================================================
+elif menu == "🧮 Mitral Yetmezlik Hesaplayıcı":
+    st.header("🧮 Mitral Kapak Yetmezliği Hesaplayıcı")
+    st.caption(
+        "Regürjitan volüm, regürjitan fraksiyon ve PISA temelli EROA hesabı. "
+        "Amaç: MY şiddetini sayısal olarak desteklemek ve ölçüm mantığını öğretmek."
+    )
+
+    st.warning(
+        "⚠️ Bu araç karar destek/öğretim amaçlıdır. Mitral yetmezlik şiddeti tek bir sayı ile değil; "
+        "jet morfolojisi, VC/VCA, pulmoner ven akımı, CW Doppler yoğunluğu, LA/LV boyutları, ritim, yüklenme "
+        "koşulları ve klinik ile birlikte integratif değerlendirilmelidir."
+    )
+
+    def _mr_safe_div(num, den):
+        return (num / den) if den and den > 0 else 0.0
+
+    def _mr_fmt(x, digits=2):
+        try:
+            return f"{float(x):.{digits}f}"
+        except Exception:
+            return "-"
+
+    def _rf_grade(rf):
+        if rf < 30:
+            return "Hafif Yetmezlik", "low", "RF <%30: hafif aralık"
+        if rf < 50:
+            return "Orta Yetmezlik", "mid", "RF %30–49: orta aralık"
+        return "Ciddi Yetmezlik", "high", "RF ≥%50: ciddi aralık"
+
+    def _rvol_grade(rvol):
+        if rvol < 30:
+            return "Hafif", "RVol <30 mL"
+        if rvol < 60:
+            return "Orta", "RVol 30–59 mL"
+        return "Ciddi", "RVol ≥60 mL"
+
+    def _eroa_grade(eroa_cm2):
+        if eroa_cm2 is None:
+            return "Hesaplanmadı", ""
+        if eroa_cm2 < 0.20:
+            return "Hafif", "EROA <0.20 cm²"
+        if eroa_cm2 < 0.40:
+            return "Orta", "EROA 0.20–0.39 cm²"
+        return "Ciddi", "EROA ≥0.40 cm²"
+
+    def _badge_html(label, level):
+        colors = {
+            "low": ("#0f5132", "#d1e7dd", "#badbcc"),
+            "mid": ("#664d03", "#fff3cd", "#ffecb5"),
+            "high": ("#842029", "#f8d7da", "#f5c2c7"),
+            "neutral": ("#084298", "#cfe2ff", "#b6d4fe"),
+        }
+        fg, bg, border = colors.get(level, colors["neutral"])
+        return f"""
+        <div style="
+            border:1px solid {border};
+            background:{bg};
+            color:{fg};
+            border-radius:18px;
+            padding:18px 20px;
+            text-align:center;
+            margin:8px 0 14px 0;
+        ">
+            <div style="font-size:15px; opacity:0.85;">RF’ye göre sonuç</div>
+            <div style="font-size:34px; font-weight:900; line-height:1.1;">{label}</div>
+        </div>
+        """
+
+    tab_calc, tab_guide, tab_teach = st.tabs(
+        ["🧮 Hesaplayıcı", "🧭 Yönlendirici", "📚 Öğretici notlar"]
+    )
+
+    with tab_calc:
+        c0, c1, c2 = st.columns([1.2, 1, 1])
+        with c0:
+            hesap_modu = st.radio(
+                "Hesaplama modu",
+                [
+                    "Doğrudan hacim girişi",
+                    "PISA yöntemi",
+                    "Volümetrik Doppler yöntemi",
+                ],
+                horizontal=False,
+            )
+        with c1:
+            my_tipi = st.selectbox(
+                "MY mekanizması",
+                ["Primer / dejeneratif", "Sekonder / fonksiyonel", "Mekanizma belirsiz"],
+                help="Sekonder MY’de sayısal değerler klinik bağlam ve LV boyutları ile birlikte yorumlanmalıdır.",
+            )
+        with c2:
+            ritim_notu = st.selectbox(
+                "Ölçüm ritmi",
+                ["Sinüs ritmi", "Atriyal fibrilasyon / düzensiz ritim", "Belirsiz"],
+                help="AF’de en az 3–5 atım ortalaması almak daha güvenlidir.",
+            )
+
+        st.divider()
+
+        rf = 0.0
+        rvol = 0.0
+        total_sv = 0.0
+        eroa = None
+        flow_rate = None
+        forward_sv = None
+        calculation_note = ""
+
+        if hesap_modu == "Doğrudan hacim girişi":
+            st.subheader("1) Doğrudan Hacim Girişi")
+            i1, i2 = st.columns(2)
+            with i1:
+                rvol = st.number_input(
+                    "Regürjitan Volüm (RVol) (mL)",
+                    min_value=0.0,
+                    max_value=300.0,
+                    value=40.0,
+                    step=1.0,
+                    help="Eko, CMR veya volumetrik yöntemle bulunan regürjitan volüm.",
+                )
+            with i2:
+                total_sv = st.number_input(
+                    "Toplam Atım Hacmi / Mitral SV (mL)",
+                    min_value=1.0,
+                    max_value=400.0,
+                    value=100.0,
+                    step=1.0,
+                    help="Regürjitan akımı da içeren toplam LV/mitral stroke volüm.",
+                )
+            rf = _mr_safe_div(rvol, total_sv) * 100
+            calculation_note = "RF = RVol / Toplam SV × 100"
+
+        elif hesap_modu == "PISA yöntemi":
+            st.subheader("2) PISA Yöntemi")
+            st.caption("Varsayılan formül hemisferik PISA kabul eder. Birimler: r=cm, Va=cm/sn, Vmax=cm/sn, MR VTI=cm.")
+
+            p1, p2, p3, p4, p5 = st.columns(5)
+            with p1:
+                pisa_r = st.number_input("PISA yarıçapı r (cm)", min_value=0.0, max_value=3.0, value=0.80, step=0.05)
+            with p2:
+                aliasing_va = st.number_input("Aliasing hızı Va (cm/sn)", min_value=1.0, max_value=150.0, value=40.0, step=1.0)
+            with p3:
+                mr_vmax = st.number_input("Maksimum MR hızı Vmax (cm/sn)", min_value=50.0, max_value=800.0, value=500.0, step=10.0)
+            with p4:
+                mr_vti = st.number_input("MR VTI (cm)", min_value=1.0, max_value=300.0, value=150.0, step=1.0)
+            with p5:
+                total_sv = st.number_input("Toplam SV / Mitral SV (mL)", min_value=1.0, max_value=400.0, value=100.0, step=1.0)
+
+            ac1, ac2 = st.columns([1, 2])
+            with ac1:
+                use_angle = st.checkbox("Açı düzeltmesi kullan", value=False)
+            with ac2:
+                pisa_angle = st.slider(
+                    "PISA açısı (derece)",
+                    min_value=60,
+                    max_value=360,
+                    value=180,
+                    step=10,
+                    disabled=not use_angle,
+                    help="Klasik hemisfer için 180°. Daha dar akım konverjansında açı düzeltmesi yapılabilir.",
+                )
+
+            angle_factor = (pisa_angle / 180.0) if use_angle else 1.0
+            flow_rate = 2 * 3.141592653589793 * (pisa_r ** 2) * aliasing_va * angle_factor
+            eroa = _mr_safe_div(flow_rate, mr_vmax)
+            rvol = eroa * mr_vti
+            rf = _mr_safe_div(rvol, total_sv) * 100
+            calculation_note = "Flow = 2πr²Va; EROA = Flow/Vmax; RVol = EROA × MR VTI; RF = RVol/Toplam SV × 100"
+
+        else:
+            st.subheader("3) Volümetrik Doppler Yöntemi")
+            st.caption(
+                "Mantık: Toplam LV SV’den ileri LVOT SV çıkarılır. "
+                "Aort yetersizliği veya belirgin intrakardiyak şant varsa güvenilirliği azalır."
+            )
+
+            v1, v2, v3, v4 = st.columns(4)
+            with v1:
+                lvedv_calc = st.number_input("LVEDV (mL)", min_value=0.0, max_value=500.0, value=140.0, step=1.0)
+            with v2:
+                lvesv_calc = st.number_input("LVESV (mL)", min_value=0.0, max_value=500.0, value=60.0, step=1.0)
+            with v3:
+                lvot_d = st.number_input("LVOT çapı (cm)", min_value=0.1, max_value=4.0, value=2.0, step=0.05)
+            with v4:
+                lvot_vti = st.number_input("LVOT VTI (cm)", min_value=1.0, max_value=60.0, value=20.0, step=0.5)
+
+            total_sv = max(lvedv_calc - lvesv_calc, 0.0)
+            lvot_area = 3.141592653589793 * (lvot_d / 2) ** 2
+            forward_sv = lvot_area * lvot_vti
+            rvol = max(total_sv - forward_sv, 0.0)
+            rf = _mr_safe_div(rvol, total_sv) * 100
+            calculation_note = "Toplam LV SV = LVEDV − LVESV; LVOT SV = π × (LVOT çap/2)² × LVOT VTI; RVol = Toplam SV − LVOT SV"
+
+        st.divider()
+
+        label, level, rf_explain = _rf_grade(rf)
+        st.markdown(_badge_html(label, level), unsafe_allow_html=True)
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Regürjitan Fraksiyon", f"%{_mr_fmt(rf)}")
+        m2.metric("Regürjitan Volüm", f"{_mr_fmt(rvol)} mL")
+        m3.metric("Toplam SV", f"{_mr_fmt(total_sv)} mL")
+        if eroa is not None:
+            m4.metric("EROA", f"{_mr_fmt(eroa)} cm²")
+        elif forward_sv is not None:
+            m4.metric("İleri LVOT SV", f"{_mr_fmt(forward_sv)} mL")
+        else:
+            m4.metric("EROA", "—")
+
+        if flow_rate is not None:
+            e1, e2 = st.columns(2)
+            e1.metric("PISA Flow Rate", f"{_mr_fmt(flow_rate)} mL/sn")
+            e2.metric("EROA", f"{_mr_fmt(eroa)} cm²  ({_mr_fmt(eroa * 100)} mm²)")
+
+        rvol_g, rvol_txt = _rvol_grade(rvol)
+        eroa_g, eroa_txt = _eroa_grade(eroa)
+
+        st.markdown("### 🔎 Sayısal uyum kontrolü")
+        check_cols = st.columns(3)
+        check_cols[0].info(f"**RF:** {rf_explain}")
+        check_cols[1].info(f"**RVol:** {rvol_g} aralık\n\n{rvol_txt}")
+        check_cols[2].info(f"**EROA:** {eroa_g}\n\n{eroa_txt if eroa_txt else 'Bu modda EROA hesaplanmadı.'}")
+
+        severe_votes = 0
+        moderate_votes = 0
+        if rf >= 50:
+            severe_votes += 1
+        elif rf >= 30:
+            moderate_votes += 1
+
+        if rvol >= 60:
+            severe_votes += 1
+        elif rvol >= 30:
+            moderate_votes += 1
+
+        if eroa is not None:
+            if eroa >= 0.40:
+                severe_votes += 1
+            elif eroa >= 0.20:
+                moderate_votes += 1
+
+        if severe_votes >= 2 or (eroa is None and rf >= 50 and rvol >= 60):
+            st.error("🔴 Sayısal parametreler ciddi MY lehine güçlü uyum gösteriyor. Klinik ve integratif eko bulguları ile doğrula.")
+        elif severe_votes == 1 and moderate_votes >= 1:
+            st.warning("🟠 Sınırda/karma sonuç var. Ölçüm kalitesi, jet tipi, kan basıncı ve ek parametreleri kontrol et.")
+        elif moderate_votes >= 1:
+            st.warning("🟡 Sayısal parametreler orta MY aralığında. Takip ve integratif değerlendirme önemli.")
+        else:
+            st.success("🟢 Sayısal parametreler hafif MY aralığı ile uyumlu.")
+
+        with st.expander("🧪 Ölçüm güvenilirliği uyarıları", expanded=True):
+            q1, q2, q3 = st.columns(3)
+            eccentric = q1.checkbox("Eksantrik / Coanda jet")
+            multijet = q1.checkbox("Multipl jet")
+            late_systolic = q2.checkbox("Geç sistolik veya dinamik MY")
+            poor_quality = q2.checkbox("Görüntü/Doppler kalitesi sınırlı")
+            ar_shunt = q3.checkbox("Eşlik eden ciddi AY veya şant")
+            bp_unstable = q3.checkbox("Belirgin yüklenme/BP değişkenliği")
+
+            risk_count = sum([eccentric, multijet, late_systolic, poor_quality, ar_shunt, bp_unstable])
+            if ritim_notu.startswith("Atriyal"):
+                risk_count += 1
+
+            if risk_count >= 3:
+                st.error("Güvenilirlik düşük olabilir: tek ölçüme göre karar verme; 3D VCA/VC, PV akımı, CMR veya uzman eko kontrolü düşün.")
+            elif risk_count >= 1:
+                st.warning("Bazı sınırlılıklar var: ölçümü birkaç parametreyle doğrulamak iyi olur.")
+            else:
+                st.success("Belirgin güvenilirlik uyarısı seçilmedi.")
+
+        with st.expander("📐 Kullanılan formül"):
+            st.code(calculation_note, language="text")
+
+    with tab_guide:
+        st.subheader("🧭 Klinik yönlendirici karar destek")
+        st.caption("Bu bölüm hesap sonucunu klinik bağlamla birleştirir; nihai karar Heart Team / kapak ekibi ile verilmelidir.")
+
+        g1, g2, g3, g4 = st.columns(4)
+        with g1:
+            symptom = st.selectbox("Semptom", ["Yok", "Var / NYHA II-IV", "Belirsiz"])
+        with g2:
+            lvef_g = st.number_input("LVEF (%)", min_value=5.0, max_value=90.0, value=60.0, step=1.0, key="mr_guide_lvef")
+        with g3:
+            lvesd_g = st.number_input("LVESD (mm)", min_value=10.0, max_value=90.0, value=38.0, step=1.0, key="mr_guide_lvesd")
+        with g4:
+            spap_g = st.number_input("sPAP (mmHg)", min_value=0.0, max_value=120.0, value=35.0, step=1.0, key="mr_guide_spap")
+
+        g5, g6, g7 = st.columns(3)
+        new_af = g5.checkbox("Yeni AF var")
+        pulmonary_venous_reversal = g6.checkbox("Pulmoner ven sistolik reversiyon var")
+        flail_leaflet = g7.checkbox("Flail/prolapsus belirgin")
+
+        severe_by_numbers = rf >= 50 or rvol >= 60 or (eroa is not None and eroa >= 0.40)
+        severe_support = pulmonary_venous_reversal or flail_leaflet
+
+        st.markdown("### Öneri özeti")
+
+        if not severe_by_numbers and not severe_support:
+            st.success(
+                "Şu an ciddi MY lehine güçlü bir sinyal yok. Ölçümler kaliteli ise periyodik takip ve klinik bağlama göre kontrol uygun görünür."
+            )
+        else:
+            if my_tipi == "Primer / dejeneratif":
+                if symptom.startswith("Var") or lvef_g <= 60 or lvesd_g >= 40:
+                    st.error(
+                        "Primer MY + ciddi MY şüphesi + semptom veya LV disfonksiyon/dilatasyon kriteri var. "
+                        "Mitral kapak tamiri/cerrahi açısından kapak ekibi değerlendirmesi önerilir."
+                    )
+                elif new_af or spap_g > 50:
+                    st.warning(
+                        "Asemptomatik primer ciddi MY olabilir; yeni AF veya pulmoner basınç yüksekliği varsa ileri değerlendirme ve kapak ekibi görüşü düşün."
+                    )
+                else:
+                    st.info(
+                        "Asemptomatik primer ciddi MY olasılığı var. Deneyimli merkezde tamir edilebilirlik, seri LV ölçümleri ve yakın takip planı yap."
+                    )
+            elif my_tipi == "Sekonder / fonksiyonel":
+                st.warning(
+                    "Sekonder MY’de önce optimal medikal tedavi, volüm kontrolü ve CRT endikasyonu değerlendirilir. "
+                    "Buna rağmen ciddi semptomatik MY sürüyorsa anatomiye göre TEER/cerrahi için Heart Team değerlendirmesi düşün."
+                )
+            else:
+                st.info(
+                    "Mekanizma belirsiz: önce primer-sekonder ayrımını netleştir. TTE/TEE, 3D değerlendirme ve gerekirse CMR ile integratif analiz yap."
+                )
+
+        st.markdown("### Kontrol listesi")
+        st.checkbox("Kan basıncı ve volüm durumu ölçüm sırasında uygun muydu?")
+        st.checkbox("VC/3D VCA, PISA, RVol/RF ve pulmoner ven akımı birbiriyle uyumlu mu?")
+        st.checkbox("LA/LV boyutları MY şiddeti ve kronisite ile uyumlu mu?")
+        st.checkbox("Eksantrik veya multipl jet nedeniyle PISA/jet alanı yanıltıcı olabilir mi?")
+        st.checkbox("AF varsa çoklu atım ortalaması alındı mı?")
+
+    with tab_teach:
+        st.subheader("📚 Kısa öğretici notlar")
+
+        st.markdown(
+            """
+**1) Regürjitan fraksiyon (RF)**  
+Toplam LV/mitral atım hacminin yüzde kaçının sol atriyuma geri kaçtığını gösterir.  
+Pratik eşikler: **<%30 hafif**, **%30–49 orta**, **≥%50 ciddi**.
+
+**2) Regürjitan volüm (RVol)**  
+Her sistolde LA'ya geri dönen hacimdir. Genel pratikte **≥60 mL ciddi MY** lehinedir.
+
+**3) EROA**  
+Etkin regürjitan orifis alanıdır. PISA ile hesaplanabilir. Genel pratikte **≥0.40 cm² ciddi MY** lehinedir.
+
+**4) PISA nerede zorlanır?**  
+Eksantrik jet, multipl jet, eliptik orifis, geç sistolik MY, AF, kötü görüntü, yanlış aliasing hızı ve yanlış yarıçap ölçümü PISA'yı yanıltabilir.
+
+**5) En doğru yaklaşım**  
+MY şiddeti; **sayısal ölçümler + kapak morfolojisi + pulmoner ven akımı + LA/LV etkilenimi + klinik** ile birlikte değerlendirilir.
+"""
+        )
+
+        st.info(
+            "Pratik ipucu: Sonuç ciddi çıkıyor ama LA/LV hiç etkilenmemişse veya CW Doppler zayıfsa ölçümü tekrar kontrol et. "
+            "Tersi durumda, eksantrik jetlerde renkli Doppler jet alanı küçük görünse bile MY ciddi olabilir."
+        )
+
+
 
 # =========================================================
 # ===================== EKRAN 4: AV TAM BLOK - İLETİ SİSTEMİ PACING ==
