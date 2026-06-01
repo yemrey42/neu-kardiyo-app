@@ -469,10 +469,6 @@ with st.sidebar:
 # =========================================================
 if menu == "🧠 Soru Bankası":
     st.header("🧠 Kardiyoloji Soru Bankası")
-    st.caption(
-        "Sorular Google Sheets’ten çekilir. Her yeni oturumda karışık sırayla gelir. "
-        "Cevap sonrası doğru/yanlış, açıklama ve varsa kaynak gösterilir."
-    )
 
     # -----------------------------------------------------
     # Google Sheets başlık yapısı:
@@ -510,6 +506,36 @@ if menu == "🧠 Soru Bankası":
         st.warning("Aktif soru bulunamadı. Sheet’te Aktif kolonunu TRUE yap.")
         st.stop()
 
+    # Sınıflandırma: Google Sheet'teki Kategori kolonundan otomatik gelir.
+    # Kategori değişince aşağıdaki quiz_source_signature değişir ve oturum/bar sıfırlanır.
+    all_category_label = "Tüm sorular (karışık)"
+    category_options = sorted(
+        [
+            str(c).strip()
+            for c in dfq["Kategori"].dropna().unique().tolist()
+            if str(c).strip() and str(c).strip().lower() not in ["nan", "none"]
+        ],
+        key=lambda x: x.lower(),
+    )
+    category_select_options = [all_category_label] + category_options
+
+    if st.session_state.get("quiz_category_select") not in category_select_options:
+        st.session_state.quiz_category_select = all_category_label
+
+    selected_quiz_category = st.selectbox(
+        "Sınıflandırma",
+        options=category_select_options,
+        key="quiz_category_select",
+        help="Kategori Google Sheets'teki Kategori kolonundan otomatik oluşur.",
+    )
+
+    if selected_quiz_category != all_category_label:
+        dfq = dfq[dfq["Kategori"].astype(str).str.strip() == selected_quiz_category].copy()
+
+    if dfq.empty:
+        st.warning("Bu sınıflandırmada aktif soru bulunamadı.")
+        st.stop()
+
     # SoruID’ye göre önce standart sıraya al; sonra bu standart liste üzerinden oturumluk karıştır.
     dfq["_SoruID_num"] = pd.to_numeric(dfq["SoruID"], errors="coerce")
     dfq = dfq.sort_values(["_SoruID_num", "SoruID"], na_position="last").drop(columns=["_SoruID_num"])
@@ -518,17 +544,18 @@ if menu == "🧠 Soru Bankası":
     # SoruID tekrar etse bile oturum sırası bozulmasın diye benzersiz iç UID oluştur.
     dfq["_quiz_uid"] = dfq["SoruID"].astype(str).str.strip() + "__" + dfq.index.astype(str)
     question_uids_current = dfq["_quiz_uid"].tolist()
+    quiz_source_signature = (selected_quiz_category, tuple(question_uids_current))
 
-    # Her yeni tarayıcı oturumunda veya soru listesi değişince random sıra üret.
+    # Her yeni tarayıcı oturumunda, kategori değişince veya soru listesi değişince random sıra üret.
     # Streamlit rerun oldukça sıra değişmesin diye session_state içinde saklanır.
     if (
         "quiz_order" not in st.session_state
         or "quiz_order_source" not in st.session_state
-        or st.session_state.quiz_order_source != question_uids_current
+        or st.session_state.quiz_order_source != quiz_source_signature
     ):
         shuffled_df = dfq.sample(frac=1).reset_index(drop=True)
         st.session_state.quiz_order = shuffled_df["_quiz_uid"].tolist()
-        st.session_state.quiz_order_source = question_uids_current
+        st.session_state.quiz_order_source = quiz_source_signature
         st.session_state.quiz_index = 0
         st.session_state.quiz_answered = False
         st.session_state.quiz_selected = None
@@ -563,7 +590,7 @@ if menu == "🧠 Soru Bankası":
     def _reset_quiz_with_new_order():
         shuffled_df = dfq.sample(frac=1).reset_index(drop=True)
         st.session_state.quiz_order = shuffled_df["_quiz_uid"].tolist()
-        st.session_state.quiz_order_source = question_uids_current
+        st.session_state.quiz_order_source = quiz_source_signature
         st.session_state.quiz_index = 0
         st.session_state.quiz_answered = False
         st.session_state.quiz_selected = None
@@ -727,7 +754,7 @@ if menu == "🧠 Soru Bankası":
 <body>
   <div class="quiz-wrap">
     <div class="quiz-head">
-      <div>Performans barı &nbsp; {answered_count}/{total_count} soru çözüldü (%{done_pct:.0f})</div>
+      <div>Performans barı</div>
       <div class="quiz-stats">✅ {correct_count} doğru &nbsp; | &nbsp; ❌ {wrong_count} yanlış &nbsp; | &nbsp; {net_emoji} {net_label} &nbsp; | &nbsp; Başarı: %{success_pct}</div>
     </div>
     <div class="quiz-bar">
@@ -737,9 +764,9 @@ if menu == "🧠 Soru Bankası":
       <div class="zero-label">0</div>
     </div>
     <div class="quiz-foot">
-      <span>❌ -10</span>
-      <span>Kalan: {remaining_count}</span>
-      <span>✅ +10</span>
+      <span>❌ negatif net</span>
+      <span>0</span>
+      <span>✅ pozitif net</span>
     </div>
   </div>
 </body>
@@ -756,10 +783,9 @@ if menu == "🧠 Soru Bankası":
         wrong_count = max(answered_count - correct_count, 0)
         success_pct = round((correct_count / answered_count) * 100) if answered_count else 0
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Toplam soru", total_q)
-        c2.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
-        c3.metric("Başarı", f"%{success_pct}")
+        c1, c2 = st.columns(2)
+        c1.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
+        c2.metric("Başarı", f"%{success_pct}")
 
         _render_quiz_completion_bar(
             correct_count=correct_count,
@@ -801,14 +827,9 @@ if menu == "🧠 Soru Bankası":
         )
         st.stop()
 
-    # Üst bilgi kartları ve yapılma oranı
+    # Yapılma oranı yalnızca performans barında izlenir; soru/cevaplanan sayaçları gösterilmez.
     answered_count = st.session_state.quiz_index + (1 if st.session_state.quiz_answered else 0)
     correct_count = int(st.session_state.quiz_score)
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Soru", f"{q_index + 1} / {total_q}")
-    c2.metric("Cevaplanan", f"{answered_count} / {total_q}")
-    c3.metric("Kategori", kategori if kategori else "-")
 
     _render_quiz_completion_bar(
         correct_count=correct_count,
@@ -819,20 +840,21 @@ if menu == "🧠 Soru Bankası":
     st.markdown("---")
 
     # Soru metni
-    st.markdown(f"### Soru {q_index + 1}")
+    st.markdown("### Soru")
     if kategori:
         st.caption(f"Kategori: {kategori}")
     st.markdown(f"#### {soru}")
 
     radio_options = list(range(len(secenekler)))
 
+    quiz_uid = str(row.get("_quiz_uid", f"{soru_id}_{q_index}"))
     selected = st.radio(
         "Cevabınız:",
         options=radio_options,
         format_func=lambda i: f"{secenekler[i][0]}) {secenekler[i][1]}",
         index=st.session_state.quiz_selected if st.session_state.quiz_selected is not None else None,
         disabled=st.session_state.quiz_answered,
-        key=f"quiz_radio_{soru_id}_{q_index}",
+        key=f"quiz_radio_{selected_quiz_category}_{quiz_uid}",
     )
 
     st.session_state.quiz_selected = selected
@@ -1288,7 +1310,7 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
         st.markdown("##### ⚙️ İşlem Seçimi")
         mode = st.radio(
             "Mod:",
-            ["Yeni Kayıt", "Düzenleme"],
+            ["Yeni Kayıt", "Düzenleme", "Kontrol Hasta"],
             horizontal=True,
             label_visibility="collapsed",
             key="pacing_mode",
@@ -1302,6 +1324,8 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
                 st.success(f"Seçildi: {current.get('Dosya Numarası','')} | {current.get('Ziyaret','')}")
         elif mode == "Düzenleme":
             st.warning("Düzenlenecek kayıt yok.")
+        elif mode == "Kontrol Hasta":
+            st.info("Kayıtlı hasta listesinden hasta seçip sadece kontrol eko parametrelerini girebilirsin.")
 
     with col_right:
         with st.expander("📋 KAYITLI LİSTE / ARAMA / SİLME", expanded=True):
@@ -1352,6 +1376,146 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
 
     VISIT_LABELS = ["1. Başlangıç", "2. Kontrol"]
     VISIT_CODE = {"1. Başlangıç": "BASLANGIC", "2. Kontrol": "KONTROL"}
+
+    if mode == "Kontrol Hasta":
+        if dfp.empty or "Dosya Numarası" not in dfp.columns:
+            st.warning("Kontrol girilecek kayıtlı hasta bulunamadı. Önce başlangıç kaydı oluştur.")
+            st.stop()
+
+        patient_source = dfp.copy()
+        patient_source["Dosya Numarası"] = patient_source["Dosya Numarası"].astype(str).str.strip()
+        patient_source = patient_source[patient_source["Dosya Numarası"] != ""].copy()
+
+        if patient_source.empty:
+            st.warning("Kontrol girilecek geçerli dosya numarası bulunamadı.")
+            st.stop()
+
+        patient_options = sorted(patient_source["Dosya Numarası"].unique().tolist())
+        selected_patient_no = st.selectbox(
+            "Kontrol verisi girilecek hasta",
+            patient_options,
+            key="pacing_control_patient",
+        )
+
+        patient_rows = patient_source[patient_source["Dosya Numarası"] == selected_patient_no].copy()
+        if "Ziyaret" in patient_rows.columns:
+            patient_rows["_visit_priority"] = patient_rows["Ziyaret"].astype(str).apply(
+                lambda x: 0 if ("Başlangıç" in x or "BASLANGIC" in x.upper()) else 1
+            )
+            patient_rows = patient_rows.sort_values("_visit_priority")
+
+        base_patient = patient_rows.iloc[0].to_dict()
+
+        def bgs(k): return str(base_patient.get(k, ""))
+        def bgf(k):
+            try:
+                return float(base_patient.get(k, 0))
+            except Exception:
+                return 0.0
+
+        st.info(
+            f"Seçilen hasta: **{selected_patient_no}**"
+            + (f" | Pacing tipi: **{bgs('Pacing Tipi')}**" if bgs("Pacing Tipi") else "")
+        )
+
+        with st.form("pacing_control_form"):
+            st.markdown("### 🫀 Kontrol Eko Parametreleri")
+
+            cdate, chekim = st.columns(2)
+            kontrol_tarihi = cdate.date_input("Kontrol Tarihi", value=datetime.now().date())
+            kontrol_hekim = chekim.text_input("Kontrolü Giren Hekim (Zorunlu)", value="")
+
+            kayit_id = f"{selected_patient_no}_KONTROL_{kontrol_tarihi.strftime('%Y%m%d')}"
+            st.caption(f"🆔 KayıtID: {kayit_id}")
+
+            st.markdown("#### RV")
+            r1, r2, r3, r4 = st.columns(4)
+            rv_fwls = r1.number_input("RV FWLS (%)", value=0.0, key="pacing_ctrl_rv_fwls")
+            endogls = r1.number_input("EndoGLS (%)", value=0.0, key="pacing_ctrl_endogls")
+            myogls = r1.number_input("MyoGLS (%)", value=0.0, key="pacing_ctrl_myogls")
+
+            eda = r2.number_input("EDA", value=0.0, key="pacing_ctrl_eda")
+            esa = r2.number_input("ESA", value=0.0, key="pacing_ctrl_esa")
+            rv_fac = r2.number_input("RV FAC (%)", value=0.0, key="pacing_ctrl_rv_fac")
+
+            rv_grs = r3.number_input("RV GRS (%)", value=0.0, key="pacing_ctrl_rv_grs")
+            tyvel = r3.number_input("TY vel. (m/sn)", value=0.0, key="pacing_ctrl_tyvel")
+
+            rvsm = r4.number_input("RV Sm (cm/sn)", value=0.0, key="pacing_ctrl_rvsm")
+            tapse = r4.number_input("TAPSE (mm)", value=0.0, key="pacing_ctrl_tapse")
+
+            st.markdown("#### LV / LA")
+            lv1, lv2, lv3 = st.columns(3)
+            lv_gls = lv1.number_input("LV-GLS (%)", value=0.0, key="pacing_ctrl_lv_gls")
+            lvedv = lv2.number_input("LVEDV (mL)", value=0.0, key="pacing_ctrl_lvedv")
+            lvesv = lv2.number_input("LVESV (mL)", value=0.0, key="pacing_ctrl_lvesv")
+            sv_lv = lv3.number_input("SV (mL)", value=0.0, key="pacing_ctrl_sv_lv")
+
+            la_gls = lv1.number_input("LA-GLS (%)", value=0.0, key="pacing_ctrl_la_gls")
+            laedv = lv2.number_input("LAEDV (mL)", value=0.0, key="pacing_ctrl_laedv")
+            laesv = lv3.number_input("LAESV (mL)", value=0.0, key="pacing_ctrl_laesv")
+
+            bsa_safe = bgf("BSA")
+            if bsa_safe <= 0:
+                boy_base = bgf("Boy")
+                kilo_base = bgf("Kilo")
+                bsa_safe = (boy_base * kilo_base / 3600) ** 0.5 if (boy_base > 0 and kilo_base > 0) else 0.0
+
+            laedvi = (laedv / bsa_safe) if bsa_safe > 0 else 0.0
+            laesvi = (laesv / bsa_safe) if bsa_safe > 0 else 0.0
+            lavi = laesvi
+            laci = (laedvi / laesvi) if laesvi > 0 else 0.0
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("LAVI (mL/m²)", f"{lavi:.1f}")
+            m2.metric("LAEDVi (mL/m²)", f"{laedvi:.1f}")
+            m3.metric("LAESVi (mL/m²)", f"{laesvi:.1f}")
+            m4.metric("LACi (LAEDVi/LAESVi)", f"{laci:.2f}")
+
+            kontrol_notu = st.text_area("Kontrol eko notu", value="")
+
+            submitted_control = st.form_submit_button("💾 KONTROL EKOSUNU KAYDET", type="primary")
+
+            if submitted_control:
+                if not kontrol_hekim:
+                    st.error("Kontrolü giren hekim zorunlu!")
+                else:
+                    control_payload = {
+                        "KayıtID": kayit_id,
+                        "Dosya Numarası": selected_patient_no,
+                        "Ziyaret": "2. Kontrol",
+                        "Tarih": str(kontrol_tarihi),
+                        "Hekim": kontrol_hekim,
+                        "Pacing Tipi": bgs("Pacing Tipi"),
+                        "RV FWLS (%)": rv_fwls,
+                        "EndoGLS (%)": endogls,
+                        "MyoGLS (%)": myogls,
+                        "EDA": eda,
+                        "ESA": esa,
+                        "RV FAC (%)": rv_fac,
+                        "RV GRS (%)": rv_grs,
+                        "TY vel. (m/sn)": tyvel,
+                        "RV Sm (cm/sn)": rvsm,
+                        "TAPSE (mm)": tapse,
+                        "LV-GLS (%)": lv_gls,
+                        "LVEDV (mL)": lvedv,
+                        "LVESV (mL)": lvesv,
+                        "SV (mL)": sv_lv,
+                        "LA-GLS (%)": la_gls,
+                        "LAEDV (mL)": laedv,
+                        "LAESV (mL)": laesv,
+                        "LAVI (mL/m2)": lavi,
+                        "LAEDVi (mL/m2)": laedvi,
+                        "LAESVi (mL/m2)": laesvi,
+                        "LACi": laci,
+                        "Kontrol Eko Notu": kontrol_notu,
+                    }
+                    save_data_row(SHEET_ID, control_payload, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
+                    st.success(f"✅ Kontrol eko kaydı oluşturuldu: {kayit_id}")
+                    time.sleep(0.25)
+                    st.rerun()
+
+        st.stop()
 
     with st.form("pacing_main_form"):
         st.markdown("### 👤 Klinik")
