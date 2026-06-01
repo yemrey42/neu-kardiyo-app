@@ -1597,13 +1597,21 @@ elif menu == "🫀 Diyastolik Disfonksiyon Hesaplayıcı":
     with st.expander("📚 Kısa öğretici notlar", expanded=False):
         st.markdown(
             """
-**Pratik mantık:** Diyastolik değerlendirmede tek parametreye güvenilmez; mitral inflow, annüler e', E/e', TR Vmax, LAVI ve mümkünse LARS birlikte yorumlanır.
-
-**E/e' yorumu:** Ortalama E/e' yüksekliği dolum basıncı artışını destekler; ancak ciddi MY, MS, ileri MAC, protez/TEER ve kötü Doppler kalitesinde yanıltıcı olabilir.
-
-**LARS:** Ölçüm güvenilirse ≤18% değeri kronik LAP artışı lehine güçlü destek sağlar.
-
-**AF:** A dalgası olmadığı için E/A ve klasik gradeleme yerine LAP tahmini yapılır.
+- Relaksasyon bozulursa **e′ düşer**; compliance bozulursa **LAP yükselir**.
+- **Grade I = gevşeme bozukluğu**; **Grade II–III = basınç yükü**.
+- **LVEDP erken bozulur**, LAP/PCWP daha geç yükselir.
+- **E/e′ LAP’ı**, **Ar-A LVEDP’yi** daha iyi anlatır.
+- **HFpEF tanısı için EF normal yetmez**; yüksek filling pressure kanıtı gerekir.
+- **PH’de LAP yüksek mi?** sorusu, hastanın **Grup 2 mi PAH tarafı mı** olduğunu belirler.
+- **Restriktif KMP’de e′ düşük**; **konstriksiyonda septal e′ korunur**.
+- Mitral kapak hastaysa **mitral inflow’a**, annülüs hastaysa **e′ye** dikkat.
+- **LAVI kronik yükü**, **LARS daha erken fonksiyonel bozulmayı** gösterebilir.
+- **MR + normal EF:** E/e′ güvenilmez; **Ar-A >30 ms** ve **IVRT/TE-e′ <5.6** daha değerli.
+- **Restriktif = kas hasta → e′ düşük**.
+- **Konstriktif = kılıf hasta → e′ korunur**.
+- **HCM’de >orta MR varsa** E/e′ ve LAVI yanıltıcı; **Ar-A ve TR** daha güvenilir.
+- **PH’de septal e′ etkilenebilir**; bu yüzden **lateral E/e′ ve LARS** daha değerli olabilir.
+- **AF’de filling pressure yüksekse** mitral E dalgası atımdan atıma daha az değişir.
 """
         )
 
