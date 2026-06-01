@@ -506,35 +506,8 @@ if menu == "🧠 Soru Bankası":
         st.warning("Aktif soru bulunamadı. Sheet’te Aktif kolonunu TRUE yap.")
         st.stop()
 
-    # Sınıflandırma: Google Sheet'teki Kategori kolonundan otomatik gelir.
-    # Kategori değişince aşağıdaki quiz_source_signature değişir ve oturum/bar sıfırlanır.
-    all_category_label = "Tüm sorular (karışık)"
-    category_options = sorted(
-        [
-            str(c).strip()
-            for c in dfq["Kategori"].dropna().unique().tolist()
-            if str(c).strip() and str(c).strip().lower() not in ["nan", "none"]
-        ],
-        key=lambda x: x.lower(),
-    )
-    category_select_options = [all_category_label] + category_options
-
-    if st.session_state.get("quiz_category_select") not in category_select_options:
-        st.session_state.quiz_category_select = all_category_label
-
-    selected_quiz_category = st.selectbox(
-        "Sınıflandırma",
-        options=category_select_options,
-        key="quiz_category_select",
-        help="Kategori Google Sheets'teki Kategori kolonundan otomatik oluşur.",
-    )
-
-    if selected_quiz_category != all_category_label:
-        dfq = dfq[dfq["Kategori"].astype(str).str.strip() == selected_quiz_category].copy()
-
-    if dfq.empty:
-        st.warning("Bu sınıflandırmada aktif soru bulunamadı.")
-        st.stop()
+    # Sorular aktif listenin tamamından rastgele gelir.
+    # Sınıflandırma filtresi şimdilik kaldırıldı; Sheet'teki Kategori kolonu yalnızca bilgi amaçlı kullanılabilir.
 
     # SoruID’ye göre önce standart sıraya al; sonra bu standart liste üzerinden oturumluk karıştır.
     dfq["_SoruID_num"] = pd.to_numeric(dfq["SoruID"], errors="coerce")
@@ -544,9 +517,9 @@ if menu == "🧠 Soru Bankası":
     # SoruID tekrar etse bile oturum sırası bozulmasın diye benzersiz iç UID oluştur.
     dfq["_quiz_uid"] = dfq["SoruID"].astype(str).str.strip() + "__" + dfq.index.astype(str)
     question_uids_current = dfq["_quiz_uid"].tolist()
-    quiz_source_signature = (selected_quiz_category, tuple(question_uids_current))
+    quiz_source_signature = tuple(question_uids_current)
 
-    # Her yeni tarayıcı oturumunda, kategori değişince veya soru listesi değişince random sıra üret.
+    # Her yeni tarayıcı oturumunda veya soru listesi değişince random sıra üret.
     # Streamlit rerun oldukça sıra değişmesin diye session_state içinde saklanır.
     if (
         "quiz_order" not in st.session_state
@@ -854,7 +827,7 @@ if menu == "🧠 Soru Bankası":
         format_func=lambda i: f"{secenekler[i][0]}) {secenekler[i][1]}",
         index=st.session_state.quiz_selected if st.session_state.quiz_selected is not None else None,
         disabled=st.session_state.quiz_answered,
-        key=f"quiz_radio_{selected_quiz_category}_{quiz_uid}",
+        key=f"quiz_radio_{quiz_uid}",
     )
 
     st.session_state.quiz_selected = selected
@@ -1428,21 +1401,26 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
             kayit_id = f"{selected_patient_no}_KONTROL_{kontrol_tarihi.strftime('%Y%m%d')}"
             st.caption(f"🆔 KayıtID: {kayit_id}")
 
-            st.markdown("#### RV")
-            r1, r2, r3, r4 = st.columns(4)
-            rv_fwls = r1.number_input("RV FWLS (%)", value=0.0, key="pacing_ctrl_rv_fwls")
-            endogls = r1.number_input("EndoGLS (%)", value=0.0, key="pacing_ctrl_endogls")
-            myogls = r1.number_input("MyoGLS (%)", value=0.0, key="pacing_ctrl_myogls")
+            def _rv_control_inputs(prefix: str, title: str) -> Dict[str, float]:
+                st.markdown(f"#### RV — {title}")
+                r1, r2, r3, r4 = st.columns(4)
+                values = {
+                    "RV FWLS (%)": r1.number_input(f"{title} RV FWLS (%)", value=0.0, key=f"pacing_ctrl_{prefix}_rv_fwls"),
+                    "EndoGLS (%)": r1.number_input(f"{title} EndoGLS (%)", value=0.0, key=f"pacing_ctrl_{prefix}_endogls"),
+                    "MyoGLS (%)": r1.number_input(f"{title} MyoGLS (%)", value=0.0, key=f"pacing_ctrl_{prefix}_myogls"),
+                    "EDA": r2.number_input(f"{title} EDA", value=0.0, key=f"pacing_ctrl_{prefix}_eda"),
+                    "ESA": r2.number_input(f"{title} ESA", value=0.0, key=f"pacing_ctrl_{prefix}_esa"),
+                    "RV FAC (%)": r2.number_input(f"{title} RV FAC (%)", value=0.0, key=f"pacing_ctrl_{prefix}_rv_fac"),
+                    "RV GRS (%)": r3.number_input(f"{title} RV GRS (%)", value=0.0, key=f"pacing_ctrl_{prefix}_rv_grs"),
+                    "TY vel. (m/sn)": r3.number_input(f"{title} TY vel. (m/sn)", value=0.0, key=f"pacing_ctrl_{prefix}_tyvel"),
+                    "RV Sm (cm/sn)": r4.number_input(f"{title} RV Sm (cm/sn)", value=0.0, key=f"pacing_ctrl_{prefix}_rvsm"),
+                    "TAPSE (mm)": r4.number_input(f"{title} TAPSE (mm)", value=0.0, key=f"pacing_ctrl_{prefix}_tapse"),
+                }
+                st.write("")
+                return values
 
-            eda = r2.number_input("EDA", value=0.0, key="pacing_ctrl_eda")
-            esa = r2.number_input("ESA", value=0.0, key="pacing_ctrl_esa")
-            rv_fac = r2.number_input("RV FAC (%)", value=0.0, key="pacing_ctrl_rv_fac")
-
-            rv_grs = r3.number_input("RV GRS (%)", value=0.0, key="pacing_ctrl_rv_grs")
-            tyvel = r3.number_input("TY vel. (m/sn)", value=0.0, key="pacing_ctrl_tyvel")
-
-            rvsm = r4.number_input("RV Sm (cm/sn)", value=0.0, key="pacing_ctrl_rvsm")
-            tapse = r4.number_input("TAPSE (mm)", value=0.0, key="pacing_ctrl_tapse")
+            rv_unipolar = _rv_control_inputs("unipolar", "Unipolar mod")
+            rv_bipolar = _rv_control_inputs("bipolar", "Bipolar mod")
 
             st.markdown("#### LV / LA")
             lv1, lv2, lv3 = st.columns(3)
@@ -1472,8 +1450,6 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
             m3.metric("LAESVi (mL/m²)", f"{laesvi:.1f}")
             m4.metric("LACi (LAEDVi/LAESVi)", f"{laci:.2f}")
 
-            kontrol_notu = st.text_area("Kontrol eko notu", value="")
-
             submitted_control = st.form_submit_button("💾 KONTROL EKOSUNU KAYDET", type="primary")
 
             if submitted_control:
@@ -1487,16 +1463,26 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
                         "Tarih": str(kontrol_tarihi),
                         "Hekim": kontrol_hekim,
                         "Pacing Tipi": bgs("Pacing Tipi"),
-                        "RV FWLS (%)": rv_fwls,
-                        "EndoGLS (%)": endogls,
-                        "MyoGLS (%)": myogls,
-                        "EDA": eda,
-                        "ESA": esa,
-                        "RV FAC (%)": rv_fac,
-                        "RV GRS (%)": rv_grs,
-                        "TY vel. (m/sn)": tyvel,
-                        "RV Sm (cm/sn)": rvsm,
-                        "TAPSE (mm)": tapse,
+                        "Unipolar RV FWLS (%)": rv_unipolar["RV FWLS (%)"],
+                        "Unipolar EndoGLS (%)": rv_unipolar["EndoGLS (%)"],
+                        "Unipolar MyoGLS (%)": rv_unipolar["MyoGLS (%)"],
+                        "Unipolar EDA": rv_unipolar["EDA"],
+                        "Unipolar ESA": rv_unipolar["ESA"],
+                        "Unipolar RV FAC (%)": rv_unipolar["RV FAC (%)"],
+                        "Unipolar RV GRS (%)": rv_unipolar["RV GRS (%)"],
+                        "Unipolar TY vel. (m/sn)": rv_unipolar["TY vel. (m/sn)"],
+                        "Unipolar RV Sm (cm/sn)": rv_unipolar["RV Sm (cm/sn)"],
+                        "Unipolar TAPSE (mm)": rv_unipolar["TAPSE (mm)"],
+                        "Bipolar RV FWLS (%)": rv_bipolar["RV FWLS (%)"],
+                        "Bipolar EndoGLS (%)": rv_bipolar["EndoGLS (%)"],
+                        "Bipolar MyoGLS (%)": rv_bipolar["MyoGLS (%)"],
+                        "Bipolar EDA": rv_bipolar["EDA"],
+                        "Bipolar ESA": rv_bipolar["ESA"],
+                        "Bipolar RV FAC (%)": rv_bipolar["RV FAC (%)"],
+                        "Bipolar RV GRS (%)": rv_bipolar["RV GRS (%)"],
+                        "Bipolar TY vel. (m/sn)": rv_bipolar["TY vel. (m/sn)"],
+                        "Bipolar RV Sm (cm/sn)": rv_bipolar["RV Sm (cm/sn)"],
+                        "Bipolar TAPSE (mm)": rv_bipolar["TAPSE (mm)"],
                         "LV-GLS (%)": lv_gls,
                         "LVEDV (mL)": lvedv,
                         "LVESV (mL)": lvesv,
@@ -1508,7 +1494,6 @@ elif menu == "🫀 AV tam blok-ileti sistemi pacing":
                         "LAEDVi (mL/m2)": laedvi,
                         "LAESVi (mL/m2)": laesvi,
                         "LACi": laci,
-                        "Kontrol Eko Notu": kontrol_notu,
                     }
                     save_data_row(SHEET_ID, control_payload, unique_col="KayıtID", worksheet_index=PACED_WS_INDEX)
                     st.success(f"✅ Kontrol eko kaydı oluşturuldu: {kayit_id}")
