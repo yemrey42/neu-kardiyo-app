@@ -437,6 +437,7 @@ with st.sidebar:
         [
             "🧠 Soru Bankası",
             "🧮 Mitral Yetmezlik Hesaplayıcı",
+            "🫀 Diyastolik Disfonksiyon Hesaplayıcı",
             "🏥 H-Type HT Çalışması",
             "🫀 AV tam blok-ileti sistemi pacing",
             "🫀 AFMR – TEE LV-GLS",
@@ -1264,6 +1265,347 @@ MY şiddeti; **sayısal ölçümler + kapak morfolojisi + pulmoner ven akımı +
             "Tersi durumda, eksantrik jetlerde renkli Doppler jet alanı küçük görünse bile MY ciddi olabilir."
         )
 
+
+
+
+# =========================================================
+# ===================== EKRAN DD: DİYASTOLİK DİSFONKSİYON HESAPLAYICI =====
+# =========================================================
+elif menu == "🫀 Diyastolik Disfonksiyon Hesaplayıcı":
+    st.header("🫀 Diyastolik Disfonksiyon Hesaplayıcı")
+    st.caption(
+        "ASE 2025/2026 pratik algoritmasına göre diyastolik disfonksiyon, LV dolum basıncı ve grade değerlendirmesi. "
+        "Amaç: hızlı klinik karar desteği; nihai yorum her zaman ölçüm kalitesi ve klinik bağlamla yapılmalıdır."
+    )
+
+    st.warning(
+        "⚠️ Bu araç karar destek/öğretim amaçlıdır. Ciddi kapak hastalığı, protez/TEER, ileri MAC, konstriksiyon, "
+        "belirgin non-kardiyak pulmoner hipertansiyon veya kötü Doppler kalitesinde standart algoritma yanıltıcı olabilir."
+    )
+
+    def _dd_safe_div(num, den):
+        return (num / den) if den and den > 0 else 0.0
+
+    def _dd_fmt(x, digits=2):
+        try:
+            return f"{float(x):.{digits}f}"
+        except Exception:
+            return "—"
+
+    def _dd_bool_txt(flag):
+        return "Pozitif" if flag else "Negatif"
+
+    def _dd_badge_html(title, subtitle, level="neutral"):
+        colors = {
+            "normal": ("#0f5132", "#d1e7dd", "#badbcc"),
+            "mild": ("#664d03", "#fff3cd", "#ffecb5"),
+            "high": ("#842029", "#f8d7da", "#f5c2c7"),
+            "uncertain": ("#084298", "#cfe2ff", "#b6d4fe"),
+            "neutral": ("#212529", "#e9ecef", "#ced4da"),
+        }
+        fg, bg, border = colors.get(level, colors["neutral"])
+        return f"""
+        <div style="
+            border:1px solid {border};
+            background:{bg};
+            color:{fg};
+            border-radius:18px;
+            padding:18px 20px;
+            text-align:center;
+            margin:8px 0 14px 0;
+        ">
+            <div style="font-size:15px; opacity:0.85;">{subtitle}</div>
+            <div style="font-size:32px; font-weight:900; line-height:1.1;">{title}</div>
+        </div>
+        """
+
+    def _dd_lap_label(lap_state):
+        if lap_state == "Yüksek":
+            return "Artmış LAP", "high"
+        if lap_state == "Normal":
+            return "Normal LAP", "normal"
+        return "LAP belirsiz", "uncertain"
+
+    def _dd_reliability(missing_count, special_count, support_count):
+        if special_count >= 1 or missing_count >= 2:
+            return "Düşük"
+        if missing_count == 1 or support_count == 0:
+            return "Orta"
+        return "Yüksek"
+
+    mode = st.radio(
+        "Ritim / algoritma",
+        ["Sinüs ritmi", "Atriyal fibrilasyon / flutter"],
+        horizontal=True,
+        key="dd_mode",
+    )
+
+    with st.expander("⚠️ Genel algoritmayı sınırlayan durumlar", expanded=False):
+        s1, s2, s3, s4 = st.columns(4)
+        severe_mr = s1.checkbox("Ciddi primer MY", key="dd_special_mr")
+        ms_or_mac = s2.checkbox("MS / ileri MAC", key="dd_special_ms_mac")
+        mitral_intervention = s3.checkbox("Mitral protez / TEER", key="dd_special_intervention")
+        other_special = s4.checkbox("Konstriksiyon / non-kardiyak PHT", key="dd_special_other")
+        special_count = sum([severe_mr, ms_or_mac, mitral_intervention, other_special])
+
+        if special_count:
+            st.warning(
+                "Seçilen özel durumda standart diyastolik algoritma doğrudan uygulanmamalı. "
+                "Sonuç kartını daha çok uyarı/ön değerlendirme olarak kullan."
+            )
+
+    st.divider()
+
+    if mode == "Sinüs ritmi":
+        st.subheader("🧮 Pratik sinüs ritmi algoritması")
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            lvef = st.number_input("LVEF (%)", min_value=5.0, max_value=90.0, value=60.0, step=1.0, key="dd_s_lvef")
+            mitral_e = st.number_input("Mitral E (cm/sn)", min_value=0.0, max_value=250.0, value=80.0, step=1.0, key="dd_s_e")
+            mitral_a = st.number_input("Mitral A (cm/sn)", min_value=0.0, max_value=250.0, value=70.0, step=1.0, key="dd_s_a")
+        with c2:
+            septal_e = st.number_input("Septal e' (cm/sn)", min_value=0.0, max_value=30.0, value=7.0, step=0.5, key="dd_s_septal_e")
+            lateral_e = st.number_input("Lateral e' (cm/sn)", min_value=0.0, max_value=35.0, value=9.0, step=0.5, key="dd_s_lateral_e")
+            tr_vmax = st.number_input("TR Vmax (m/sn)", min_value=0.0, max_value=6.0, value=2.5, step=0.1, key="dd_s_trv")
+        with c3:
+            lavi = st.number_input("LAVI (mL/m²)", min_value=0.0, max_value=120.0, value=30.0, step=1.0, key="dd_s_lavi")
+            lars = st.number_input("LARS (%) - opsiyonel", min_value=0.0, max_value=80.0, value=0.0, step=1.0, key="dd_s_lars", help="Ölçülmediyse 0 bırak.")
+            pv_sd = st.number_input("PV S/D - opsiyonel", min_value=0.0, max_value=5.0, value=0.0, step=0.1, key="dd_s_pvsd", help="Ölçülmediyse 0 bırak.")
+        with c4:
+            ivrt = st.number_input("IVRT (ms) - opsiyonel", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="dd_s_ivrt", help="Ölçülmediyse 0 bırak.")
+            symptomatic = st.checkbox("Dispne / HFpEF şüphesi", key="dd_s_symptom")
+            use_lars_support = st.checkbox("LARS ölçümü güvenilir", value=(lars > 0), key="dd_s_lars_reliable")
+
+        e_a = _dd_safe_div(mitral_e, mitral_a)
+        avg_e_prime = (septal_e + lateral_e) / 2 if (septal_e > 0 and lateral_e > 0) else 0.0
+        septal_ee = _dd_safe_div(mitral_e, septal_e)
+        lateral_ee = _dd_safe_div(mitral_e, lateral_e)
+        avg_ee = _dd_safe_div(mitral_e, avg_e_prime)
+
+        reduced_e_prime = bool((septal_e > 0 and septal_e <= 6) or (lateral_e > 0 and lateral_e <= 7) or (avg_e_prime > 0 and avg_e_prime <= 6.5))
+        high_ee = bool((avg_ee >= 14) or (septal_ee >= 15) or (lateral_ee >= 13))
+        high_tr = bool(tr_vmax >= 2.8)
+        high_lavi = bool(lavi > 34)
+        low_lars = bool(use_lars_support and lars > 0 and lars <= 18)
+        abnormal_ea_for_dd = bool((mitral_a > 0 and e_a <= 0.8) or (mitral_a > 0 and e_a >= 2.0))
+        pv_support = bool(pv_sd > 0 and pv_sd <= 0.67)
+        ivrt_support = bool(ivrt > 0 and ivrt <= 70)
+
+        dd_support_flags = [high_ee, low_lars, abnormal_ea_for_dd, high_lavi]
+        dd_support_count = sum(dd_support_flags)
+        if reduced_e_prime and dd_support_count >= 1:
+            dd_present = True
+        elif (not reduced_e_prime) and dd_support_count >= 2:
+            dd_present = True
+        else:
+            dd_present = False
+
+        main_positive_count = sum([reduced_e_prime, high_ee, high_tr])
+        support_positive_count = sum([high_lavi, low_lars, pv_support, ivrt_support])
+        missing_count = sum([
+            1 if mitral_e <= 0 else 0,
+            1 if mitral_a <= 0 else 0,
+            1 if septal_e <= 0 or lateral_e <= 0 else 0,
+            1 if tr_vmax <= 0 else 0,
+            1 if lavi <= 0 else 0,
+        ])
+
+        if missing_count >= 3:
+            grade = "Kararsız"
+            lap_state = "Belirsiz"
+            result_note = "Temel ölçümlerin çoğu eksik. En az E/A, e', E/e', TR Vmax ve LAVI ile tekrar değerlendir."
+        elif not dd_present and main_positive_count == 0 and support_positive_count == 0:
+            grade = "Normal"
+            lap_state = "Normal"
+            result_note = "Diyastolik disfonksiyon lehine güçlü bulgu yok."
+        elif main_positive_count == 3:
+            lap_state = "Yüksek"
+            grade = "Grade 3" if e_a >= 2.0 else "Grade 2"
+            result_note = "Ana değişkenlerin tamamı pozitif; LV dolum basıncı artmış kabul edilir."
+        elif reduced_e_prime and not high_ee and not high_tr:
+            if mitral_a > 0 and e_a <= 0.8:
+                grade = "Grade 1"
+                lap_state = "Normal"
+                result_note = "Relaksasyon bozukluğu paterni; LAP genellikle normaldir."
+            elif support_positive_count >= 1:
+                grade = "Grade 2 olası"
+                lap_state = "Yüksek"
+                result_note = "Reduced e' yanında destek parametresi pozitif; artmış LAP olasıdır."
+            else:
+                grade = "Grade 1 / Kararsız"
+                lap_state = "Normal veya belirsiz"
+                result_note = "Reduced e' var ama LAP artışı için yeterli destek yok."
+        elif (main_positive_count >= 2) or high_ee or high_tr:
+            if support_positive_count >= 1:
+                lap_state = "Yüksek"
+                grade = "Grade 3" if e_a >= 2.0 else "Grade 2"
+                result_note = "Ana ve destek parametreler artmış LAP lehine."
+            else:
+                lap_state = "Belirsiz"
+                grade = "Kararsız"
+                result_note = "Ana parametrelerde sinyal var; fakat destek parametresi yok veya negatif."
+        elif dd_present:
+            grade = "Grade 1 olası"
+            lap_state = "Normal veya belirsiz"
+            result_note = "Diyastolik disfonksiyon sinyali var, ancak artmış LAP için güçlü kanıt yok."
+        else:
+            grade = "Normal / Kararsız"
+            lap_state = "Normal veya belirsiz"
+            result_note = "Sonuç sınıra yakın; ölçüm kalitesini ve klinik bağlamı kontrol et."
+
+        if lvef < 50:
+            result_note += " LVEF <%50 olduğundan yorum klinik bağlamla birlikte yapılmalı."
+
+        reliability = _dd_reliability(missing_count, special_count, support_positive_count)
+        lap_label, lap_level = _dd_lap_label(lap_state if lap_state in ["Normal", "Yüksek"] else "Belirsiz")
+        badge_level = "normal" if grade == "Normal" else ("high" if "Grade 2" in grade or "Grade 3" in grade else ("mild" if "Grade 1" in grade else "uncertain"))
+
+        st.markdown(_dd_badge_html(grade, f"Sonuç: {lap_label} | Güvenilirlik: {reliability}", badge_level), unsafe_allow_html=True)
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("E/A", _dd_fmt(e_a, 2) if mitral_a > 0 else "—")
+        m2.metric("Ortalama e'", f"{_dd_fmt(avg_e_prime, 1)} cm/sn" if avg_e_prime > 0 else "—")
+        m3.metric("Ortalama E/e'", _dd_fmt(avg_ee, 1) if avg_ee > 0 else "—")
+        m4.metric("LAVI", f"{_dd_fmt(lavi, 1)} mL/m²" if lavi > 0 else "—")
+        m5.metric("TR Vmax", f"{_dd_fmt(tr_vmax, 1)} m/sn" if tr_vmax > 0 else "—")
+
+        st.info(f"📌 **Yorum:** {result_note}")
+
+        if symptomatic and lap_state != "Yüksek":
+            st.warning(
+                "Semptom/HFpEF şüphesi var ama istirahat bulguları net yüksek LAP göstermiyor. "
+                "Uygunsa diyastolik stres eko veya ek klinik skorlarla değerlendirme düşünülebilir."
+            )
+
+        with st.expander("🔎 Kanıt tablosu", expanded=True):
+            evidence = pd.DataFrame([
+                {"Parametre": "Reduced e'", "Değer": f"Septal {septal_e:.1f}, lateral {lateral_e:.1f}, ort {avg_e_prime:.1f}", "Eşik": "Septal ≤6 veya lateral ≤7 veya ort ≤6.5", "Sonuç": _dd_bool_txt(reduced_e_prime)},
+                {"Parametre": "Increased E/e'", "Değer": f"Ort {avg_ee:.1f} / septal {septal_ee:.1f} / lateral {lateral_ee:.1f}", "Eşik": "Ort ≥14 veya septal ≥15 veya lateral ≥13", "Sonuç": _dd_bool_txt(high_ee)},
+                {"Parametre": "TR Vmax", "Değer": f"{tr_vmax:.1f} m/sn", "Eşik": "≥2.8 m/sn", "Sonuç": _dd_bool_txt(high_tr)},
+                {"Parametre": "LAVI", "Değer": f"{lavi:.1f} mL/m²", "Eşik": ">34 mL/m²", "Sonuç": _dd_bool_txt(high_lavi)},
+                {"Parametre": "LARS", "Değer": f"{lars:.1f}%" if lars > 0 else "Ölçülmedi", "Eşik": "≤18%", "Sonuç": _dd_bool_txt(low_lars) if lars > 0 else "—"},
+                {"Parametre": "PV S/D", "Değer": f"{pv_sd:.2f}" if pv_sd > 0 else "Ölçülmedi", "Eşik": "≤0.67", "Sonuç": _dd_bool_txt(pv_support) if pv_sd > 0 else "—"},
+                {"Parametre": "IVRT", "Değer": f"{ivrt:.0f} ms" if ivrt > 0 else "Ölçülmedi", "Eşik": "≤70 ms", "Sonuç": _dd_bool_txt(ivrt_support) if ivrt > 0 else "—"},
+            ])
+            st.dataframe(evidence, use_container_width=True, hide_index=True)
+
+        with st.expander("📝 Rapor cümlesi"):
+            if grade == "Normal":
+                report = "Diyastolik fonksiyon normal sınırlarda izlenmiştir. Sol atriyal basınç artışı lehine belirgin bulgu saptanmamıştır."
+            elif "Grade 1" in grade:
+                report = "Bulgular Grade 1 diyastolik disfonksiyon/relaksasyon bozukluğu ile uyumludur. Sol atriyal basınç normal veya belirgin artmamış görünmektedir."
+            elif "Grade 2" in grade:
+                report = "Bulgular Grade 2 diyastolik disfonksiyon ve artmış sol atriyal basınç ile uyumludur."
+            elif "Grade 3" in grade:
+                report = "Bulgular Grade 3 diyastolik disfonksiyon ve belirgin artmış sol atriyal basınç ile uyumludur."
+            else:
+                report = "Diyastolik fonksiyon ve sol atriyal basınç mevcut ölçümlerle net sınıflandırılamadı; ek parametreler ve klinik bağlam ile değerlendirme önerilir."
+            st.code(report, language="text")
+
+    else:
+        st.subheader("🧮 Pratik AF/flutter algoritması")
+        st.caption("AF’de A dalgası olmadığı için E/A kullanılmaz; sonuç LAP tahmini odaklıdır.")
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            lvef = st.number_input("LVEF (%)", min_value=5.0, max_value=90.0, value=55.0, step=1.0, key="dd_af_lvef")
+            mitral_e = st.number_input("Mitral E (cm/sn)", min_value=0.0, max_value=250.0, value=90.0, step=1.0, key="dd_af_e")
+        with c2:
+            septal_e = st.number_input("Septal e' (cm/sn)", min_value=0.0, max_value=30.0, value=7.0, step=0.5, key="dd_af_septal_e")
+            septal_ee = _dd_safe_div(mitral_e, septal_e)
+            st.metric("Septal E/e'", _dd_fmt(septal_ee, 1) if septal_e > 0 else "—")
+        with c3:
+            tr_vmax = st.number_input("TR Vmax (m/sn)", min_value=0.0, max_value=6.0, value=2.6, step=0.1, key="dd_af_trv")
+            dt = st.number_input("E deselerasyon zamanı (ms)", min_value=0.0, max_value=400.0, value=180.0, step=5.0, key="dd_af_dt")
+        with c4:
+            lavi = st.number_input("LAVI (mL/m²)", min_value=0.0, max_value=120.0, value=32.0, step=1.0, key="dd_af_lavi")
+            lars = st.number_input("LARS (%) - opsiyonel", min_value=0.0, max_value=80.0, value=0.0, step=1.0, key="dd_af_lars", help="Ölçülmediyse 0 bırak.")
+
+        af_e_high = bool(mitral_e >= 100)
+        af_ee_high = bool(septal_ee > 11)
+        af_tr_high = bool(tr_vmax > 2.8)
+        af_dt_short = bool(dt > 0 and dt <= 160)
+        af_lavi_high = bool(lavi > 34)
+        af_lars_low = bool(lars > 0 and lars < 18)
+
+        af_main_count = sum([af_e_high, af_ee_high, af_tr_high, af_dt_short])
+        af_support_count = sum([af_lavi_high, af_lars_low])
+        af_missing_count = sum([
+            1 if mitral_e <= 0 else 0,
+            1 if septal_e <= 0 else 0,
+            1 if tr_vmax <= 0 else 0,
+            1 if dt <= 0 else 0,
+        ])
+
+        if af_missing_count >= 3:
+            lap_state = "Belirsiz"
+            result = "Kararsız"
+            note = "Temel AF parametrelerinin çoğu eksik."
+        elif af_main_count >= 3:
+            lap_state = "Yüksek"
+            result = "Artmış LAP olası"
+            note = "AF ana kriterlerinin ≥3 tanesi pozitif."
+        elif af_main_count <= 1:
+            lap_state = "Normal"
+            result = "Normal LAP olası"
+            note = "AF ana kriterlerinden 0–1 tanesi pozitif."
+        else:
+            if af_support_count >= 1:
+                lap_state = "Yüksek"
+                result = "Artmış LAP olası"
+                note = "AF ana kriterleri ara bölgede; destek parametresi pozitif."
+            else:
+                lap_state = "Belirsiz"
+                result = "Kararsız"
+                note = "AF ana kriterleri ara bölgede; destek parametresi yok veya negatif."
+
+        reliability = _dd_reliability(af_missing_count, special_count, af_support_count)
+        lap_label, lap_level = _dd_lap_label(lap_state)
+        badge_level = "high" if lap_state == "Yüksek" else ("normal" if lap_state == "Normal" else "uncertain")
+        st.markdown(_dd_badge_html(result, f"Sonuç: {lap_label} | Güvenilirlik: {reliability}", badge_level), unsafe_allow_html=True)
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Mitral E", f"{mitral_e:.0f} cm/sn")
+        m2.metric("Septal E/e'", _dd_fmt(septal_ee, 1) if septal_e > 0 else "—")
+        m3.metric("TR Vmax", f"{tr_vmax:.1f} m/sn")
+        m4.metric("DT", f"{dt:.0f} ms" if dt > 0 else "—")
+
+        st.info(f"📌 **Yorum:** {note}")
+
+        with st.expander("🔎 Kanıt tablosu", expanded=True):
+            evidence = pd.DataFrame([
+                {"Parametre": "Mitral E", "Değer": f"{mitral_e:.0f} cm/sn", "Eşik": "≥100 cm/sn", "Sonuç": _dd_bool_txt(af_e_high)},
+                {"Parametre": "Septal E/e'", "Değer": f"{septal_ee:.1f}", "Eşik": ">11", "Sonuç": _dd_bool_txt(af_ee_high)},
+                {"Parametre": "TR Vmax", "Değer": f"{tr_vmax:.1f} m/sn", "Eşik": ">2.8 m/sn", "Sonuç": _dd_bool_txt(af_tr_high)},
+                {"Parametre": "DT", "Değer": f"{dt:.0f} ms", "Eşik": "≤160 ms", "Sonuç": _dd_bool_txt(af_dt_short)},
+                {"Parametre": "LAVI", "Değer": f"{lavi:.1f} mL/m²", "Eşik": ">34 mL/m²", "Sonuç": _dd_bool_txt(af_lavi_high)},
+                {"Parametre": "LARS", "Değer": f"{lars:.1f}%" if lars > 0 else "Ölçülmedi", "Eşik": "<18%", "Sonuç": _dd_bool_txt(af_lars_low) if lars > 0 else "—"},
+            ])
+            st.dataframe(evidence, use_container_width=True, hide_index=True)
+
+        with st.expander("📝 Rapor cümlesi"):
+            if lap_state == "Yüksek":
+                report = "AF ritminde mevcut Doppler ve destek parametreleri artmış sol atriyal basınç lehinedir."
+            elif lap_state == "Normal":
+                report = "AF ritminde mevcut Doppler parametreleri artmış sol atriyal basınç lehine güçlü bulgu göstermemektedir."
+            else:
+                report = "AF ritminde sol atriyal basınç mevcut ölçümlerle net değerlendirilemedi; ek parametreler ve klinik bağlam ile yorum önerilir."
+            st.code(report, language="text")
+
+    st.divider()
+    with st.expander("📚 Kısa öğretici notlar", expanded=False):
+        st.markdown(
+            """
+**Pratik mantık:** Diyastolik değerlendirmede tek parametreye güvenilmez; mitral inflow, annüler e', E/e', TR Vmax, LAVI ve mümkünse LARS birlikte yorumlanır.
+
+**E/e' yorumu:** Ortalama E/e' yüksekliği dolum basıncı artışını destekler; ancak ciddi MY, MS, ileri MAC, protez/TEER ve kötü Doppler kalitesinde yanıltıcı olabilir.
+
+**LARS:** Ölçüm güvenilirse ≤18% değeri kronik LAP artışı lehine güçlü destek sağlar.
+
+**AF:** A dalgası olmadığı için E/A ve klasik gradeleme yerine LAP tahmini yapılır.
+"""
+        )
 
 
 # =========================================================
