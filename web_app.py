@@ -3279,7 +3279,7 @@ elif menu == "🏥 H-Type HT Çalışması":
                 q = st.text_input("🔎 Arama (dosya no / hekim)", "", key="htype_search")
                 show = df.copy()
 
-                search_cols = [c for c in ["Dosya Numarası", "Hekim", "Tarih"] if c in show.columns]
+                search_cols = [c for c in ["Dosya Numarası", "Hekim", "Tarih", "Eppendorf Numarası"] if c in show.columns]
                 if q.strip() and search_cols:
                     mask = show[search_cols].apply(
                         lambda r: r.astype(str).str.contains(q, case=False, na=False).any(),
@@ -3297,7 +3297,7 @@ elif menu == "🏥 H-Type HT Çalışması":
 
                 cols_show = [
                     c for c in [
-                        "Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "İletişim",
+                        "Dosya Numarası", "Adı Soyadı", "Tarih", "Hekim", "İletişim", "Eppendorf Numarası",
                         "Yaş", "Cinsiyet", "TA Sistol", "TA Diyastol", "Homosistein"
                     ]
                     if c in display_df.columns
@@ -3345,7 +3345,16 @@ elif menu == "🏥 H-Type HT Çalışması":
             basvuru = st.date_input("Başvuru Tarihi", value=d_date)
 
             hekim = st.text_input("Veriyi Giren Hekim (Zorunlu)", value=gs("Hekim"))
-            iletisim = st.text_input("İletişim", value=gs("İletişim"))
+
+            iletisim_col, eppendorf_col = st.columns(2)
+            with iletisim_col:
+                iletisim = st.text_input("İletişim", value=gs("İletişim"))
+            with eppendorf_col:
+                eppendorf_no = st.text_input(
+                    "Eppendorf Numarası",
+                    value=gs("Eppendorf Numarası"),
+                    help="Kan örneği için tüp/eppendorf kodu. Sheet’te kolon yoksa kayıt sırasında en sona otomatik eklenir."
+                )
 
         with c2:
             cy, cc = st.columns(2)
@@ -3468,6 +3477,7 @@ elif menu == "🏥 H-Type HT Çalışması":
                     "Tarih": str(basvuru),
                     "Hekim": hekim,
                     "İletişim": iletisim,
+                    "Eppendorf Numarası": eppendorf_no,
                     "Yaş": yas,
                     "Cinsiyet": cinsiyet,
                     "Boy": boy,
