@@ -10,6 +10,8 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+import requests
+
 import time
 import random
 import textwrap
@@ -32,9 +34,15 @@ SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 # İkinci Google Sheets — yalnızca fotoğraf ve video soruları.
 # Yeni dosyanızın URL'sinde /d/ ile /edit arasındaki değeri buraya girin.
 # Bu ID gizli anahtar değildir; servis hesabının JSON bilgileri Secrets'ta kalır.
-MEDIA_SHEET_ID = "1nrAcMsjEpYmhWThlA5XfKfmCykJ_2w8zCaE00iTaXGI"
+MEDIA_SHEET_ID = "YENI_SHEETS_ID_BURAYA"
 MEDIA_PHOTO_TAB = "Fotograflar"
 MEDIA_VIDEO_TAB = "Videolar"
+
+# Google Drive: Fotoğraf ve videolar tek klasörde tutulur.
+# Drive klasör URL'sindeki /folders/ kısmından sonraki ID'yi girin.
+MEDIA_DRIVE_FOLDER_ID = "YENI_DRIVE_KLASOR_ID_BURAYA"
+
+
 def _sheet_index(key, default):
     try:
         return int(st.secrets.get(key, default))
@@ -217,8 +225,13 @@ def _media_sheet_is_configured():
     return bool(MEDIA_SHEET_ID.strip() and MEDIA_SHEET_ID != "YENI_SHEETS_ID_BURAYA")
 
 
+def _media_folder_is_configured():
+    return bool(re.fullmatch(r"[A-Za-z0-9_-]{10,}", MEDIA_DRIVE_FOLDER_ID.strip()) and
+                MEDIA_DRIVE_FOLDER_ID != "YENI_DRIVE_KLASOR_ID_BURAYA")
+
+
 def _media_link(value):
-    """Do not render arbitrary file paths / unsafe URL schemes from Sheets."""
+    """Only http(s) links are accepted as legacy URL input."""
     url = str(value or "").strip()
     parsed = urlparse(url)
     if parsed.scheme.lower() not in {"https", "http"} or not parsed.netloc:
@@ -227,7 +240,7 @@ def _media_link(value):
 
 
 def _drive_file_id(url):
-    """Extract Drive file id only from standard share URLs."""
+    """Extract a file ID from standard Google Drive sharing URLs."""
     parsed = urlparse(url)
     if parsed.hostname not in {"drive.google.com", "www.drive.google.com"}:
         return None
@@ -240,16 +253,167 @@ def _drive_file_id(url):
     return None
 
 
-def _show_question_media(row, kind):
-    """Show the image/video from the second Google Sheets before answer options."""
-    keys = ("GorselURL", "GörselURL", "FotoURL", "ResimURL", "MedyaURL") if kind == "photo" else ("VideoURL", "MedyaURL")
-    raw = next((str(row.get(key, "")).strip() for key in keys if str(row.get(key, "")).strip()), "")
-    if not raw:
-        st.info("Bu soruya henüz medya bağlantısı eklenmemiş.")
+@st.cache_resource(show_spinner=False)
+def _drive_credentials():
+    """The same service account as Sheets; never expose its token to the browser."""
+    info = _get_service_account_info()
+    return ServiceAccountCredentials.from_json_keyfile_dict(
+        info, ["https://www.googleapis.com/auth/drive.readonly"]
+    )
+
+
+def _drive_get(url, *, params=None, stream=False, timeout=(10, 45)):
+    # oauth2client refreshes the token on demand; all requests are server-side.
+    token = _drive_credentials().get_access_token().access_token
+    return requests.get(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        params=params,
+        stream=stream,
+        timeout=timeout,
+    )
+
+
+@st.cache_data(ttl=120, max_entries=3, show_spinner=False)
+def _list_drive_media(folder_id):
+    """List files in the shared folder, not in the entire Google Drive.
+
+    Returns a filename -> metadata lookup. No public-sharing URLs required.
+    """
+    items = {}
+    page_token = None
+    while True:
+        params = {
+            "q": f"'{folder_id}' in parents and trashed = false",
+            "fields": "nextPageToken,files(id,name,mimeType,size,modifiedTime)",
+            "pageSize": 1000,
+            "supportsAllDrives": "true",
+            "includeItemsFromAllDrives": "true",
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        response = _drive_get("https://www.googleapis.com/drive/v3/files", params=params)
+        try:
+            response.raise_for_status()
+            data = response.json()
+        finally:
+            response.close()
+        for item in data.get("files", []):
+            # Case-insensitive lookup; duplicate names must be renamed by the owner.
+            key = str(item.get("name", "")).strip().casefold()
+            if key:
+                items.setdefault(key, []).append(item)
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            return items
+
+
+@st.cache_data(ttl=3600, max_entries=6, show_spinner=False)
+def _download_drive_media(file_id, modified_time, max_bytes):
+    """Download only a size-limited media file; the bytes stay on Streamlit server.
+
+    modified_time is used as a cache-busting parameter when the file is updated.
+    """
+    response = _drive_get(
+        f"https://www.googleapis.com/drive/v3/files/{file_id}",
+        params={"alt": "media", "supportsAllDrives": "true"},
+        stream=True, timeout=(10, 90),
+    )
+    try:
+        response.raise_for_status()
+        declared_size = response.headers.get("Content-Length", "")
+        if declared_size.isdigit() and int(declared_size) > max_bytes:
+            raise ValueError(f"Dosya {max_bytes // (1024 * 1024)} MB sınırını aşıyor.")
+        contents, total = [], 0
+        for part in response.iter_content(chunk_size=256 * 1024):
+            if not part:
+                continue
+            total += len(part)
+            if total > max_bytes:
+                raise ValueError(f"Dosya {max_bytes // (1024 * 1024)} MB sınırını aşıyor.")
+            contents.append(part)
+        return b"".join(contents)
+    finally:
+        response.close()
+
+
+def _show_drive_media_by_name(filename, kind):
+    """Look up the exact filename in the private Drive folder and display it."""
+    if not _media_folder_is_configured():
+        st.warning("Drive klasörü ayarlanmadı: web_app.py içinde MEDIA_DRIVE_FOLDER_ID değerini girin.")
         return
-    url = _media_link(raw)
+    filename = str(filename).strip()
+    if not filename or "/" in filename or "\\" in filename or len(filename) > 250:
+        st.warning("Dosya adını uzantısıyla yazın. Örnek: coronary_sinus.png")
+        return
+    try:
+        index = _list_drive_media(MEDIA_DRIVE_FOLDER_ID)
+        matches = index.get(filename.casefold(), [])
+        if not matches:
+            st.warning(f"Drive klasöründe '{filename}' bulunamadı. Dosya adı ve uzantısını kontrol edin.")
+            st.caption("Yeni yüklediyseniz 'Drive listesini yenile' düğmesini kullanın.")
+            return
+        if len(matches) > 1:
+            st.error(f"Klasörde '{filename}' adında birden fazla dosya var. Her dosyaya benzersiz ad verin.")
+            return
+        file = matches[0]
+        mime = str(file.get("mimeType", "")).lower()
+        accepted = (
+            {"image/jpeg", "image/png", "image/webp", "image/gif"}
+            if kind == "photo" else {"video/mp4", "video/webm", "video/ogg"}
+        )
+        if mime not in accepted:
+            st.warning(f"'{filename}' dosyasının biçimi ({mime or 'bilinmiyor'}) desteklenmiyor. "
+                       + ("PNG/JPG/WebP/GIF kullanın." if kind == "photo" else "MP4 (H.264) önerilir."))
+            return
+        limit = 15 * 1024 * 1024 if kind == "photo" else 60 * 1024 * 1024
+        size = str(file.get("size", ""))
+        if size.isdigit() and int(size) > limit:
+            st.warning(f"'{filename}' fazla büyük. "
+                       f"{'Fotoğraf' if kind == 'photo' else 'Video'} başına sınır "
+                       f"{limit // (1024 * 1024)} MB; videoyu sıkıştırın.")
+            return
+        payload = _download_drive_media(file["id"], file.get("modifiedTime", ""), limit)
+        if kind == "photo":
+            st.image(payload, caption="Ekokardiyografi sorusu", use_container_width=True)
+        else:
+            st.video(payload, format=mime, loop=True)
+    except requests.exceptions.HTTPError as exc:
+        code = exc.response.status_code if exc.response is not None else "?"
+        st.error(f"Drive dosyasına erişilemedi (HTTP {code}). Klasör paylaşımını ve Drive API'yi kontrol edin.")
+    except requests.exceptions.RequestException:
+        st.error("Drive bağlantısı sırasında ağ hatası oluştu; yeniden deneyin.")
+    except ValueError as exc:
+        st.warning(str(exc))
+    except Exception:
+        st.error("Medya yüklenemedi. Klasör ID'sini, dosya adını ve servis hesabı erişimini kontrol edin.")
+
+
+def _show_question_media(row, kind):
+    """Use Drive filename first, or fall back to the older URL columns."""
+    if kind == "photo":
+        filename_cols = ("GorselDosya", "GörselDosya", "DosyaAdi", "DosyaAdı")
+        link_cols = ("GorselURL", "GörselURL", "FotoURL", "ResimURL", "MedyaURL")
+    else:
+        filename_cols = ("VideoDosya", "DosyaAdi", "DosyaAdı")
+        link_cols = ("VideoURL", "MedyaURL")
+
+    raw_name = next((str(row.get(k, "")).strip() for k in filename_cols
+                     if str(row.get(k, "")).strip()), "")
+    if raw_name:
+        _show_drive_media_by_name(raw_name, kind)
+        return
+
+    raw_url = next((str(row.get(k, "")).strip() for k in link_cols
+                    if str(row.get(k, "")).strip()), "")
+    if not raw_url:
+        st.info("Bu soruya henüz medya eklenmemiş. Sheets'te dosya adını yazın.")
+        return
+    url = _media_link(raw_url)
     if not url:
-        st.warning("Medya bağlantısı geçersiz. Google Sheets'te https:// ile başlayan bir URL kullanın.")
+        # Backward compatibility: a filename placed into the old GorselURL/
+        # VideoURL column is also accepted, so no Sheets migration is needed.
+        _show_drive_media_by_name(raw_url, kind)
         return
     drive_id = _drive_file_id(url)
     try:
@@ -257,16 +421,12 @@ def _show_question_media(row, kind):
             view_url = f"https://drive.google.com/thumbnail?id={drive_id}&sz=w1600" if drive_id else url
             st.image(view_url, caption="Soruyla ilgili görüntü", use_container_width=True)
         elif drive_id:
-            # Standard Drive /view URL cannot be passed directly into st.video.
             components.iframe(f"https://drive.google.com/file/d/{drive_id}/preview", height=475, scrolling=False)
-            st.caption("Drive videosunun oynatılması dosyanın paylaşım iznine bağlıdır. Döngüsel oynatma Drive oynatıcısında garanti edilemez.")
+            st.caption("Drive video bağlantısında izleyici erişimi gerekir. Özel dosyalar için 'VideoDosya' sütununu kullanın.")
         else:
-            # Direct MP4/WebM URLs can repeat with Streamlit's native player.
-            # YouTube / other providers may have their own playback behavior.
             st.video(url, loop=True)
     except Exception:
-        st.warning("Medya gösterilemedi. Bağlantıyı ve dosyanın görüntülenme iznini kontrol edin.")
-        st.markdown(f"[Medya bağlantısını aç]({url})")
+        st.warning("URL ile medya gösterilemedi. Drive klasöründeki dosya adını kullanabilirsiniz.")
 
 
 def save_data_row(sheet_id: str, data_dict: Dict[str, Any], unique_col: str, worksheet_index: int = 0):
@@ -1467,6 +1627,12 @@ if menu == "🧠 Soru Bankası":
         st.info("web_app.py dosyasında bu değeri yeni Google Sheets ID'si ile değiştirin. Secrets'a yeni bir ID eklemeniz gerekmiyor.")
         st.stop()
 
+    if media_kind and _media_folder_is_configured():
+        if st.button("🔄 Drive listesini yenile", key=f"drive_refresh_{media_kind}",
+                     help="Klasöre yeni eklenen veya adı değişen dosyaları yeniden tara."):
+            _list_drive_media.clear()
+            st.rerun()
+
     dfq = load_data(quiz_sheet_id, quiz_ws, required_col="SoruID")
     if dfq.empty:
         if media_kind:
@@ -1484,7 +1650,7 @@ if menu == "🧠 Soru Bankası":
     missing_cols = [c for c in required_cols if c not in dfq.columns]
     if missing_cols:
         st.error(f"{quiz_ws} sekmesinde eksik kolon var: " + ", ".join(missing_cols))
-        st.info("Başlıklar: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak` + fotoğrafta `GorselURL`, videoda `VideoURL`.")
+        st.info("Başlıklar: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`; fotoğraf için `GorselDosya`, video için `VideoDosya` ekleyin.")
         st.stop()
     if "Kaynak" not in dfq.columns:
         dfq["Kaynak"] = ""
