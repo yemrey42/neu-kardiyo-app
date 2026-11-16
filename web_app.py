@@ -34,13 +34,13 @@ SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
 # İkinci Google Sheets — yalnızca fotoğraf ve video soruları.
 # Yeni dosyanızın URL'sinde /d/ ile /edit arasındaki değeri buraya girin.
 # Bu ID gizli anahtar değildir; servis hesabının JSON bilgileri Secrets'ta kalır.
-MEDIA_SHEET_ID = "YENI_SHEETS_ID_BURAYA"
+MEDIA_SHEET_ID = "1nrAcMsjEpYmhWThlA5XfKfmCykJ_2w8zCaE00iTaXGI"
 MEDIA_PHOTO_TAB = "Fotograflar"
 MEDIA_VIDEO_TAB = "Videolar"
 
 # Google Drive: Fotoğraf ve videolar tek klasörde tutulur.
 # Drive klasör URL'sindeki /folders/ kısmından sonraki ID'yi girin.
-MEDIA_DRIVE_FOLDER_ID = "YENI_DRIVE_KLASOR_ID_BURAYA"
+MEDIA_DRIVE_FOLDER_ID = "1PkQu5DBmYKKNrLBHQtnLJwCyNgM6f2OQ"
 
 
 def _sheet_index(key, default):
