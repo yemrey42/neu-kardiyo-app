@@ -1,6 +1,6 @@
 # web_app.py
 # NEÜ-KARDİYO | Streamlit + Google Sheets (CRUD)
-
+# Not: Excel/CSV indirme YOK (isteğe göre kaldırıldı)
 
 import hashlib
 import json
@@ -8,6 +8,7 @@ import re
 import tempfile
 import unicodedata
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 import time
 import random
@@ -25,8 +26,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ===================== AYARLAR =====================
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
-# Tek bir Google Sheet içinde sekmeler:
+# Ana Google Sheets (mevcut klinik modüller ve soru bankası) — DEĞİŞTİRMEYİN.
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
+
+# İkinci Google Sheets — yalnızca fotoğraf ve video soruları.
+# Yeni dosyanızın URL'sinde /d/ ile /edit arasındaki değeri buraya girin.
+# Bu ID gizli anahtar değildir; servis hesabının JSON bilgileri Secrets'ta kalır.
+MEDIA_SHEET_ID = "1nrAcMsjEpYmhWThlA5XfKfmCykJ_2w8zCaE00iTaXGI"
+MEDIA_PHOTO_TAB = "Fotograflar"
+MEDIA_VIDEO_TAB = "Videolar"
 def _sheet_index(key, default):
     try:
         return int(st.secrets.get(key, default))
@@ -175,9 +183,12 @@ def connect_to_gsheets() -> gspread.Client:
     return gspread.authorize(creds)
 
 
-def get_ws(sheet_id: str, worksheet_index: int):
+def get_ws(sheet_id: str, worksheet_index):
+    """Mevcut sayısal sekme indeksleri ve yeni isimli medya sekmeleri."""
     client = connect_to_gsheets()
     sh = client.open_by_key(sheet_id)
+    if isinstance(worksheet_index, str):
+        return sh.worksheet(worksheet_index)
     return sh.get_worksheet(worksheet_index)
 
 
@@ -199,6 +210,63 @@ def load_data(sheet_id: str, worksheet_index: int, required_col: Optional[str] =
         return df
     except Exception:
         return pd.DataFrame()
+
+
+
+def _media_sheet_is_configured():
+    return bool(MEDIA_SHEET_ID.strip() and MEDIA_SHEET_ID != "YENI_SHEETS_ID_BURAYA")
+
+
+def _media_link(value):
+    """Do not render arbitrary file paths / unsafe URL schemes from Sheets."""
+    url = str(value or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme.lower() not in {"https", "http"} or not parsed.netloc:
+        return ""
+    return url
+
+
+def _drive_file_id(url):
+    """Extract Drive file id only from standard share URLs."""
+    parsed = urlparse(url)
+    if parsed.hostname not in {"drive.google.com", "www.drive.google.com"}:
+        return None
+    match = re.search(r"/file/d/([A-Za-z0-9_-]{10,})", parsed.path)
+    if match:
+        return match.group(1)
+    file_id = parse_qs(parsed.query).get("id", [None])[0]
+    if file_id and re.fullmatch(r"[A-Za-z0-9_-]{10,}", file_id):
+        return file_id
+    return None
+
+
+def _show_question_media(row, kind):
+    """Show the image/video from the second Google Sheets before answer options."""
+    keys = ("GorselURL", "GörselURL", "FotoURL", "ResimURL", "MedyaURL") if kind == "photo" else ("VideoURL", "MedyaURL")
+    raw = next((str(row.get(key, "")).strip() for key in keys if str(row.get(key, "")).strip()), "")
+    if not raw:
+        st.info("Bu soruya henüz medya bağlantısı eklenmemiş.")
+        return
+    url = _media_link(raw)
+    if not url:
+        st.warning("Medya bağlantısı geçersiz. Google Sheets'te https:// ile başlayan bir URL kullanın.")
+        return
+    drive_id = _drive_file_id(url)
+    try:
+        if kind == "photo":
+            view_url = f"https://drive.google.com/thumbnail?id={drive_id}&sz=w1600" if drive_id else url
+            st.image(view_url, caption="Soruyla ilgili görüntü", use_container_width=True)
+        elif drive_id:
+            # Standard Drive /view URL cannot be passed directly into st.video.
+            components.iframe(f"https://drive.google.com/file/d/{drive_id}/preview", height=475, scrolling=False)
+            st.caption("Drive videosunun oynatılması dosyanın paylaşım iznine bağlıdır. Döngüsel oynatma Drive oynatıcısında garanti edilemez.")
+        else:
+            # Direct MP4/WebM URLs can repeat with Streamlit's native player.
+            # YouTube / other providers may have their own playback behavior.
+            st.video(url, loop=True)
+    except Exception:
+        st.warning("Medya gösterilemedi. Bağlantıyı ve dosyanın görüntülenme iznini kontrol edin.")
+        st.markdown(f"[Medya bağlantısını aç]({url})")
 
 
 def save_data_row(sheet_id: str, data_dict: Dict[str, Any], unique_col: str, worksheet_index: int = 0):
@@ -1378,35 +1446,48 @@ with st.sidebar:
 # ===================== EKRAN 0: SORU BANKASI / QUIZ =======
 # =========================================================
 if menu == "🧠 Soru Bankası":
-    mode = st.radio("Soru bankası modu", ["Kalp atlası", "Karışık test"], horizontal=True, key="soru_bankasi_modu")
+    mode = st.radio(
+        "Soru bankası modu",
+        ["Kalp atlası", "Karışık test", "Fotoğraflı test", "Videolu test"],
+        horizontal=True, key="soru_bankasi_modu",
+    )
     if mode == "Kalp atlası":
         _render_heart_atlas()
         st.stop()
 
     st.header("🧠 Kardiyoloji Soru Bankası")
 
-    # -----------------------------------------------------
-    # Google Sheets başlık yapısı:
-    # SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak
-    # -----------------------------------------------------
-    dfq = load_data(SHEET_ID, QUESTION_WS_INDEX, required_col="SoruID")
-
-    if dfq.empty:
-        st.warning("Henüz soru yok veya SoruBankasi sekmesi başlıkları uygun değil.")
-        st.info(
-            "Google Sheets içinde `SoruBankasi` isimli sekme açıp ilk satırı şu şekilde yap:\n\n"
-            "`SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`\n\n"
-            "Not: Bu kodda varsayılan `question_ws_index = 8`. "
-            "SoruBankasi farklı sıradaysa Streamlit secrets içine doğru index değerini ekle."
-        )
+    # Karışık test eski dosyadan, medya soruları ikinci dosyadaki isimli sekmelerden okunur.
+    media_kind = "photo" if mode == "Fotoğraflı test" else "video" if mode == "Videolu test" else None
+    quiz_sheet_id = SHEET_ID if not media_kind else MEDIA_SHEET_ID
+    quiz_ws = QUESTION_WS_INDEX if not media_kind else MEDIA_PHOTO_TAB if media_kind == "photo" else MEDIA_VIDEO_TAB
+    if media_kind and not _media_sheet_is_configured():
+        st.warning("Yeni Google Sheets bağlantısı henüz ayarlanmamış.")
+        st.code('MEDIA_SHEET_ID = "YENI_SHEETS_ID_BURAYA"', language="python")
+        st.info("web_app.py dosyasında bu değeri yeni Google Sheets ID'si ile değiştirin. Secrets'a yeni bir ID eklemeniz gerekmiyor.")
         st.stop()
 
-    required_cols = ["SoruID", "Aktif", "Kategori", "Soru", "A", "B", "C", "D", "E", "Dogru", "Aciklama", "Kaynak"]
+    dfq = load_data(quiz_sheet_id, quiz_ws, required_col="SoruID")
+    if dfq.empty:
+        if media_kind:
+            st.warning(f"'{quiz_ws}' sekmesi okunamadı veya henüz soru eklenmedi.")
+            st.info("Yeni Google Sheets'i servis hesabının client_email adresiyle Düzenleyici olarak paylaşın. Sekme adlarını ve başlıkları kontrol edin.")
+        else:
+            st.warning("Henüz soru yok veya SoruBankasi sekmesi başlıkları uygun değil.")
+            st.info("İlk satır: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`. Varsayılan sekme indeksi: 8.")
+        st.stop()
+
+    # Yeni medya tablolarında Kaynak isteğe bağlıdır; eski testin şeması değişmez.
+    required_cols = ["SoruID", "Aktif", "Kategori", "Soru", "A", "B", "C", "D", "E", "Dogru", "Aciklama"]
+    if not media_kind:
+        required_cols.append("Kaynak")
     missing_cols = [c for c in required_cols if c not in dfq.columns]
     if missing_cols:
-        st.error("SoruBankasi sekmesinde eksik kolon var: " + ", ".join(missing_cols))
-        st.info("Başlık satırı birebir şöyle olmalı: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`")
+        st.error(f"{quiz_ws} sekmesinde eksik kolon var: " + ", ".join(missing_cols))
+        st.info("Başlıklar: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak` + fotoğrafta `GorselURL`, videoda `VideoURL`.")
         st.stop()
+    if "Kaynak" not in dfq.columns:
+        dfq["Kaynak"] = ""
 
     # Sadece aktif sorular. Aktif kolonu TRUE/1/evet/yes/aktif olmalı.
     dfq = dfq[
@@ -1432,7 +1513,7 @@ if menu == "🧠 Soru Bankası":
     # SoruID tekrar etse bile oturum sırası bozulmasın diye benzersiz iç UID oluştur.
     dfq["_quiz_uid"] = dfq["SoruID"].astype(str).str.strip() + "__" + dfq.index.astype(str)
     question_uids_current = dfq["_quiz_uid"].tolist()
-    quiz_source_signature = tuple(question_uids_current)
+    quiz_source_signature = (mode, tuple(question_uids_current))
 
     # Her yeni tarayıcı oturumunda veya soru listesi değişince random sıra üret.
     # Streamlit rerun oldukça sıra değişmesin diye session_state içinde saklanır.
@@ -1732,6 +1813,8 @@ if menu == "🧠 Soru Bankası":
     if kategori:
         st.caption(f"Kategori: {kategori}")
     st.markdown(f"#### {soru}")
+    if media_kind:
+        _show_question_media(row, media_kind)
 
     radio_options = list(range(len(secenekler)))
 
@@ -1742,7 +1825,7 @@ if menu == "🧠 Soru Bankası":
         format_func=lambda i: f"{secenekler[i][0]}) {secenekler[i][1]}",
         index=st.session_state.quiz_selected if st.session_state.quiz_selected is not None else None,
         disabled=st.session_state.quiz_answered,
-        key=f"quiz_radio_{quiz_uid}",
+        key=f"quiz_radio_{media_kind or 'standard'}_{quiz_uid}",
     )
 
     st.session_state.quiz_selected = selected
@@ -1775,8 +1858,8 @@ if menu == "🧠 Soru Bankası":
     with col3:
         if st.button("☑️ Soru düzelt", help="Bu soruyu Google Sheets'te 'Soru Düzelt' kolonu altında işaretler."):
             ok = flag_question_for_review(
-                SHEET_ID,
-                QUESTION_WS_INDEX,
+                quiz_sheet_id,
+                quiz_ws,
                 soru_id=soru_id,
                 soru_text=soru,
                 flag_col="Soru Düzelt",
