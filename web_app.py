@@ -1,6 +1,13 @@
 # web_app.py
 # NEÜ-KARDİYO | Streamlit + Google Sheets (CRUD)
-# Not: Excel/CSV indirme YOK (isteğe göre kaldırıldı)
+
+
+import hashlib
+import json
+import re
+import tempfile
+import unicodedata
+from pathlib import Path
 
 import time
 import random
@@ -20,15 +27,22 @@ st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide"
 
 # Tek bir Google Sheet içinde sekmeler:
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
-DATA_WS_INDEX = int(st.secrets.get("data_ws_index", 0))         # H-Type HT
-CASE_WS_INDEX = int(st.secrets.get("case_ws_index", 1))         # Case Report
-LETTER_WS_INDEX = int(st.secrets.get("letter_ws_index", 2))     # Editöre mektup
-PACED_WS_INDEX = int(st.secrets.get("paced_ws_index", 3))       # Fizyolojik pacing
-AFMR_WS_INDEX = int(st.secrets.get("afmr_ws_index", 4))         # AFMR
-CVABL_WS_INDEX = int(st.secrets.get("cvabl_ws_index", 5))       # Kardiyoversiyon-Ablasyon / TEE-GLS
-PBMV_WS_INDEX = int(st.secrets.get("pbmv_ws_index", 7))         # PBMV – RV-PA Coupling
-FEATURED_WS_INDEX = int(st.secrets.get("featured_ws_index", 6)) # Özellikli Vakalar
-QUESTION_WS_INDEX = int(st.secrets.get("question_ws_index", 8)) # Soru Bankası
+def _sheet_index(key, default):
+    try:
+        return int(st.secrets.get(key, default))
+    except FileNotFoundError:
+        return default
+
+
+DATA_WS_INDEX = _sheet_index("data_ws_index", 0)         # H-Type HT
+CASE_WS_INDEX = _sheet_index("case_ws_index", 1)         # Case Report
+LETTER_WS_INDEX = _sheet_index("letter_ws_index", 2)     # Editöre mektup
+PACED_WS_INDEX = _sheet_index("paced_ws_index", 3)       # Fizyolojik pacing
+AFMR_WS_INDEX = _sheet_index("afmr_ws_index", 4)         # AFMR
+CVABL_WS_INDEX = _sheet_index("cvabl_ws_index", 5)       # Kardiyoversiyon-Ablasyon / TEE-GLS
+PBMV_WS_INDEX = _sheet_index("pbmv_ws_index", 7)         # PBMV – RV-PA Coupling
+FEATURED_WS_INDEX = _sheet_index("featured_ws_index", 6) # Özellikli Vakalar
+QUESTION_WS_INDEX = _sheet_index("question_ws_index", 8) # Soru Bankası
 
 APP_TITLE = "❤️ NEÜ-KARDİYO"
 
@@ -284,7 +298,7 @@ def flag_question_for_review(
         # Uyarı kolonu yoksa en sona ekle
         if flag_col not in headers:
             headers.append(flag_col)
-            ws.update("1:1", [headers])
+            ws.update_cell(1, len(headers), flag_col)
 
         values = ws.get_all_values()
         headers = [str(h).strip() for h in values[0]]
@@ -315,8 +329,10 @@ def flag_question_for_review(
                     selected_row_idx = row_idx
                     break
 
-        cell_a1 = f"{colnum_to_letter(flag_col_idx)}{selected_row_idx}"
-        ws.update(cell_a1, "Soru düzelt")
+            else:
+                return False
+
+        ws.update_cell(selected_row_idx, flag_col_idx, "Soru düzelt")
         return True
     except Exception:
         return False
@@ -379,6 +395,899 @@ def confirm_delete_with_password(context_key: str) -> bool:
             else:
                 st.error("❌ Şifre yanlış")
     return False
+
+
+# ===================== ANATOMİK SORU ATLASI =====================
+# Yalnızca Anatomi/Kategori/Soru üzerinden eşleştir. Şıkları ve yanıtı konu etiketi sayma.
+_ATLAS_TERMS = {
+    "mitral": r"\b(?:mitral\w*|miytral\w*)\b",
+    "laa": r"\b(?:laa|sol (?:atrial|atriyal|atrium|atriyum|aurikul\w*) (?:apend\w*|append\w*|kulakc\w*)|left atrial append\w*|sol atriyal aurikul\w*)\b",
+    "hepatic": r"\b(?:hepat(?:ik|ic) (?:vein\w*|ven\w*|toplardamar\w*)|karaciger ven\w*)\b",
+    "aortic_valve": r"\b(?:aort(?:ik|ic)? (?:kapa\w*|val[vf]\w*|darl\w*|steno\w*|yet\w*|reg[uü]\w*)|(?:bikuspi[dt]|trikuspi[dt]|bicuspi[dt]|tricuspi[dt]) aort(?:ik|ic)?(?: (?:val[vf]\w*|kapa\w*))?|tavi|tavr)\b",
+    "tricuspid": r"\b(?:trikuspi[dt]\w*|tricuspi[dt]\w*)\b",
+    "pulmonary_valve": r"\b(?:pulmon(?:er|ary|ic|ik) (?:kapa\w*|valv\w*|darl\w*|steno\w*|yet\w*|regu\w*))\b",
+    "aorta": r"\b(?:aort\w*|arkus aorta|ascending aorta|sinotubuler\w*|valsalva sinus\w*)\b",
+    "lv": r"\b(?:sol ventrik\w*|left ventric\w*|lvef|lvot)\b",
+    "rv": r"\b(?:sag ventrik\w*|right ventric\w*|tapse|rvot|rvfwls)\b",
+    "la": r"\b(?:sol atri(?:y?um|al|yal)\w*|left atri(?:um|al)\w*)\b",
+    "ra": r"\b(?:sag atri(?:y?um|al|yal)\w*|right atri(?:um|al)\w*)\b",
+    "pa": r"\b(?:pulmon(?:er|ary) (?:arter\w*|trun[kc]\w*)|ana pulmoner arter\w*|truncus pulmonalis)\b",
+    "pv": r"\b(?:pulmon(?:er|ary) (?:ven\w*|vein\w*)|pulmonal ven\w*)\b",
+    "svc": r"\b(?:v(?:ena)? [kc]a[vw]a sup\w*|superior vena cava|svc|vks|vcs)\b",
+    "ivc": r"\b(?:v(?:ena)? [kc]a[vw]a inf\w*|inferior vena cava|ivc|vki|vci)\b",
+    "coronary": r"\b(?:koroner(?! sinus| kusp| yaprak)\w*|coronary(?! sinus| cusp)|lad|sirkumfleks\w*|circumflex\w*|on inen arter\w*)\b",
+}
+_ATLAS_PATTERNS = {key: re.compile(pattern) for key, pattern in _ATLAS_TERMS.items()}
+_ATLAS_SHORT_TAGS = {"mr": "mitral", "my": "mitral", "tr": "tricuspid", "ty": "tricuspid",
+                     "as": "aortic_valve", "ay": "aortic_valve", "ad": "aortic_valve",
+                     "lv": "lv", "rv": "rv", "ra": "ra", "la": "la"}
+
+def _atlas_text(value):
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
+
+def _atlas_fold(value):
+    text = unicodedata.normalize("NFKD", _atlas_text(value).casefold().replace("ı", "i"))
+    return re.sub(r"[^a-z0-9]+", " ", "".join(c for c in text if not unicodedata.combining(c))).strip()
+
+def _atlas_topics(value, *, as_tags=False):
+    normalized = _atlas_fold(value)
+    if not normalized:
+        return set()
+    topics = set()
+    if as_tags:
+        for part in re.split(r"[,;|/\n]+", _atlas_text(value)):
+            code = part.strip().casefold()
+            if code in _ATLAS_TERMS:
+                topics.add(code)
+            elif code in _ATLAS_SHORT_TAGS:
+                topics.add(_ATLAS_SHORT_TAGS[code])
+    # Consume the more specific phrase before matching its containing structure.
+    for key in ("aortic_valve", "laa"):
+        pattern = _ATLAS_PATTERNS[key]
+        if pattern.search(normalized):
+            topics.add(key)
+            normalized = pattern.sub(" ", normalized)
+    topics.update(key for key, pattern in _ATLAS_PATTERNS.items() if pattern.search(normalized))
+    return topics
+
+def _atlas_bank(df):
+    """Only valid active questions are sent to the student component."""
+    banks, lookup = {}, {}
+    if not {"SoruID", "Aktif", "Soru", "Dogru"}.issubset(df.columns):
+        return banks, lookup, "schema" if len(df.columns) else "unavailable"
+    tag_cols = [c for c in df.columns if _atlas_fold(c) in {"anatomi", "anatomik yapi", "anatomikyapi", "anatomik bolge", "yapi"}]
+    for row in df.to_dict("records"):
+        if _atlas_fold(row.get("Aktif")) not in {"1", "true", "evet", "yes", "aktif"}:
+            continue
+        stem, sheet_id = (_atlas_text(row.get(col)) for col in ("Soru", "SoruID"))
+        tags = ";".join(_atlas_text(row[c]) for c in tag_cols if _atlas_text(row[c]))
+        if tags:
+            topics = _atlas_topics(tags, as_tags=True)
+        else:
+            topics = _atlas_topics(row.get("Kategori"), as_tags=True) or _atlas_topics(stem)
+        if not stem or not sheet_id or not topics:
+            continue
+        options = []
+        for letter in "ABCDE":
+            value = re.sub(r"^" + letter + r"\s*[.):\-]\s*", "", _atlas_text(row.get(letter)), flags=re.I).strip()
+            if value:
+                options.append([letter, value])
+        correct = _atlas_text(row.get("Dogru")).upper()
+        if len(options) < 2 or correct not in {letter for letter, _ in options}:
+            continue
+        identity = json.dumps([sheet_id, stem, options, correct], ensure_ascii=False)
+        uid = "s-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+        if uid in lookup:
+            # Two indistinguishable duplicate rows may legitimately carry different labels.
+            known = {k for k in topics if any(q["id"] == uid for q in banks.get(k, []))}
+            topics -= known
+        source = _atlas_text(row.get("Kaynak"))
+        entry = {"id": uid, "stem": stem, "options": options, "key": correct, "why": _atlas_text(row.get("Aciklama")),
+                 "source": [source, source if re.fullmatch(r"https?://\S+", source, re.I) else ""]}
+        lookup[uid] = (sheet_id, stem)
+        for topic in topics:
+            banks.setdefault(topic, []).append(entry)
+    return banks, lookup, "ready"
+
+_ATLAS_HTML = r'''<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kalp atlası · NEÜ Kardiyoloji</title>
+  <style>
+    :root{color-scheme:light;--ink:#173a38;--mute:#526762;--paper:#f5f3eb;--line:#d9dfd4;--green:#176c54;--pink:#b1695a;--serif:"Source Serif 4","STIX Two Text",Georgia,serif;--sans:Inter,"Segoe UI",Arial,sans-serif}
+    *{box-sizing:border-box}
+    html,body{padding:0;margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+    .atlas{max-width:1290px;margin:auto;padding:clamp(14px,3.2vw,46px)}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #c9d1c6;padding-bottom:15px}
+    .brand{font-size:12px;font-weight:700;letter-spacing:.13em;display:flex;align-items:center;gap:9px;color:#274e44}
+    .brand svg{width:29px;height:25px}.header-section{font-size:12px;color:var(--mute);font-weight:550}
+    .intro{display:flex;justify-content:space-between;align-items:end;gap:20px;padding:23px 0 20px}
+    h1,h2,h3,p{margin:0}h1,h2,h3{font-weight:500}
+    h1{font-family:var(--serif);font-size:clamp(37px,4.3vw,60px);letter-spacing:-.058em;line-height:1.04}
+    .intro p{font-size:14px;color:var(--mute);line-height:1.5;margin-top:8px}
+    .course{flex:none;width:155px;text-align:right}
+    #course-label{font-size:12px;color:var(--mute);font-weight:570}
+    .track{height:4px;background:#dce2d7;border-radius:9px;overflow:hidden;margin-top:8px}
+    #course-fill,#q-fill{height:100%;display:block;border-radius:inherit;background:#528875;transition:width .2s}
+    main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.88fr);gap:16px;align-items:start}
+    .model{border-radius:15px;background:#19343b;border:1px solid #1b3b40;color:#edf3e9;overflow:hidden}
+    .panel-head{padding:19px 21px 0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .panel-head h2,.right-kicker,.mini-head{font-size:11px;font-weight:700;letter-spacing:.105em;text-transform:uppercase}
+    .panel-head h2{color:#d0ded6}
+    .phase{display:flex;align-items:center;gap:6px;color:#c3d3cf;font-size:11px}
+    #beat-indicator{width:7px;height:7px;border-radius:50%;background:#99d5b3}
+    .views{display:flex;gap:5px;margin:14px 19px 3px;flex-wrap:wrap;position:relative;z-index:1}
+    button,select{font:inherit}button{cursor:pointer}button:focus-visible,select:focus-visible,[tabindex]:focus-visible,a:focus-visible{outline:3px solid #e69a46;outline-offset:3px}
+    .views button,.tools button{border:1px solid #496169;background:transparent;color:#d4dfdc;border-radius:6px;font-size:12px;font-weight:530;padding:7px 10px}
+    .views button:hover,.tools button:hover{background:#315054}.views button[aria-pressed=true]{background:#d3e8d8;border-color:#d3e8d8;color:#183c32}
+    .viewport{position:relative;isolation:isolate;height:clamp(345px,34vw,430px);overflow:hidden;touch-action:none;cursor:grab;background:radial-gradient(ellipse at 49% 46%,#354a4c 0,#213d42 47%,#19343b 75%)}
+    .viewport::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;background-image:radial-gradient(#8ba6a1 .7px,transparent .85px);background-size:17px 17px;mask-image:radial-gradient(ellipse at 50% 48%,#000 12%,transparent 82%)}
+    .grabbing{cursor:grabbing}.viewport canvas{display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    .tools{border-top:1px solid #385258;display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 15px;flex-wrap:wrap}
+    .toolgroup{display:flex;align-items:center;gap:5px}
+    .tools button{min-width:32px;min-height:30px;padding:5px 9px}
+    .tools button[aria-pressed=true]{color:#d6f0de;background:#2f5053;border-color:#5d7e78}
+    .sign{font-size:16px!important;line-height:1}
+    .right{background:#fffef9;border:1px solid var(--line);border-radius:15px;padding:clamp(17px,2.1vw,30px);min-width:0}
+    .right-top{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:12px}
+    .right-kicker{color:#566e63}.source-badge{color:#6c5b44;font-size:11px;background:#f5eee0;border:1px solid #e8decb;border-radius:5px;padding:4px 7px}
+    .source-badge.bank{color:#2e6b57;background:#edf6ed;border-color:#cbded0}
+    .select-wrap{position:relative;display:block;margin:0 0 16px;max-width:100%}
+    .select-wrap:after{content:"⌄";position:absolute;right:9px;top:50%;transform:translateY(-58%);color:#467467;font-size:21px;pointer-events:none}
+    select{appearance:none;width:100%;cursor:pointer;background:transparent;border:0;border-bottom:1px solid #cbd6ca;border-radius:0;color:#214a3c;font-family:var(--serif);font-size:clamp(24px,2.4vw,35px);letter-spacing:-.04em;padding:0 33px 8px 0;line-height:1.2}
+    select option,select optgroup{font:15px var(--sans);color:#173a38}
+    .meter-label{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--mute);font-weight:550;font-variant-numeric:tabular-nums}
+    #qmeter{height:3px;margin:7px 0 17px}
+    .question{font-family:var(--serif);font-size:clamp(19px,1.75vw,24px);letter-spacing:-.02em;line-height:1.32;color:#182e2b;margin:0 0 15px;overflow-wrap:anywhere}
+    .options{display:grid;gap:7px}
+    .opt{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid #d6dfd4;background:#fcfcf6;border-radius:7px;color:#30463e;min-height:39px;padding:7px 10px;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+    .opt:hover:not(:disabled){border-color:#70937f;background:#f3f7ef}
+    .opt[aria-pressed=true]{border-color:#4e8773;background:#eaf3e9}
+    .opt:disabled{cursor:default;opacity:1}.opt.correct{background:#e2f2e4;border-color:#73a985}.opt.wrong{background:#fcf0e9;border-color:#c89177}
+    .letter{border:1px solid #c8d3c8;border-radius:4px;display:grid;place-items:center;flex:none;width:23px;height:23px;font-size:11px;font-weight:700;background:#fffdfa;color:#506457}
+    .correct .letter{background:#267253;color:white;border-color:#267253}.wrong .letter{background:#995b48;color:white;border-color:#995b48}
+    .primary{background:#1e654e;color:#fff;border:1px solid #1e654e;border-radius:7px;font-weight:600;font-size:13px;min-height:40px;width:100%;margin-top:13px;padding:8px 12px}
+    .primary:hover:not(:disabled){background:#15533e}.primary:disabled{background:#dce6dc;color:#50675b;border-color:#d7e1d5;cursor:default}
+    .feedback{border-left:3px solid #669d83;padding:0 0 0 12px;margin-top:15px;font-size:13px;color:#475c51;line-height:1.48;overflow-wrap:anywhere}
+    .feedback.negative{border-left-color:#bc8167}.feedback strong{display:block;color:#254f3c;margin-bottom:4px}.negative strong{color:#8c503d}
+    .feedback a,.reference{display:inline-block;color:#346456;font-size:11px;margin-top:6px}
+    .actions{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:10px}
+    .text-button{background:none;border:none;font-size:11px;color:#4c6c60;text-decoration:underline;text-underline-offset:3px;padding:4px 0}
+    .flag-status,.bank-notice{color:#5d6b63;font-size:12px;line-height:1.45}.flag-status{margin-top:5px}
+    .bank-notice{margin:12px 0 0}.model-foot{display:flex;justify-content:space-between;gap:8px;align-items:start;margin:9px 2px 0;line-height:1.45;font-size:11px;color:var(--mute)}
+    .model-foot strong{font-weight:600;color:#465f51}.mobile-back{display:none}
+    .end{min-height:145px;display:flex;flex-direction:column;justify-content:center;gap:9px}.end h3{font:32px var(--serif);color:#28533f}.end p{color:#50665b}
+    .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    [hidden]{display:none!important}
+    @media(max-width:740px){
+      .atlas{padding:13px}.intro{padding:17px 0 15px;gap:11px}.course{width:111px}main{grid-template-columns:minmax(0,1fr);gap:13px}
+      .viewport{height:335px}.right{padding:17px}.right-top{margin-bottom:9px}.mobile-back{display:inline-block}.model-foot{font-size:10px}
+      .intro p{font-size:12px;max-width:280px}.brand,.header-section{font-size:10px}.panel-head{padding:14px 15px 0}.views{margin:11px 14px 0}
+      .tools{padding:8px 10px}.right{scroll-margin-top:8px}
+    }
+    @media(max-width:370px){.atlas{padding:8px}.course{width:82px}.views button{padding:6px 8px}.tools{gap:5px}.tools button{font-size:11px;min-width:28px;padding:5px 7px}.viewport{height:305px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<div class="atlas">
+  <header><span class="brand"><svg viewBox="0 0 32 27" fill="none" aria-hidden="true"><path d="M2 15h6l4-10 5 18 4-12 3 4h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>NEÜ KARDİYOLOJİ</span><span class="header-section">Soru bankası</span></header>
+  <div class="intro"><div><h1>Kalp atlası</h1><p>Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.</p></div><div class="course"><span id="course-label"></span><div class="track"><i id="course-fill"></i></div></div></div>
+  <main>
+    <section aria-label="Etkileşimli anatomik model">
+      <div class="model">
+        <div class="panel-head"><h2>Anatomik görünüm</h2><span class="phase"><i id="beat-indicator"></i><span id="phase">Diyastol</span></span></div>
+        <div class="views" role="group" aria-label="Model görünümü">
+          <button data-view="front" aria-pressed="true">Ön</button><button data-view="back" aria-pressed="false">Arka</button><button data-view="valves" aria-pressed="false">Kapak düzlemi</button><button data-view="inferior" aria-pressed="false">Alt</button>
+        </div>
+        <div id="viewport" class="viewport" tabindex="0" role="group" aria-label="Döndürülebilen kalp modeli. Ok tuşlarıyla döndürün veya sorular için yapı listesini kullanın."><canvas id="heart"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div>
+        <div class="tools"><div class="toolgroup"><button id="motion" type="button">Durdur</button><button id="guides" type="button" aria-pressed="true">Etiketler</button></div><div class="toolgroup"><button class="sign" id="zoom-out" aria-label="Uzaklaştır">−</button><button class="sign" id="zoom-in" aria-label="Yakınlaştır">+</button><button id="home" title="Geçerli görünümün başlangıç açısına dön">Açıyı sıfırla</button></div></div>
+      </div>
+      <div class="model-foot"><span><strong>3B + zaman</strong> · Şematik kalp döngüsü</span><span>16 seçilebilir yapı</span></div>
+    </section>
+    <section class="right" id="quiz" aria-label="Seçilen yapının soruları">
+      <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source"></span></div>
+      <label class="select-wrap"><span class="sr">Anatomik yapı seç</span><select id="region"></select></label>
+      <div class="meter-label"><span id="q-index"></span><span id="score"></span></div><div class="track" id="qmeter"><i id="q-fill"></i></div>
+      <div id="exercise"><h2 class="question" id="stem"></h2><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
+      <div class="end" id="complete" hidden><h3>Bu yapı tamamlandı.</h3><p id="result"></p></div>
+      <button class="primary" id="submit" type="button">Yanıtı kontrol et</button>
+      <div class="actions"><button class="text-button mobile-back" id="to-model">↑ Modele dön</button><button class="text-button" id="flag" hidden>Soruyu düzeltme için bildir</button></div><p class="flag-status" role="status" id="flag-status"></p>
+    </section>
+  </main>
+  <p class="bank-notice" id="bank-note"></p>
+</div>
+<script>
+'use strict';
+const CATALOG={"regions":[{"id":"aorta","name":"Aorta","short":"Aorta","group":"Büyük damarlar","view":"front"},{"id":"mitral","name":"Mitral kapak","short":"Mitral kapak","group":"Kapaklar","view":"valves"},{"id":"laa","name":"Sol atriyal apendiks","short":"Sol atriyal apendiks","group":"Kalp boşlukları","view":"front"},{"id":"hepatic","name":"Hepatik venler","short":"Hepatik venler","group":"Büyük damarlar","view":"inferior"},{"id":"aortic_valve","name":"Aort kapağı","short":"Aort kapağı","group":"Kapaklar","view":"valves"},{"id":"tricuspid","name":"Triküspit kapak","short":"Triküspit","group":"Kapaklar","view":"valves"},{"id":"pulmonary_valve","name":"Pulmoner kapak","short":"Pulmoner kapak","group":"Kapaklar","view":"valves"},{"id":"lv","name":"Sol ventrikül","short":"Sol ventrikül","group":"Kalp boşlukları","view":"front"},{"id":"rv","name":"Sağ ventrikül","short":"Sağ ventrikül","group":"Kalp boşlukları","view":"front"},{"id":"la","name":"Sol atriyum","short":"Sol atriyum","group":"Kalp boşlukları","view":"back"},{"id":"ra","name":"Sağ atriyum","short":"Sağ atriyum","group":"Kalp boşlukları","view":"front"},{"id":"pa","name":"Pulmoner arter","short":"Pulmoner arter","group":"Büyük damarlar","view":"front"},{"id":"pv","name":"Pulmoner venler","short":"Pulmoner venler","group":"Büyük damarlar","view":"back"},{"id":"svc","name":"Vena kava superior","short":"V. kava superior","group":"Büyük damarlar","view":"front"},{"id":"ivc","name":"Vena kava inferior","short":"V. kava inferior","group":"Büyük damarlar","view":"inferior"},{"id":"coronary","name":"Koroner arterler","short":"Koroner arterler","group":"Koroner dolaşım","view":"front"}],"samples":{"aorta":[{"id":"demo-aorta-1","stem":"Çıkan aortadan arkusa ilerlerken tipik sol aort arkının ilk dalı hangisidir?","options":[["A","Sol ana karotis arter"],["B","Brakiyosefalik trunkus"],["C","Sol subklavyen arter"],["D","Sağ koroner arter"]],"key":"B","why":"Arkusun tipik dal sırası brakiyosefalik trunkus, sol ana karotis ve sol subklavyen arterdir. Koroner arterler daha proksimalde, aort kökünden çıkar.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-aorta-2","stem":"Normal bir aort kökünde koroner ostiyumlar hangi düzeyde yer alır?","options":[["A","Sinotübüler bileşkenin belirgin distalinde"],["B","Anulusun ventriküler yüzünde"],["C","Sağ ve sol Valsalva sinüslerinde"],["D","Arkusun küçük kurvaturunda"]],"key":"C","why":"Sağ ve sol koroner arterler karşılık gelen aort sinüslerinden köken alır. Üçüncü sinüs nonkoroner sinüstür.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"mitral":[{"id":"demo-mitral-1","stem":"3B TEE’nin cerrahi görünümünde posterior mitral yaprakçığın ortasındaki prolabe segment nasıl adlandırılır?","options":[["A","A2"],["B","P1"],["C","P2"],["D","P3"]],"key":"C","why":"Posterior yaprakçığın orta tarağı P2’dir. Karşısında anterior yaprakçığın A2 bölgesi bulunur.","source":["BSE · Mitral kapak değerlendirmesi","https://doi.org/10.1530/ERP-20-0034"]},{"id":"demo-mitral-2","stem":"Marjinal kordası kopan bir mitral segmentte sistolde hangi hareket beklenir?","options":[["A","Serbest kenarın sol atriyuma dönmesi"],["B","Anulusun aortaya doğru ayrılması"],["C","Diyastolde komissürlerin birleşmesi"],["D","Papiller kasın atriyuma göç etmesi"]],"key":"A","why":"Marjinal kordalar yaprakçığın serbest kenarını destekler. Destek kaybolduğunda kenar sol atriyuma dönebilir ve flail segment görülebilir.","source":["BSE · Mitral kapak değerlendirmesi","https://doi.org/10.1530/ERP-20-0034"]}],"laa":[{"id":"demo-laa-1","stem":"TEE’de sol atriyal apendiks içinde, duvarla birlikte hareket eden paralel kas bantları görülüyor. Normal anatomide bunlar nedir?","options":[["A","Moderatör bant"],["B","Korda tendinealar"],["C","Östaki kapakçığı"],["D","Pektinat kaslar"]],"key":"D","why":"Pektinat kaslar apendiksin trabeküllü iç yüzeyini oluşturur. Farklı TEE düzlemlerinde duvarla sürekliliklerini izlemek trombüs ayrımına yardımcı olur.","source":["LAA morfolojisi ve ekokardiyografik değerlendirme","https://pmc.ncbi.nlm.nih.gov/articles/PMC11285475/"]},{"id":"demo-laa-2","stem":"TEE’de görülen Coumadin sırtı, sol atriyal apendiksi hangi yapıdan ayırır?","options":[["A","Sol üst pulmoner ven"],["B","Vena kava superior"],["C","Sağ alt pulmoner ven"],["D","Koroner sinüs ostiyumu"]],"key":"A","why":"Sol lateral atriyal sırt, apendiks ağzı ile sol üst pulmoner ven arasında uzanır. Belirgin olduğunda kitleyi taklit edebilir.","source":["LAA morfolojisi ve ekokardiyografik değerlendirme","https://pmc.ncbi.nlm.nih.gov/articles/PMC11285475/"]}],"hepatic":[{"id":"demo-hepatic-1","stem":"Hepatik venlerde pulsed-wave Doppler ile sistol boyunca ters akım izleniyor. Bu bulgu en çok hangi kapak lezyonunu destekler?","options":[["A","Mitral darlığı"],["B","Ciddi triküspit yetersizliği"],["C","Pulmoner darlık"],["D","Aort yetersizliği"]],"key":"B","why":"Ciddi triküspit yetersizliğinde sistolik geri akım sağ atriyumdan hepatik venlere iletilebilir. Yorumda ritim, sağ atriyum basıncı ve diğer yetersizlik ölçütleri birlikte değerlendirilir.","source":["EACVI · Doğal kapak yetersizliklerinin değerlendirilmesi","https://doi.org/10.1093/ehjci/jeab253"]},{"id":"demo-hepatic-2","stem":"Karaciğerden çıkan kan, ana hepatik venlerden sonra önce hangi damara ulaşır?","options":[["A","Portal ven"],["B","Vena kava superior"],["C","Vena kava inferior"],["D","Pulmoner ven"]],"key":"C","why":"Hepatik venler diyaframın hemen altında vena kava inferiora açılır. Kan oradan sağ atriyuma döner.","source":["AJR · Hepatik ven anatomisi","https://doi.org/10.2214/ajr.180.6.1801583"]}],"aortic_valve":[{"id":"demo-aortic_valve-1","stem":"Normal kardiyak siklusta aort kapağını hangi basınç değişikliği açar?","options":[["A","Aort basıncının sol ventrikül basıncını aşması"],["B","Sol atriyum basıncının sol ventrikülü aşması"],["C","Sağ ventrikül basıncının pulmoner arteri aşması"],["D","Sol ventrikül basıncının aort basıncını aşması"]],"key":"D","why":"İzovolümetrik kontraksiyonun sonunda sol ventrikül basıncı aort basıncını aşınca kapak açılır ve ejeksiyon başlar.","source":["OpenStax · Kardiyak siklus","https://openstax.org/books/anatomy-and-physiology/pages/19-3-cardiac-cycle"]},{"id":"demo-aortic_valve-2","stem":"Kısa eksende normal bir triküspit aort kapağının yaprakçıkları nasıl adlandırılır?","options":[["A","Sağ koroner, sol koroner ve nonkoroner"],["B","Anterior, septal ve inferior"],["C","A1, A2 ve A3"],["D","Sağ, sol ve komissüral"]],"key":"A","why":"Aort yaprakçıklarının isimleri komşu sinüslerin koroner ostiyumlarla ilişkisine dayanır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"tricuspid":[{"id":"demo-tricuspid-1","stem":"Triküspit kapaktan diyastolde geçen kan hangi yolu izler?","options":[["A","Sol atriyumdan sol ventriküle"],["B","Sağ ventrikülden pulmoner artere"],["C","Sağ atriyumdan sağ ventriküle"],["D","Sağ atriyumdan sol atriyuma"]],"key":"C","why":"Triküspit kapak sağ atriyum ile sağ ventrikül arasındaki atriyoventriküler kapaktır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-tricuspid-2","stem":"Triküspit kapağın hangi yaprakçığı interventriküler septuma komşudur?","options":[["A","Posterior mitral yaprakçık"],["B","Septal yaprakçık"],["C","Nonkoroner yaprakçık"],["D","Sol koroner yaprakçık"]],"key":"B","why":"Septal yaprakçık sağ ventrikülün septal tarafına tutunur. Apikal dört boşluk kesitinde bu ilişki izlenebilir.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"pulmonary_valve":[{"id":"demo-pulmonary_valve-1","stem":"Pulmoner kapak hangi iki yapı arasında bulunur?","options":[["A","Sağ ventrikül çıkış yolu ve pulmoner trunkus"],["B","Sol ventrikül çıkış yolu ve aorta"],["C","Sağ atriyum ve sağ ventrikül"],["D","Sol atriyum ve pulmoner ven"]],"key":"A","why":"Sağ ventrikülden çıkan kan pulmoner kapağı geçerek pulmoner trunkusa girer.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pulmonary_valve-2","stem":"Pulmoner kapağı triküspit kapaktan ayıran yapısal özellik hangisidir?","options":[["A","İki boşluğu birleştirmesi"],["B","Sadece diyastolde açılması"],["C","Bir septal yaprakçığının olması"],["D","Yaprakçıklarının korda ve papiller kas bağlantısı taşımaması"]],"key":"D","why":"Pulmoner kapak bir semilunar kapaktır. Yaprakçıkları korda tendinealarla papiller kaslara bağlanmaz.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"lv":[{"id":"demo-lv-1","stem":"Normal kalpte apeksi ağırlıklı olarak hangi boşluk oluşturur?","options":[["A","Sol ventrikül"],["B","Sağ atriyum"],["C","Sağ ventrikül çıkış yolu"],["D","Sol atriyum"]],"key":"A","why":"Sol ventrikül apeksi oluşturur. Dış yüzeyde ön interventriküler oluk, iki ventrikül arasındaki sınırı izlemeye yardım eder.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-lv-2","stem":"Sol ventrikül duvarının sağ ventriküle göre daha kalın olmasının temel nedeni nedir?","options":[["A","Kalp hızının daha yüksek olması"],["B","Daha fazla atım hacmi pompalaması"],["C","Sistemik dolaşımın daha yüksek basıncına karşı çalışması"],["D","Kanı daha uzun süre depolaması"]],"key":"C","why":"İki ventrikül kararlı durumda benzer atım hacmi pompalar. Sol ventrikül sistemik dolaşımın daha yüksek basıncını oluşturur.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"rv":[{"id":"demo-rv-1","stem":"Apikal dört boşluk kesitinde moderatör bant hangi boşluğu tanımaya yardım eder?","options":[["A","Sol atriyum"],["B","Sağ ventrikül"],["C","Sol ventrikül"],["D","Sağ atriyum"]],"key":"B","why":"Moderatör bant morfolojik sağ ventrikülde septum ile anterior papiller kas bölgesini birleştirir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-rv-2","stem":"TAPSE ölçümü, sağ ventrikülün hangi hareketini örnekler?","options":[["A","Septumun çevresel deformasyonunu"],["B","Çıkış yolunun radyal genişlemesini"],["C","Sağ atriyum rezervuar fonksiyonunu"],["D","Lateral triküspit anulusun sistolik uzunlamasına yer değiştirmesini"]],"key":"D","why":"TAPSE, lateral triküspit anulusun sistolde apekse doğru hareketini ölçer. Sağ ventrikülün uzunlamasına işlevi hakkında bilgi verir.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"la":[{"id":"demo-la-1","stem":"Arka görünümde sol atriyuma giren damarlar hangi dolaşımdan kan getirir?","options":[["A","Sistemik venöz dolaşımdan"],["B","Koroner venöz dolaşımdan"],["C","Pulmoner venöz dolaşımdan"],["D","Portal dolaşımdan"]],"key":"C","why":"Pulmoner venler akciğerlerde oksijenlenen kanı sol atriyuma taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-la-2","stem":"Ventrikül diyastolünde sol atriyumdan çıkan kan sırasıyla hangi yapılara ulaşır?","options":[["A","Triküspit kapak ve sağ ventrikül"],["B","Mitral kapak ve sol ventrikül"],["C","Aort kapağı ve aorta"],["D","Pulmoner kapak ve pulmoner arter"]],"key":"B","why":"Sol atriyumun çıkışında mitral kapak yer alır. Kapak açıldığında kan sol ventriküle geçer.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"ra":[{"id":"demo-ra-1","stem":"Miyokardın venöz kanının büyük bölümünü sağ atriyuma hangi yapı getirir?","options":[["A","Pulmoner trunkus"],["B","Sol üst pulmoner ven"],["C","Brakiyosefalik arter"],["D","Koroner sinüs"]],"key":"D","why":"Koroner sinüs, kalp venlerinin topladığı kanın büyük kısmını sağ atriyuma boşaltır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-ra-2","stem":"Tipik anatomide sinüs düğümü sağ atriyumun hangi damar bileşkesine yakındır?","options":[["A","Vena kava superior"],["B","Sol üst pulmoner ven"],["C","Vena kava inferior"],["D","Koroner sinüs"]],"key":"A","why":"Sinüs düğümü sağ atriyumun üst kısmında, vena kava superiorun girişine yakın yerleşir.","source":["OpenStax · Kardiyak ileti sistemi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-2-cardiac-muscle-and-electrical-activity"]}],"pa":[{"id":"demo-pa-1","stem":"Ana pulmoner arterin bifurkasyonu hangi iki dala ayrılır?","options":[["A","Sağ ve sol pulmoner venlere"],["B","Sağ ve sol pulmoner arterlere"],["C","Sağ ve sol koroner arterlere"],["D","İnen aorta ve aort arkına"]],"key":"B","why":"Pulmoner trunkus sağ ve sol pulmoner arterlere ayrılır. Bu dallar kanı ilgili akciğere taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pa-2","stem":"Normal dolaşımda ana pulmoner arterdeki kanın özelliği nedir?","options":[["A","Akciğerlerden sol atriyuma dönmektedir"],["B","Aort kökünü yeni geçmiştir"],["C","Oksijen içeriği pulmoner ven kanından daha düşüktür"],["D","Karaciğerden doğrudan gelmektedir"]],"key":"C","why":"Pulmoner arter sağ ventrikülden akciğere henüz oksijenlenmemiş kan taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"pv":[{"id":"demo-pv-1","stem":"Klasik anatomide sol atriyuma ayrı ostiyumlarla açılan kaç pulmoner ven vardır?","options":[["A","İki"],["B","Üç"],["C","Altı"],["D","Dört"]],"key":"D","why":"Tipik olarak sağ ve sol akciğerden birer üst ve alt pulmoner ven gelir. Ostiyum sayısı anatomik varyantlarda değişebilir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pv-2","stem":"Pulmoner ven Dopplerinde sistolik akımın tersine dönmesi hangi lezyonun şiddetini destekler?","options":[["A","Ciddi mitral yetersizliği"],["B","Ciddi pulmoner darlık"],["C","Triküspit darlığı"],["D","İzole aort darlığı"]],"key":"A","why":"Ciddi mitral yetersizliğinde sistolik jet ve sol atriyum basınç artışı pulmoner ven akımını tersine çevirebilir. Jet yönü ve örneklenen ven bulguyu etkiler.","source":["EACVI · Doğal kapak yetersizliklerinin değerlendirilmesi","https://doi.org/10.1093/ehjci/jeab253"]}],"svc":[{"id":"demo-svc-1","stem":"Vena kava superior hangi iki venin birleşmesiyle oluşur?","options":[["A","Sağ ve sol brakiyosefalik venler"],["B","Sağ ve sol hepatik venler"],["C","Sağ ve sol pulmoner venler"],["D","Sağ ve sol ana iliak venler"]],"key":"A","why":"Sağ ve sol brakiyosefalik venler birleşerek vena kava superioru oluşturur. Vena kava superior sağ atriyuma açılır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-svc-2","stem":"Normal anatomide baş ve üst ekstremitelerin venöz kanı sağ atriyuma hangi yolla döner?","options":[["A","Koroner sinüs"],["B","Pulmoner venler"],["C","Vena kava superior"],["D","Portal ven"]],"key":"C","why":"Baş-boyun ve üst ekstremite kanı brakiyosefalik venlerden vena kava superiora ulaşır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"ivc":[{"id":"demo-ivc-1","stem":"Subkostal uzun eksende vena kava inferioru kraniyale doğru takip ediyorsunuz. Hangi boşluğa ulaşırsınız?","options":[["A","Sol atriyum"],["B","Sağ atriyum"],["C","Sağ ventrikül"],["D","Sol ventrikül"]],"key":"B","why":"Vena kava inferior diyaframı geçerek sağ atriyumun alt bölümüne açılır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-ivc-2","stem":"Spontan soluyan erişkinde vena kava inferior çapı ve inspiratuvar kollapsı birlikte hangi basıncın tahmininde kullanılır?","options":[["A","Aort diyastolik basıncı"],["B","Sol atriyum basıncı"],["C","Pulmoner kapiller kama basıncı"],["D","Sağ atriyum basıncı"]],"key":"D","why":"Kaval çap ve inspirasyonla değişimi tahmini sağ atriyum basıncına katkı sağlar. Yorumda solunum biçimi ve klinik koşullar dikkate alınır.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"coronary":[{"id":"demo-coronary-1","stem":"Ön interventriküler olukta apekse doğru seyreden koroner arter hangisidir?","options":[["A","Sirkumfleks arter"],["B","Sağ marjinal arter"],["C","Sol ön inen arter (LAD)"],["D","Posterior inen arter"]],"key":"C","why":"LAD, anterior interventriküler olukta izlenir ve seyri boyunca septal ve diyagonal dallar verir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-coronary-2","stem":"Sol ana koroner arterin tipik iki terminal dalı hangileridir?","options":[["A","LAD ve sirkumfleks arter"],["B","LAD ve sağ koroner arter"],["C","Sağ koroner ve posterior inen arter"],["D","Sirkumfleks ve sağ marjinal arter"]],"key":"A","why":"Sol ana koroner arter tipik olarak sol ön inen ve sirkumfleks arterlere ayrılır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}]}};
+// Patient coordinates: +x left, +y superior, +z anterior. Dimensions are schematic.
+const TAU = 2 * Math.PI;
+const add = (a,b) => a.map((x,i) => x+b[i]);
+const sub = (a,b) => a.map((x,i) => x-b[i]);
+const scale = (a,k) => a.map(x => x*k);
+const mix = (a,b,t) => a.map((x,i) => x+(b[i]-x)*t);
+const unit = a => scale(a, 1/(Math.hypot(...a)||1));
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const clamp = (x,lo,hi) => Math.max(lo,Math.min(hi,x));
+const pi = Math.PI;
+
+// Catmull–Rom interpolation for a continuous vessel lumen and ventricular outline.
+function spline(nodes,t){
+  const f=clamp(t,0,1)*(nodes.length-1), i=Math.min(nodes.length-2,Math.floor(f)), s=f-i;
+  const a=nodes[Math.max(i-1,0)], b=nodes[i], c=nodes[i+1], d=nodes[Math.min(i+2,nodes.length-1)];
+  return b.map((v,k)=>0.5*(2*v+(-a[k]+c[k])*s+(2*a[k]-5*v+4*c[k]-d[k])*s*s+(-a[k]+3*v-3*c[k]+d[k])*s*s*s));
+}
+const regionIndex = Object.fromEntries(CATALOG.regions.map((r,i)=>[r.id,i+1]));
+function beatPoint(p,id,phase){
+  const [x,y,z]=p;
+  if (['lv','rv','coronary'].includes(id)){
+    const h=clamp((y+1.68)/2.35,0,1), cx=0.50*(1-h), cz=0.28*(1-h);
+    const twist=phase*(0.085-0.13*h), shrink=1-phase*(0.025+0.074*Math.sin(pi*h));
+    const dx=(x-cx)*shrink, dz=(z-cz)*shrink;
+    return [cx+dx*Math.cos(twist)-dz*Math.sin(twist), y-phase*.13*h, cz+dz*Math.cos(twist)+dx*Math.sin(twist)];
+  }
+  if (['ra','la','laa'].includes(id)){
+    const amount=phase*.023;
+    return [x*(1+amount),y+amount*(y-.55)-.055*phase,z*(1+amount)];
+  }
+  if (['aorta','pa'].includes(id)){
+    const near=Math.exp(-Math.pow((y-1.05)/.66,2));
+    return [x*(1+.018*near*phase),y-.065*near*phase,z*(1+.027*near*phase)];
+  }
+  return p;
+}
+const palette={
+  lv:'#bf6258',rv:'#b67167',ra:'#976879',la:'#ad6a72',laa:'#d98578',aorta:'#da735b',
+  pa:'#5a92aa',pv:'#ce807b',ivc:'#7299ab',svc:'#7199b2',hepatic:'#79a8b6',
+  coronary:'#e1ac72',mitral:'#e1b892',tricuspid:'#bdcdbc',aortic_valve:'#e1a078',pulmonary_valve:'#a8cbd4'
+};
+const rgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
+
+function buildHeart(){
+  const vertices=[], indices=[];
+  function surface(id,layer,nu,nv,point,base=palette[id],wrap=true,customBeat=false,skipCell=null){
+    const start=vertices.length/16, color=typeof base==='string'?rgb(base):base;
+    for(let j=0;j<=nv;j++){
+      const v=j/nv, row=[];
+      for(let i=0;i<=nu;i++){
+        const u=i/nu;
+        row.push(point(u,v,0));
+      }
+      for(let i=0;i<=nu;i++){
+        const u=i/nu, actualId=typeof id==='function'?id(u,v):id;
+        const p=row[i], p1=customBeat?point(u,v,1):beatPoint(p,actualId,1);
+        const u1=wrap?u-.001:Math.max(0,u-.001), u2=wrap?u+.001:Math.min(1,u+.001);
+        const v1=Math.max(0,v-.001),v2=Math.min(1,v+.001);
+        const normal=unit(cross(sub(point(u,v2,0),point(u,v1,0)),sub(point(u2,v,0),point(u1,v,0))));
+        const n1=customBeat?unit(cross(sub(point(u,v2,1),point(u,v1,1)),sub(point(u2,v,1),point(u1,v,1)))):normal;
+        vertices.push(...p,...p1,...normal,...n1,...color,regionIndex[actualId]+layer*32);
+      }
+    }
+    for(let j=0;j<nv;j++) for(let i=0;i<nu;i++){
+      if(skipCell&&skipCell((i+.5)/nu,(j+.5)/nv))continue;
+      const k=start+j*(nu+1)+i;
+      indices.push(k,k+nu+1,k+1, k+1,k+nu+1,k+nu+2);
+    }
+  }
+  function chamber(id,center,radii,skew,color=palette[id]){
+    surface(id,1,40,23,(u,v)=>{
+      const a=u*TAU, b=(v-.5)*pi*.9998, h=Math.sin(b), ring=Math.cos(b);
+      const relief=1+.032*Math.cos(3*a+.7)*ring+.023*Math.sin(2*b-a);
+      return [center[0]+radii[0]*ring*Math.cos(a)*relief+skew*h,
+        center[1]+radii[1]*h+.07*ring*Math.cos(a),
+        center[2]+radii[2]*ring*Math.sin(a)*relief+.06*h];
+    },color);
+  }
+  // A moving orthogonal frame gives each curved vessel a round section.
+  function tube(id,layer,nodes,opts={}){
+    const seg=opts.seg||Math.max(14,(nodes.length-1)*6), around=opts.around||18;
+    const ringCache=new Map();
+    function frame(t){
+      if(ringCache.has(t)) return ringCache.get(t);
+      const p=spline(nodes,t), tangent=unit(sub(spline(nodes,Math.min(1,t+.001)).slice(0,3),spline(nodes,Math.max(0,t-.001)).slice(0,3)));
+      const ref=opts.ref||[0,0,1];
+      const n=unit(cross(tangent,Math.abs(tangent[0]*ref[0]+tangent[1]*ref[1]+tangent[2]*ref[2])>.97?[0,1,0]:ref)), b=cross(n,tangent);
+      const out={p,n,b}; ringCache.set(t,out); return out;
+    }
+    function ring(u,t,ratio=1){
+      const {p,n,b}=frame(t), angle=u*TAU, radius=Math.max(.003,p[3])*ratio;
+      return add(p.slice(0,3),add(scale(n,radius*Math.cos(angle)),scale(b,radius*Math.sin(angle))));
+    }
+    surface(id,layer,around,seg,(u,v)=>ring(u,v),opts.color||palette[id]);
+    for(const end of opts.open||[]){
+      const tint=rgb(opts.color||palette[id]), inward=end===1?-1:1;
+      surface(id,layer,around,2,(u,v)=>ring(u,end,1-v*.25),mix(tint,[1,.84,.76],.35));
+      surface(id,layer,around,3,(u,v)=>ring(u,end+inward*.075*v,.75-.12*v),scale(tint,.48));
+      surface(id,layer,around,2,(u,v)=>ring(u,end+inward*.075,.63*(1-v)+.001),scale(tint,.25));
+    }
+  }
+  const rings=[
+    [.61,-1.64,.34,.026,.027], [.50,-1.48,.34,.27,.22], [.34,-1.20,.29,.53,.40],
+    [.15,-.82,.21,.81,.59], [-.01,-.39,.12,1.03,.75], [-.05,.03,.075,1.15,.84],
+    [-.045,.37,.035,1.15,.82], [-.025,.59,.005,1.04,.71], [-.01,.68,-.025,.91,.62]
+  ];
+  const vent=(t,a,offset=0)=>{
+    const [x,y,z,rx,rz]=spline(rings,t), aFront=1.24+.08*Math.sin(pi*t), aBack=4.27+.13*t;
+    const groove=(aa)=>Math.exp(-Math.pow(Math.atan2(Math.sin(a-aa),Math.cos(a-aa))/.12,2));
+    const s=1-(.040*groove(aFront)+.036*groove(aBack))*Math.sin(pi*t);
+    return [x+(rx+offset)*Math.cos(a)*s, y+.13*t*Math.cos(a)-.08*t*Math.sin(a),
+            z+(rz+offset)*Math.sin(a)*(1+.025*Math.cos(3*a))*s];
+  };
+  const front=t=>1.24+.08*Math.sin(pi*t), back=t=>4.27+.13*t;
+  surface('rv',0,39,33,(u,t)=>vent(t,front(t)+(back(t)-front(t))*u),palette.rv,false);
+  surface('lv',0,45,33,(u,t)=>vent(t,back(t)+(front(t)+TAU-back(t))*u),palette.lv,false);
+  // Infundibulum continuous with the anterior RV free wall.
+  tube('rv',1,[[-.36,-.02,.10,.11],[-.27,.18,.22,.27],[-.17,.36,.35,.335],[-.04,.51,.44,.34],[.07,.62,.51,.322],[.13,.74,.53,.28]],{color:'#b97166',around:25});
+  chamber('ra',[-.79,.69,.015],[.57,.58,.52],-.05);
+  chamber('ra',[-.62,.98,.34],[.37,.205,.24],.15,'#ac7988');
+  chamber('la',[.14,.91,-.45],[.72,.49,.47],.06);
+  tube('laa',1,[[.45,1.02,-.40,.25],[.72,1.12,-.27,.28],[.91,1.15,-.04,.24],[1.02,1.13,.17,.17],[.97,1.02,.35,.11],[.82,.98,.43,.008]],{around:22,color:'#da8978'});
+  tube('laa',1,[[.88,1.09,-.10,.15],[1.07,1.13,.01,.14],[1.16,1.13,.13,.035]]);
+  tube('aorta',1,[[-.07,.65,.02,.30],[-.13,.99,.10,.29],[-.22,1.42,.10,.26],[-.18,1.77,.05,.25],[.02,1.94,-.10,.235],[.34,1.91,-.30,.219],[.51,1.69,-.53,.201],[.54,1.19,-.75,.186],[.51,.62,-.90,.17],[.43,-.35,-.94,.15],[.38,-.86,-.94,.14]],{open:[1],around:26});
+  tube('aorta',1,[[-.14,1.79,.025,.14],[-.22,2.04,.075,.128],[-.28,2.18,.07,.116],[-.32,2.37,.07,.098]],{open:[1]});
+  tube('aorta',1,[[-.27,2.15,.07,.088],[-.42,2.21,.03,.085],[-.58,2.27,0,.077]],{open:[1]});
+  tube('aorta',1,[[.046,1.9,-.11,.105],[.08,2.13,-.13,.096],[.08,2.38,-.14,.080]],{open:[1]});
+  tube('aorta',1,[[.29,1.89,-.27,.114],[.43,2.09,-.30,.102],[.56,2.22,-.35,.086]],{open:[1]});
+  tube('pa',1,[[.105,.60,.51,.23],[.17,.82,.56,.283],[.25,1.14,.46,.265],[.34,1.37,.25,.25],[.36,1.44,-.04,.21]],{around:24});
+  tube('pa',1,[[.34,1.42,.02,.208],[.57,1.45,-.10,.20],[.86,1.48,-.23,.18],[1.22,1.54,-.30,.15]],{open:[1]});
+  tube('pa',1,[[.32,1.43,.01,.202],[-.04,1.40,-.27,.194],[-.48,1.39,-.38,.174],[-.95,1.42,-.36,.154],[-1.3,1.43,-.28,.13]],{open:[1]});
+  tube('svc',1,[[-.88,.88,-.10,.235],[-.95,1.24,-.10,.225],[-.98,1.62,-.16,.205],[-.98,1.94,-.18,.186]],{open:[1]});
+  tube('ivc',1,[[-.88,.51,-.22,.242],[-.93,.20,-.27,.238],[-.91,-.19,-.34,.222],[-.92,-.58,-.38,.210],[-.93,-1.04,-.4,.182],[-.98,-1.55,-.43,.144]],{open:[1]});
+  tube('hepatic',1,[[-.91,-.61,-.38,.13],[-1.12,-.72,-.37,.126],[-1.36,-.86,-.31,.102],[-1.57,-1.02,-.25,.075]],{open:[1]});
+  tube('hepatic',1,[[-.91,-.71,-.40,.116],[-1.00,-.87,-.23,.108],[-1.10,-1.05,-.08,.09],[-1.16,-1.22,.06,.065]],{open:[1]});
+  tube('hepatic',1,[[-.94,-.75,-.38,.103],[-.74,-.90,-.32,.10],[-.57,-1.07,-.23,.081],[-.45,-1.17,-.13,.058]],{open:[1]});
+  for(const side of [-1,1]) for(const top of [0,1]){
+    const h=top?.98:.63;
+    tube('pv',1,[[.14+side*.31,h,-.56,.16],[.14+side*.58,h+.03,-.66,.155],
+      [.14+side*.86,h+(top?.10:-.06),-.75,.14],[.14+side*1.08,h+(top?.17:-.10),-.80,.122]],{open:[1]});
+  }
+
+  // Coronaries follow the actual epicardial surface including the interventricular grooves.
+  function epicardial(points,r0,r1){
+    const path=points.map(([t,a],i)=>[...vent(t,a,.026),r0+(r1-r0)*i/(points.length-1)]);
+    tube('coronary',1,path,{around:9,seg:Math.max(10,points.length*4)});
+  }
+  const lad=[[.91,1.08],[.79,1.24],[.63,1.31],[.49,1.28],[.34,1.28],[.21,1.35],[.09,1.40],[.035,1.59]];
+  epicardial(lad,.041,.008);
+  epicardial([[.82,1.24],[.76,.98],[.66,.77],[.54,.59],[.42,.48]],.028,.005);
+  epicardial([[.64,1.31],[.60,1.06],[.51,.89],[.41,.78],[.30,.71]],.025,.004);
+  epicardial([[.48,1.28],[.43,1.56],[.36,1.66],[.28,1.78]],.021,.004);
+  epicardial([[.88,1.00],[.93,.62],[.95,.05],[.94,-.49],[.91,-.93],[.88,-1.58]],.038,.013);
+  epicardial([[.94,.03],[.79,-.01],[.68,.095],[.56,.04],[.44,.10]],.026,.005);
+  epicardial([[.93,1.92],[.89,2.28],[.85,2.70],[.84,3.08],[.86,3.55],[.87,3.95],[.84,4.35]],.040,.023);
+  epicardial([[.86,2.75],[.73,2.72],[.60,2.62],[.46,2.58],[.31,2.45]],.027,.006);
+  epicardial([[.84,4.35],[.69,4.31],[.52,4.30],[.31,4.27],[.12,4.23]],.028,.005);
+
+  epicardial([[.74,1.00],[.69,.87],[.64,.66],[.57,.47]],.015,.0035);
+  epicardial([[.61,1.45],[.55,1.61],[.46,1.81]],.017,.003);
+  epicardial([[.62,.95],[.55,.91],[.49,.79],[.44,.77]],.012,.003);
+  epicardial([[.75,2.72],[.70,2.51],[.66,2.38],[.60,2.31]],.016,.0035);
+  epicardial([[.90,.62],[.84,.52],[.75,.43],[.67,.42]],.019,.003);
+  // Atrial view. AV free edges meet during systole; semilunar cusps retract.
+  const valves=[
+    ['mitral',.525,.69,-.35,.438,.323,2,-.16], ['tricuspid',-.555,.66,.00,.438,.36,3,.16],
+    ['aortic_valve',-.01,.72,.075,.220,.203,3,.06], ['pulmonary_valve',.235,.73,.563,.227,.207,3,-.10]
+  ];
+  function section(u,v,beat){
+    const a=u*TAU, radius=v*(1+.04*Math.cos(3*a-.5));
+    return [.025+1.14*radius*Math.cos(a),.615+.032*radius*Math.cos(a)-.10*beat,.035+.89*radius*Math.sin(a)];
+  }
+  function inOrifice(u,v){
+    const [px,,pz]=section(u,v,0);
+    return valves.some(([,x,,z,rx,rz,,turn])=>{
+      const dx=px-x, dz=pz-z, co=Math.cos(turn),si=Math.sin(turn);
+      return ((co*dx+si*dz)/rx)**2+((-si*dx+co*dz)/rz)**2<1.015;
+    });
+  }
+  // The section has a true opening under each annulus; its tissue never spans an orifice.
+  surface('lv',2,144,52,section,'#b16c64',true,true,inOrifice);
+  surface('rv',2,96,10,(u,v,b)=>{
+    const p=section(u,1,b),r=1-.10*v;
+    return [p[0]*r,p[1]-.35*v,p[2]*r];
+  },'#99615b',true,true);
+
+  for(const [id,x,y,z,rx,rz,n,turn] of valves){
+    const av=id==='mitral'||id==='tricuspid';
+    function place(xx,yy,zz,beat){
+      return [x+xx*Math.cos(turn)-zz*Math.sin(turn),y+yy-.10*beat,z+zz*Math.cos(turn)+xx*Math.sin(turn)];
+    }
+    surface(id,2,48,10,(u,v,b)=>{
+      const a=u*TAU, t=v*TAU, ridge=av?.023:.019;
+      return place((rx+ridge*Math.cos(t))*Math.cos(a),ridge*Math.sin(t)+.028*Math.cos(2*a),(rz+ridge*Math.cos(t))*Math.sin(a),b);
+    },palette[id],true,true);
+    surface(id,2,40,9,(u,v,b)=>{
+      const a=u*TAU, r=1-.987*v;
+      return place(rx*r*Math.cos(a),-.049-.56*Math.pow(v,.62),rz*r*Math.sin(a),b);
+    },av?'#642f41':'#603e49',true,true);
+    for(let l=0;l<n;l++){
+      surface(id,2,20,9,(u,v,b)=>{
+        const theta=(l+u)*TAU/n+(av?0:pi/6), scallop=Math.sin(pi*u);
+        const open=av?1-b:b, radius=1-v*((1-open)*.985+open*(.16+.22*scallop));
+        let xx=rx*radius*Math.cos(theta), zz=rz*radius*Math.sin(theta);
+        if(n===2){
+          // Anterior and posterior leaflets meet along a transverse coaptation line.
+          xx=rx*Math.cos(theta)*(1-.12*v);
+          zz=rz*Math.sin(theta)*(1-v*(.992-open*.54));
+        }
+        const deep=av?-.17*open:.085*open;
+        const yy=.027*Math.cos(2*theta)*(1-v)+v*(deep*scallop-.037)+.058*Math.sin(pi*v)*scallop;
+        return place(xx,yy,zz,b);
+      },mix(rgb(palette[id]),[1,.87,.76],l%2?.08:.20),false,true);
+    }
+  }
+  return {vertices:new Float32Array(vertices), indices:new Uint16Array(indices)};
+}
+
+const PRESETS={
+  front:{yaw:-.16,tilt:.19,center:[-.08,.33,0],zoom:1},
+  back:{yaw:pi-.11,tilt:.13,center:[-.07,.31,-.05],zoom:1},
+  valves:{yaw:-.075,tilt:1.32,center:[0,.56,.11],zoom:1.62},
+  inferior:{yaw:-.79,tilt:-.25,center:[-.30,-.27,-.22],zoom:1.18}
+};
+const ANCHORS={
+  aorta:[-.17,1.72,.27],mitral:[.54,.69,-.40],laa:[1.04,1.12,.11],hepatic:[-1.35,-.87,-.27],
+  tricuspid:[-.58,.67,-.02],aortic_valve:[-.037,.79,.07],pulmonary_valve:[.28,.82,.58],
+  lv:[.69,-.72,.58],rv:[-.47,-.11,.79],la:[.27,1.12,-.82],ra:[-1.13,.72,.35],
+  pa:[.29,1.18,.60],pv:[.95,1.06,-.72],svc:[-.98,1.67,-.08],
+  ivc:[-.96,-1.27,-.37],coronary:[.31,-.29,.79]
+};
+// The overlay only shows landmarks in a preset orientation. Free rotation uses surface picking.
+const GUIDE={
+  front:[['aorta',-1,-24],['laa',1,-4],['hepatic',-1,18],['lv',1,21]],
+  back:[['pv',-1,-21],['la',1,-19],['ivc',1,20]],
+  valves:[['mitral',1,-16],['tricuspid',-1,-4],['aortic_valve',-1,-54],['pulmonary_valve',1,35]],
+  inferior:[['hepatic',-1,-14],['ivc',1,28],['ra',-1,-36]]
+};
+
+function createGL(canvas,mesh){
+  const gl=canvas.getContext('webgl',{alpha:true,antialias:true,premultipliedAlpha:false,preserveDrawingBuffer:false});
+  if(!gl) return null;
+  const vs=`
+    attribute vec3 p0,p1,n0,n1,base;
+    attribute float item;
+    uniform vec4 cam; uniform vec3 center; uniform vec2 extent; uniform float phase,cut;
+    varying vec3 normal,col,modelPos; varying float depth,id,visible;
+    vec3 rot(vec3 p){
+      float x=cam.x*p.x-cam.y*p.z, z=cam.y*p.x+cam.x*p.z;
+      return vec3(x,cam.z*p.y-cam.w*z,cam.w*p.y+cam.z*z);
+    }
+    void main(){
+      vec3 pos=mix(p0,p1,phase), r=rot(pos-center); float layer=floor(item/32.0);
+      id=mod(item,32.0); visible=1.0;
+      if((cut<0.5&&layer>1.5)||(cut>0.5&&layer<1.5)) visible=0.0;
+      normal=rot(mix(n0,n1,phase)); col=base; modelPos=p0; depth=r.z;
+      gl_Position=vec4(r.x*extent.x,r.y*extent.y,-r.z*.16,1.);
+    }`;
+  const fs=`
+    precision mediump float;
+    uniform float selected,picking;
+    varying vec3 normal,col,modelPos; varying float depth,id,visible;
+    void main(){
+      if(visible<.5) discard;
+      if(picking>.5){gl_FragColor=vec4(id/255.,0.,0.,1.);return;}
+      vec3 n=normalize(normal); if(n.z<0.) n=-n;
+      float key=max(0.,dot(n,normalize(vec3(-.43,.67,.75))));
+      float fill=max(0.,dot(n,normalize(vec3(.78,.02,.42))));
+      float spec=pow(max(0.,dot(n,normalize(vec3(-.29,.41,.866)))),24.);
+      float rim=pow(1.-max(0.,n.z),3.);
+      float fiber=.013*sin(58.*modelPos.y+14.*modelPos.x+4.*sin(6.*modelPos.z));
+      float dither=.011*sin(dot(modelPos,vec3(87.,79.,57.)))*sin(98.*modelPos.z-15.*modelPos.x);
+      float light=.43+.53*key+.15*fill+clamp(depth*.038,-.045,.075)+fiber+dither;
+      vec3 c=col*light+vec3(.19,.145,.12)*spec+vec3(.085,.135,.146)*rim;
+      if(abs(id-selected)<.4) c=mix(c,vec3(1.,.76,.49),.18)+.046*rim;
+      gl_FragColor=vec4(c,1.);
+    }`;
+  function shader(type,src){
+    const sh=gl.createShader(type); gl.shaderSource(sh,src); gl.compileShader(sh);
+    if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  const prog=gl.createProgram();
+  gl.attachShader(prog,shader(gl.VERTEX_SHADER,vs)); gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,mesh.vertices,gl.STATIC_DRAW);
+  const ib=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,mesh.indices,gl.STATIC_DRAW);
+  for(const [name,num,offset] of [['p0',3,0],['p1',3,3],['n0',3,6],['n1',3,9],['base',3,12],['item',1,15]]){
+    const a=gl.getAttribLocation(prog,name);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,num,gl.FLOAT,false,64,4*offset);
+  }
+  const u=Object.fromEntries(['cam','center','extent','phase','cut','selected','picking'].map(s=>[s,gl.getUniformLocation(prog,s)]));
+  const fb=gl.createFramebuffer(), tex=gl.createTexture(), depth=gl.createRenderbuffer();
+  let fw=0,fh=0;
+  function resizeTarget(){
+    if(fw===canvas.width&&fh===canvas.height) return;
+    fw=canvas.width; fh=canvas.height;
+    gl.bindTexture(gl.TEXTURE_2D,tex); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,fw,fh,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+    gl.bindRenderbuffer(gl.RENDERBUFFER,depth);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,fw,fh);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depth);
+  }
+  function draw(s,pick=false){
+    gl.bindFramebuffer(gl.FRAMEBUFFER,pick?fb:null); if(pick) resizeTarget();
+    gl.viewport(0,0,canvas.width,canvas.height); gl.enable(gl.DEPTH_TEST); gl.disable(gl.DITHER);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    gl.uniform4f(u.cam,Math.cos(s.yaw),Math.sin(s.yaw),Math.cos(s.tilt),Math.sin(s.tilt));
+    gl.uniform3fv(u.center,s.center);gl.uniform2f(u.extent,2*s.scale/s.w,2*s.scale/s.h);
+    gl.uniform1f(u.phase,s.phase);gl.uniform1f(u.cut,s.view==='valves'?1:0);
+    gl.uniform1f(u.selected,regionIndex[s.selected]||0);gl.uniform1f(u.picking,pick?1:0);
+    gl.drawElements(gl.TRIANGLES,mesh.indices.length,gl.UNSIGNED_SHORT,0);
+  }
+  return {limit:1.75,draw,pick(x,y,s){
+    draw(s,true); const px=new Uint8Array(4);
+    gl.readPixels(clamp(Math.floor(x*fw/s.w),0,fw-1),clamp(fh-1-Math.floor(y*fh/s.h),0,fh-1),1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);return px[0];
+  }};
+}
+
+// Depth-buffered software rendering keeps the same 3D surfaces selectable without WebGL.
+function createSoftware(canvas,mesh){
+  const ctx=canvas.getContext('2d'), v=mesh.vertices, ix=mesh.indices, n=v.length/16;
+  const screen=new Float32Array(n*6);
+  let depths,ids,img;
+  function draw(s){
+    const w=canvas.width,h=canvas.height;
+    if(!img||img.width!==w||img.height!==h){img=ctx.createImageData(w,h);depths=new Float32Array(w*h);ids=new Uint8Array(w*h);}
+    depths.fill(-Infinity);ids.fill(0);img.data.fill(0);
+    const cy=Math.cos(s.yaw),sy=Math.sin(s.yaw),ct=Math.cos(s.tilt),st=Math.sin(s.tilt),factor=s.scale*w/s.w, ph=s.phase;
+    for(let i=0;i<n;i++){
+      const k=i*16,j=i*6;
+      let x=v[k]+(v[k+3]-v[k])*ph-s.center[0],y=v[k+1]+(v[k+4]-v[k+1])*ph-s.center[1],z=v[k+2]+(v[k+5]-v[k+2])*ph-s.center[2];
+      const zr=sy*x+cy*z;
+      screen[j]=w*.5+factor*(cy*x-sy*z);screen[j+1]=h*.5-factor*(ct*y-st*zr);screen[j+2]=st*y+ct*zr;
+      x=v[k+6]+(v[k+9]-v[k+6])*ph;y=v[k+7]+(v[k+10]-v[k+7])*ph;z=v[k+8]+(v[k+11]-v[k+8])*ph;
+      const zt=sy*x+cy*z, sign=(st*y+ct*zt)<0?-1:1, nx=(cy*x-sy*z)*sign,ny=(ct*y-st*zt)*sign,nz=(st*y+ct*zt)*sign;
+      const fiber=.014*Math.sin(54*v[k+1]+12*v[k]+3*Math.sin(7*v[k+2]));
+      const light=.43+fiber+.53*Math.max(0,-.43*nx+.67*ny+.75*nz)+.15*Math.max(0,.88*nx+.02*ny+.47*nz)+clamp(screen[j+2]*.038,-.045,.075);
+      const spec=.15*Math.pow(Math.max(0,-.29*nx+.41*ny+.866*nz),24), rim=.10*Math.pow(1-Math.max(0,nz),3);
+      const sel=(Math.round(v[k+15])%32===regionIndex[s.selected]) ? .18 : 0;
+      for(let c=0;c<3;c++)screen[j+3+c]=255*((v[k+12+c]*light+spec+rim)*(1-sel)+[1,.76,.49][c]*sel);
+    }
+    const pix=img.data;
+    for(let t=0;t<ix.length;t+=3){
+      const info=v[16*ix[t]+15],layer=Math.floor(info/32);
+      if(s.view==='valves'?layer!==2:layer===2) continue;
+      const a=6*ix[t],b=6*ix[t+1],c=6*ix[t+2];
+      const ax=screen[a],ay=screen[a+1],bx=screen[b],by=screen[b+1],cx=screen[c],cyy=screen[c+1];
+      const den=(by-cyy)*(ax-cx)+(cx-bx)*(ay-cyy);
+      if(Math.abs(den)<1e-7) continue;
+      const x0=Math.max(0,Math.floor(Math.min(ax,bx,cx))),x1=Math.min(w-1,Math.ceil(Math.max(ax,bx,cx)));
+      const y0=Math.max(0,Math.floor(Math.min(ay,by,cyy))),y1=Math.min(h-1,Math.ceil(Math.max(ay,by,cyy)));
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const f=((by-cyy)*(x+.5-cx)+(cx-bx)*(y+.5-cyy))/den, g=((cyy-ay)*(x+.5-cx)+(ax-cx)*(y+.5-cyy))/den, l=1-f-g;
+        if(f<0||g<0||l<0)continue;
+        const pos=y*w+x,zz=f*screen[a+2]+g*screen[b+2]+l*screen[c+2];
+        if(zz<depths[pos])continue;
+        depths[pos]=zz;ids[pos]=info%32;
+        for(let ch=0;ch<3;ch++)pix[pos*4+ch]=f*screen[a+3+ch]+g*screen[b+3+ch]+l*screen[c+3+ch];
+        pix[pos*4+3]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+  }
+  return {limit:.9,software:true,draw,pick(x,y,s){return ids?.[clamp(Math.floor(y*canvas.height/s.h),0,canvas.height-1)*canvas.width+clamp(Math.floor(x*canvas.width/s.w),0,canvas.width-1)]||0;}};
+}
+
+function mountHeart(onPick){
+  let canvas=document.getElementById('heart'),overlay=document.getElementById('overlay');
+  const box=document.getElementById('viewport'),ctx=overlay.getContext('2d');
+  const mesh=buildHeart();
+  let engine;
+  function useSoftware(){
+    const replacement=canvas.cloneNode(false);canvas.replaceWith(replacement);canvas=replacement;
+    engine=createSoftware(canvas,mesh);
+  }
+  try{engine=createGL(canvas,mesh);}catch(e){console.info('3B yazılım görünümü',e.message);}
+  if(!engine) useSoftware();
+  const s={view:'front',selected:'aorta',...PRESETS.front,playing:!matchMedia('(prefers-reduced-motion: reduce)').matches,
+    guides:true,clock:.58,phase:0,w:1,h:1,scale:1,zoomExtra:1};
+  let tags=[],dirty=true,inView=true,last=0,tick=null,drag=null;
+  function resize(){
+    const rect=box.getBoundingClientRect(); s.w=Math.max(1,rect.width);s.h=Math.max(1,rect.height);
+    const dpr=window.devicePixelRatio||1, ratio=Math.min(dpr,engine.limit), od=Math.min(dpr,2);
+    canvas.width=Math.max(1,Math.round(s.w*ratio));canvas.height=Math.max(1,Math.round(s.h*ratio));
+    overlay.width=Math.round(s.w*od);overlay.height=Math.round(s.h*od);
+    ctx.setTransform(od,0,0,od,0,0); dirty=true; schedule();
+  }
+  function project(p){
+    const [x,y,z]=sub(p,s.center),cy=Math.cos(s.yaw),sy=Math.sin(s.yaw),ct=Math.cos(s.tilt),st=Math.sin(s.tilt),zr=sy*x+cy*z;
+    return [s.w/2+s.scale*(cy*x-sy*z),s.h/2-s.scale*(ct*y-st*zr)];
+  }
+  function guides(){
+    ctx.clearRect(0,0,s.w,s.h);tags=[];
+    const base=PRESETS[s.view],turn=Math.atan2(Math.sin(s.yaw-base.yaw),Math.cos(s.yaw-base.yaw));
+    if(!s.guides||Math.abs(turn)>.47||Math.abs(s.tilt-base.tilt)>.34)return;
+    const compact=s.w<450;
+    const list=GUIDE[s.view],h=compact?23:25, margin=compact?6:12;
+    ctx.font=(compact?'500 10px':'500 11px')+' system-ui,sans-serif';
+    const proposed=list.map(([id,side,shift])=>{
+      let p=beatPoint(ANCHORS[id],id,s.phase);
+      if(s.view==='valves')p=[p[0],p[1]-.10*s.phase,p[2]];
+      const [x,y]=project(p),r=CATALOG.regions[regionIndex[id]-1],label=r.short;
+      const w=Math.ceil(ctx.measureText(label).width)+16;
+      return {id,x,y,w,h,side,label,tx:side===1?s.w-margin-w:margin,ty:clamp(y+shift,15,s.h-16)};
+    }).filter(o=>o.x>=0&&o.x<=s.w&&o.y>=8&&o.y<=s.h-8);
+    for(const side of [-1,1]){
+      const group=proposed.filter(o=>o.side===side).sort((a,b)=>a.ty-b.ty);
+      group.forEach((o,i)=>{if(i)o.ty=Math.max(o.ty,group[i-1].ty+h+5);});
+      for(let i=group.length-1;i>=0;i--){group[i].ty=Math.min(group[i].ty,i===group.length-1?s.h-h/2-4:group[i+1].ty-h-5);}
+    }
+    for(const o of proposed){
+      const {id,x,y,w,side,tx,ty,label}=o, edge=side===1?tx:tx+w, focus=id===s.selected;
+      ctx.lineWidth=focus?1.35:1;ctx.strokeStyle=focus?'#c0e8d6':'#89a8ad';
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(edge+(side===1?-8:8),ty);ctx.lineTo(edge,ty);ctx.stroke();
+      ctx.fillStyle=focus?'#c4f1d6':'#d2dddc';ctx.beginPath();ctx.arc(x,y,focus?3.6:2.9,0,TAU);ctx.fill();
+      ctx.fillStyle=focus?'#c4e9d4':'#203b43';ctx.strokeStyle=focus?'#c4e9d4':'#455f65';
+      ctx.beginPath();ctx.roundRect(tx,ty-h/2,w,h,5);ctx.fill();ctx.stroke();
+      ctx.fillStyle=focus?'#173d32':'#ecf3ed';ctx.textBaseline='middle';ctx.fillText(label,tx+8,ty+.5);
+      tags.push({id,x:tx,y:ty-h/2,w,h});
+    }
+  }
+  function redraw(){
+    s.scale=Math.min(s.w/3.66,s.h/4.67)*s.zoom*s.zoomExtra;
+    const u=s.clock;
+    s.phase=u<.39?Math.pow(Math.sin(pi*u/.39),.74):0;
+    engine.draw(s);guides();dirty=false;
+    document.getElementById('phase').textContent=u<.39?'Sistol':'Diyastol';
+    document.getElementById('beat-indicator').style.opacity=String(.48+.50*s.phase);
+  }
+  function frame(ts){
+    tick=null;
+    if(!inView||document.hidden){last=0;return;}
+    if(dirty||s.playing){
+      const interval=engine.software?88:32;
+      if(dirty||ts-last>=interval){
+        if(s.playing&&last)s.clock=(s.clock+Math.min(ts-last,170)/940)%1;
+        last=ts;redraw();
+      }
+      if(s.playing)schedule();
+    }
+  }
+  function schedule(){if(tick===null&&inView&&!document.hidden)tick=requestAnimationFrame(frame);}
+  function refresh(){dirty=true;schedule();}
+  function view(id){
+    s.view=id;Object.assign(s,PRESETS[id]);s.zoomExtra=1;
+    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===id)));
+    refresh();
+  }
+  function zoom(step){s.zoomExtra=clamp(s.zoomExtra*step,.72,1.85);refresh();}
+  function motion(){
+    const b=document.getElementById('motion');b.textContent=s.playing?'Durdur':'Oynat';
+    b.setAttribute('aria-label',s.playing?'Kalp hareketini durdur':'Kalp hareketini oynat');b.setAttribute('aria-pressed',String(!s.playing));
+  }
+  function toggle(){s.playing=!s.playing;last=0;motion();refresh();}
+  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));
+  document.getElementById('zoom-in').onclick=()=>zoom(1.14);document.getElementById('zoom-out').onclick=()=>zoom(1/1.14);
+  document.getElementById('motion').onclick=toggle;
+  document.getElementById('guides').onclick=e=>{s.guides=!s.guides;e.currentTarget.setAttribute('aria-pressed',String(s.guides));refresh();};
+  document.getElementById('home').onclick=()=>view(s.view);
+  box.addEventListener('pointerdown',e=>{
+    if(e.button!==0||drag)return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,oy:s.yaw,ot:s.tilt,moved:false};box.setPointerCapture(e.pointerId);
+  });
+  box.addEventListener('pointermove',e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+    if(Math.hypot(dx,dy)>5)drag.moved=true;
+    if(drag.moved){s.yaw=drag.oy-dx*.009;s.tilt=clamp(drag.ot+dy*.008,-1.53,1.53);box.classList.add('grabbing');refresh();}
+  });
+  box.addEventListener('pointerup',e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    const moved=drag.moved;drag=null;box.classList.remove('grabbing');
+    if(moved)return;
+    const rect=box.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
+    const label=tags.find(t=>x>=t.x-2&&x<=t.x+t.w+2&&y>=t.y-3&&y<=t.y+t.h+3);
+    if(label){onPick(label.id);return;}
+    const picked=engine.pick(x,y,s),r=CATALOG.regions[picked-1];
+    if(r)onPick(r.id);
+  });
+  box.addEventListener('pointercancel',()=>{drag=null;box.classList.remove('grabbing');});
+  box.addEventListener('keydown',e=>{
+    const d={ArrowLeft:[.13,0],ArrowRight:[-.13,0],ArrowUp:[0,.12],ArrowDown:[0,-.12]}[e.key];
+    if(d){e.preventDefault();s.yaw+=d[0];s.tilt=clamp(s.tilt+d[1],-1.53,1.53);refresh();}
+  });
+  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();useSoftware();resize();});
+  if(window.IntersectionObserver)new IntersectionObserver(([e])=>{inView=e.isIntersecting;last=0;if(inView)refresh();}).observe(box);
+  document.addEventListener('visibilitychange',()=>{last=0;refresh();});
+  new ResizeObserver(resize).observe(box);
+  motion();view('front');resize();
+  return {setRegion(id,fromList=false){
+    s.selected=id;const r=CATALOG.regions[regionIndex[id]-1];
+    if(fromList)view(r.view);else refresh();
+  },getView:()=>s.view};
+}
+
+const byId = id=>document.getElementById(id);
+const allRegions=CATALOG.regions;
+const regions=Object.fromEntries(allRegions.map(r=>[r.id,r]));
+const select=byId('region'), optionLetters='ABCDE';
+const state={scope:'neu-kalp-atlasi-ornek-v1',banks:{},records:{},region:'aorta',bankStatus:'standalone',flags:new Set(),pendingFlag:null};
+let model,frameOrigin=null,lastHeight=0;
+
+function shuffle(items){
+  const out=items.slice();
+  for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}
+  return out;
+}
+function storeState(){
+  try{sessionStorage.setItem(state.scope,JSON.stringify({region:state.region,records:state.records,flags:[...state.flags]}));}catch{}
+}
+function loadState(){
+  let raw={};try{raw=JSON.parse(sessionStorage.getItem(state.scope)||'{}')||{};}catch{}
+  state.records=raw.records&&typeof raw.records==='object'?raw.records:{};
+  state.flags=new Set(Array.isArray(raw.flags)?raw.flags:[]);
+  state.region=Object.hasOwn(regions,raw.region)?raw.region:'aorta';
+}
+function bankFor(id){return state.banks[id]?.length?state.banks[id]:CATALOG.samples[id];}
+function recordFor(id){
+  const bank=bankFor(id),ids=bank.map(q=>q.id),old=state.records[id];
+  if(old?.order?.length===ids.length&&new Set(old.order).size===ids.length&&ids.every(q=>old.order.includes(q))&&old.answers&&Number.isInteger(old.index)&&old.index>=0&&old.index<ids.length)return old;
+  return state.records[id]={order:shuffle(ids),index:0,answers:{},pick:null,done:false};
+}
+function current(){
+  const bank=bankFor(state.region),rec=recordFor(state.region);
+  return {q:bank.find(x=>x.id===rec.order[rec.index]),rec,bank};
+}
+function make(tag,cls,text){
+  const el=document.createElement(tag);
+  if(cls)el.className=cls;if(text!==undefined)el.textContent=text;
+  return el;
+}
+function safeSource(feedback,q){
+  const source=q.source;if(!source||!source[0])return;
+  if(/^https?:\/\//i.test(source[1]||'')){
+    const a=make('a','',source[0]+' ↗');a.href=source[1];a.target='_blank';a.rel='noopener noreferrer';feedback.append(a);
+  }else feedback.append(make('span','reference',source[0]));
+}
+function scoreOf(rec,bank){return bank.reduce((sum,q)=>sum+(rec.answers[q.id]===q.key?1:0),0);}
+function render(){
+  const {q,rec,bank}=current(),id=state.region;
+  const answered=Object.hasOwn(rec.answers,q.id),selection=answered?rec.answers[q.id]:rec.pick;
+  const totalAnswered=Object.keys(rec.answers).length,score=scoreOf(rec,bank),fromSheet=Boolean(state.banks[id]?.length);
+  select.value=id;
+  byId('source').textContent=fromSheet?'Kurum bankası':'Örnek sorular';
+  byId('source').classList.toggle('bank',fromSheet);
+  byId('q-index').textContent=rec.done?'Tur tamamlandı':'Soru '+(rec.index+1)+' / '+bank.length;
+  byId('score').textContent=score+' doğru · '+(totalAnswered-score)+' yanlış';
+  byId('q-fill').style.width=(100*totalAnswered/bank.length)+'%';
+  byId('exercise').hidden=rec.done;byId('complete').hidden=!rec.done;
+  byId('stem').textContent=q.stem;
+  const choices=byId('choices');choices.replaceChildren();
+  q.options.forEach(([letter,text])=>{
+    const button=make('button','opt');button.type='button';button.disabled=answered;
+    button.setAttribute('aria-pressed',String(selection===letter));button.append(make('span','letter',letter),document.createTextNode(text));
+    if(answered&&letter===q.key)button.classList.add('correct');
+    if(answered&&letter===selection&&letter!==q.key)button.classList.add('wrong');
+    button.onclick=()=>{
+      if(rec.done||Object.hasOwn(rec.answers,q.id))return;
+      rec.pick=letter;storeState();
+      [...choices.children].forEach((b,i)=>b.setAttribute('aria-pressed',String(q.options[i][0]===letter)));
+      byId('submit').disabled=false;
+    };
+    choices.append(button);
+  });
+  const feedback=byId('feedback');feedback.replaceChildren();feedback.hidden=!answered||rec.done;
+  feedback.classList.toggle('negative',answered&&selection!==q.key);
+  if(answered){
+    const answer=q.options.find(([l])=>l===q.key);
+    feedback.append(make('strong','',(selection===q.key?'Doğru. ':'Doğru yanıt '+q.key+' · ')+answer[1]));
+    if(q.why)feedback.append(make('div','',q.why));
+    safeSource(feedback,q);
+  }
+  byId('submit').disabled=!rec.done&&!answered&&!selection;
+  byId('submit').textContent=rec.done?'Bu yapıyı yeniden çöz':answered?(rec.index+1===bank.length?'Sonucu gör':'Sonraki soru  →'):'Yanıtı kontrol et';
+  byId('result').textContent=bank.length+' soruda '+score+' doğru, '+(totalAnswered-score)+' yanlış. Başka bir yapı seçerek devam edebilirsiniz.';
+  byId('flag').hidden=!fromSheet||rec.done||!frameOrigin;
+  byId('flag').disabled=state.flags.has(q.id)||state.pendingFlag?.qid===q.id;
+  byId('flag-status').textContent=state.flags.has(q.id)?'Düzeltme isteği kaydedildi.':state.pendingFlag?.qid===q.id?'Kaydediliyor…':'';
+  const done=allRegions.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
+  byId('course-label').textContent=done+' / '+allRegions.length+' yapı tamamlandı';
+  byId('course-fill').style.width=100*done/allRegions.length+'%';
+  const note=byId('bank-note');
+  if(state.bankStatus==='standalone')note.textContent='Bu önizlemede her yapı için kaynaklı iki örnek soru bulunur.';
+  else if(state.bankStatus==='ready')note.textContent=fromSheet?'':'Bu yapı için eşleşen aktif kurum sorusu bulunamadı. Örnek sorular gösteriliyor.';
+  else note.textContent=state.bankStatus==='schema'?'SoruBankasi başlıkları okunamadı. Örnek sorular gösteriliyor.':'Kurum soru bankası şu anda kullanılamıyor. Örnek sorular gösteriliyor.';
+  note.hidden=!note.textContent;
+}
+function choose(id,fromList=false,move=false){
+  if(!Object.hasOwn(regions,id))return;
+  state.region=id;model?.setRegion(id,fromList);render();storeState();
+  if(move&&window.matchMedia('(max-width:740px)').matches)byId('quiz').scrollIntoView({block:'start',behavior:'instant'});
+}
+for(const group of [...new Set(allRegions.map(r=>r.group))]){
+  const og=make('optgroup');og.label=group;
+  for(const r of allRegions.filter(r=>r.group===group)){const opt=make('option','',r.name);opt.value=r.id;og.append(opt);}
+  select.append(og);
+}
+select.onchange=()=>choose(select.value,true);
+byId('to-model').onclick=()=>byId('viewport').scrollIntoView({block:'center'});
+byId('submit').onclick=()=>{
+  const {rec,q,bank}=current();
+  if(rec.done){delete state.records[state.region];recordFor(state.region);}
+  else if(Object.hasOwn(rec.answers,q.id)){
+    rec.pick=null;
+    if(rec.index+1>=bank.length)rec.done=true;else rec.index++;
+  }else if(q.options.some(([letter])=>letter===rec.pick)){rec.answers[q.id]=rec.pick;}
+  storeState();render();
+};
+function post(type,body,origin=frameOrigin||'*'){
+  if(window.parent!==window)window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:'+type,...body},origin);
+}
+function frameHeight(){
+  if(!frameOrigin)return;
+  const height=Math.ceil(document.querySelector('.atlas').getBoundingClientRect().height)+2;
+  if(height!==lastHeight){lastHeight=height;post('setFrameHeight',{height});}
+}
+byId('flag').onclick=()=>{
+  const {q}=current();
+  if(!frameOrigin||!state.banks[state.region]?.some(x=>x.id===q.id)||state.pendingFlag||state.flags.has(q.id))return;
+  state.pendingFlag={qid:q.id,nonce:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9)};
+  render();post('setComponentValue',{dataType:'json',value:state.pendingFlag});
+};
+window.addEventListener('message',e=>{
+  if(e.source!==window.parent||e.data?.type!=='streamlit:render'||!e.data.args?.atlasScope)return;
+  if(frameOrigin&&e.origin!==frameOrigin)return;
+  frameOrigin=e.origin==='null'?'*':e.origin;
+  const args=e.data.args,nextScope='neu-kalp-atlasi-'+args.atlasScope;
+  const changed=state.scope!==nextScope;
+  if(changed){state.scope=nextScope;loadState();}
+  state.banks=args.banks||{};state.bankStatus=args.status;
+  const ack=args.ack;
+  if(ack&&ack.nonce===state.pendingFlag?.nonce){
+    state.pendingFlag=null;
+    if(ack.ok){state.flags.add(ack.qid);storeState();}
+  }
+  if(changed)model?.setRegion(state.region,true);
+  render();if(ack&&!ack.ok&&current().q.id===ack.qid)byId('flag-status').textContent='Kaydedilemedi. Yeniden deneyebilirsiniz.';
+  frameHeight();
+});
+loadState();render();
+model=mountHeart(id=>choose(id,false,true));model.setRegion(state.region,true);
+new ResizeObserver(frameHeight).observe(document.querySelector('.atlas'));
+post('componentReady',{apiVersion:1});
+
+</script>
+</body>
+</html>
+'''
+
+@st.cache_resource(show_spinner=False)
+def _atlas_directory(html):
+    # Keep the TemporaryDirectory alive for as long as Streamlit serves this component.
+    directory = tempfile.TemporaryDirectory(prefix="neu_kalp_atlasi_")
+    Path(directory.name, "index.html").write_text(html, encoding="utf-8")
+    return directory
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _atlas_read_bank(sheet_id, index):
+    try:
+        if _get_service_account_info().get("type") != "service_account":
+            return {}, {}, "unavailable"
+    except FileNotFoundError:
+        return {}, {}, "unavailable"
+    return _atlas_bank(load_data(sheet_id, index, required_col="SoruID"))
+
+def _render_heart_atlas():
+    banks, lookup, status = _atlas_read_bank(SHEET_ID, QUESTION_WS_INDEX)
+    component = components.declare_component("neu_kalp_atlasi", path=_atlas_directory(_ATLAS_HTML).name)
+    scope = hashlib.sha256(f"{SHEET_ID}/{QUESTION_WS_INDEX}".encode()).hexdigest()[:12]
+    previous = st.session_state.get("atlas_review_ack", {})
+    event = component(atlasScope=scope, banks=banks, status=status, ack=previous,
+                      key="neu_kalp_atlasi", default=None)
+    if not isinstance(event, dict):
+        return
+    uid, nonce = event.get("qid"), event.get("nonce")
+    if not isinstance(uid, str) or not isinstance(nonce, str) or not 1 <= len(nonce) <= 80 or previous.get("nonce") == nonce:
+        return
+    target = lookup.get(uid)
+    ok = bool(target and flag_question_for_review(SHEET_ID, QUESTION_WS_INDEX, *target))
+    st.session_state.atlas_review_ack = {"qid": uid, "nonce": nonce, "ok": ok}
+    st.rerun()
 
 
 # ===================== HEADER / EKG ANİMASYONU =====================
@@ -469,6 +1378,11 @@ with st.sidebar:
 # ===================== EKRAN 0: SORU BANKASI / QUIZ =======
 # =========================================================
 if menu == "🧠 Soru Bankası":
+    mode = st.radio("Soru bankası modu", ["Kalp atlası", "Karışık test"], horizontal=True, key="soru_bankasi_modu")
+    if mode == "Kalp atlası":
+        _render_heart_atlas()
+        st.stop()
+
     st.header("🧠 Kardiyoloji Soru Bankası")
 
     # -----------------------------------------------------
