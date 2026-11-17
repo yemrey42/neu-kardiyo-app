@@ -658,8 +658,22 @@ _ATLAS_TERMS = {
     "svc": r"\b(?:v(?:ena)? [kc]a[vw]a sup\w*|superior vena cava|svc|vks|vcs)\b",
     "ivc": r"\b(?:v(?:ena)? [kc]a[vw]a inf\w*|inferior vena cava|ivc|vki|vci)\b",
     "coronary": r"\b(?:koroner(?! sinus| kusp| yaprak)\w*|coronary(?! sinus| cusp)|lad|sirkumfleks\w*|circumflex\w*|on inen arter\w*)\b",
+    "apex": (r"\b(?:apeks\w*|apex\w*|"
+             r"api[kc]al(?! (?:[2345]|iki|uc|dort|bes|two|three|four|five|kesit\w*|pencere\w*|view\w*)\b)\w*|"
+             r"tak[oa]\s*tsubo\w*|stres\w* (?:(?:induklu|induced) )?(?:kardiyomiyopati\w*|cardiomyopath\w*)|kirik kalp sendrom\w*)\b"),
+    "prosthesis": (r"\b(?:protez\w*|prosthe(?:sis|tic)\w*|biyoprotez\w*|bioprotez\w*|bioprosthe\w*|"
+                  r"(?:mekanik|mechanical) (?:\w+ ){0,2}(?:kapak\w*|kapag\w*|val[vf]\w*)|"
+                  r"paravalv\w*|pannus\w*|tavi|tavr|hasta protez uyumsuz\w*)\b"),
+    "valve_mass": (r"\b(?:ve[gj]etasyon\w*|vegetation\w*|endokardit\w*|endocarditis|nbte|"
+                  r"(?:fibroelastom|miksom|myxom)\w*|libman sacks|(?:kardiyak|intrakardiyak|intrakardiyal|valvuler|"
+                  r"intrakardial|kardiyal|kalpteki|kalp|kapak\w*|kapag\w*) (?:\w+ ){0,2}(?:kitle\w*|tumor\w*)|"
+                  r"(?:(?:kardiyak|intrakardiyak|valvuler|kapak\w*|kapag\w*|protez\w*) (?:uzerinde\w* )?tromb\w*)|"
+                  r"(?:cardiac|intracardiac|valvular|valve) (?:\w+ ){0,2}(?:mass\w*|tumou?r\w*|thromb\w*))\b"),
+    "myocardium": (r"\b(?:miyokar[dt](?:i|in|ina)?(?! (?:enfarkt|infarkt|iskemi))|myocardium|kalp kas\w*|endokardit\w*|endocarditis|"
+                   r"(?:miyokard|myokard|myocard|perikard|pericard|miyoperikard|myopericard|perimiyokard|perimyocard)it\w*)\b"),
 }
 _ATLAS_PATTERNS = {key: re.compile(pattern) for key, pattern in _ATLAS_TERMS.items()}
+_ATLAS_CLINICAL_TOPICS = {"apex", "prosthesis", "valve_mass", "myocardium"}
 _ATLAS_SHORT_TAGS = {"mr": "mitral", "my": "mitral", "tr": "tricuspid", "ty": "tricuspid",
                      "as": "aortic_valve", "ay": "aortic_valve", "ad": "aortic_valve",
                      "lv": "lv", "rv": "rv", "ra": "ra", "la": "la"}
@@ -685,13 +699,21 @@ def _atlas_topics(value, *, as_tags=False):
                 topics.add(code)
             elif code in _ATLAS_SHORT_TAGS:
                 topics.add(_ATLAS_SHORT_TAGS[code])
+            label = _atlas_fold(part)
+            if label in {"kitle", "kitleler", "trombus", "thrombus"}:
+                topics.add("valve_mass")
+            elif label == "ie":
+                topics.update(("valve_mass", "myocardium"))
+    # Clinical terms may cross a structure boundary, e.g. "mekanik aort kapağı".
+    topics.update(key for key in _ATLAS_CLINICAL_TOPICS if _ATLAS_PATTERNS[key].search(normalized))
     # Consume the more specific phrase before matching its containing structure.
     for key in ("aortic_valve", "laa"):
         pattern = _ATLAS_PATTERNS[key]
         if pattern.search(normalized):
             topics.add(key)
             normalized = pattern.sub(" ", normalized)
-    topics.update(key for key, pattern in _ATLAS_PATTERNS.items() if pattern.search(normalized))
+    topics.update(key for key, pattern in _ATLAS_PATTERNS.items()
+                  if key not in _ATLAS_CLINICAL_TOPICS and pattern.search(normalized))
     return topics
 
 def _atlas_bank(df):
@@ -708,7 +730,9 @@ def _atlas_bank(df):
         if tags:
             topics = _atlas_topics(tags, as_tags=True)
         else:
-            topics = _atlas_topics(row.get("Kategori"), as_tags=True) or _atlas_topics(stem)
+            category_topics = _atlas_topics(row.get("Kategori"), as_tags=True)
+            stem_topics = _atlas_topics(stem)
+            topics = category_topics | (stem_topics & _ATLAS_CLINICAL_TOPICS) if category_topics else stem_topics
         if not stem or not sheet_id or not topics:
             continue
         options = []
@@ -766,6 +790,8 @@ _ATLAS_HTML = r'''<!doctype html>
     button,select{font:inherit}button{cursor:pointer}button:focus-visible,select:focus-visible,[tabindex]:focus-visible,a:focus-visible{outline:3px solid #e69a46;outline-offset:3px}
     .views button,.tools button{border:1px solid #496169;background:transparent;color:#d4dfdc;border-radius:6px;font-size:12px;font-weight:530;padding:7px 10px}
     .views button:hover,.tools button:hover{background:#315054}.views button[aria-pressed=true]{background:#d3e8d8;border-color:#d3e8d8;color:#183c32}
+    .valve-views{margin-top:8px;align-items:center}.valve-views span{font-size:11px;color:#c3d3cf;margin-right:3px}
+    .valve-views button{font-size:11px;padding:5px 9px}
     .viewport{position:relative;isolation:isolate;height:clamp(345px,34vw,430px);overflow:hidden;touch-action:none;cursor:grab;background:radial-gradient(ellipse at 49% 46%,#354a4c 0,#213d42 47%,#19343b 75%)}
     .viewport::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;background-image:radial-gradient(#8ba6a1 .7px,transparent .85px);background-size:17px 17px;mask-image:radial-gradient(ellipse at 50% 48%,#000 12%,transparent 82%)}
     .grabbing{cursor:grabbing}.viewport canvas{display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -782,6 +808,7 @@ _ATLAS_HTML = r'''<!doctype html>
     .select-wrap:after{content:"⌄";position:absolute;right:9px;top:50%;transform:translateY(-58%);color:#467467;font-size:21px;pointer-events:none}
     select{appearance:none;width:100%;cursor:pointer;background:transparent;border:0;border-bottom:1px solid #cbd6ca;border-radius:0;color:#214a3c;font-family:var(--serif);font-size:clamp(24px,2.4vw,35px);letter-spacing:-.04em;padding:0 33px 8px 0;line-height:1.2}
     select option,select optgroup{font:15px var(--sans);color:#173a38}
+    #topic-detail{font-size:12px;color:var(--mute);line-height:1.45;margin:-6px 0 15px}
     .meter-label{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--mute);font-weight:550;font-variant-numeric:tabular-nums}
     #qmeter{height:3px;margin:7px 0 17px}
     .question{font-family:var(--serif);font-size:clamp(19px,1.75vw,24px);letter-spacing:-.02em;line-height:1.32;color:#182e2b;margin:0 0 15px;overflow-wrap:anywhere}
@@ -826,14 +853,18 @@ _ATLAS_HTML = r'''<!doctype html>
         <div class="views" role="group" aria-label="Model görünümü">
           <button data-view="front" aria-pressed="true">Ön</button><button data-view="back" aria-pressed="false">Arka</button><button data-view="valves" aria-pressed="false">Kapak düzlemi</button><button data-view="inferior" aria-pressed="false">Alt</button>
         </div>
+        <div id="valve-views" class="views valve-views" role="group" aria-label="Mitral kapak görünümü" hidden>
+          <span>Mitral konum</span><button type="button" data-valve="valves" aria-pressed="true">Doğal kapak</button><button type="button" data-valve="prosthetic" aria-pressed="false">Mekanik protez</button>
+        </div>
         <div id="viewport" class="viewport" tabindex="0" role="group" aria-label="Döndürülebilen kalp modeli. Ok tuşlarıyla döndürün veya sorular için yapı listesini kullanın."><canvas id="heart"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div>
         <div class="tools"><div class="toolgroup"><button id="motion" type="button">Durdur</button><button id="guides" type="button" aria-pressed="true">Etiketler</button></div><div class="toolgroup"><button class="sign" id="zoom-out" aria-label="Uzaklaştır">−</button><button class="sign" id="zoom-in" aria-label="Yakınlaştır">+</button><button id="home" title="Geçerli görünümün başlangıç açısına dön">Açıyı sıfırla</button></div></div>
       </div>
-      <div class="model-foot"><span><strong>3B + zaman</strong> · Şematik kalp döngüsü</span><span>16 seçilebilir yapı</span></div>
+      <div class="model-foot"><span><strong>3B + zaman</strong> · Şematik kalp döngüsü</span><span id="region-count"></span></div>
     </section>
     <section class="right" id="quiz" aria-label="Seçilen yapının soruları">
       <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source"></span></div>
       <label class="select-wrap"><span class="sr">Anatomik yapı seç</span><select id="region"></select></label>
+      <p id="topic-detail" hidden></p>
       <div class="meter-label"><span id="q-index"></span><span id="score"></span></div>
       <div id="exercise"><h2 class="question" id="stem"></h2><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
       <div class="end" id="complete" hidden><h3>Bu yapı tamamlandı.</h3><p id="result"></p></div>
@@ -846,6 +877,92 @@ _ATLAS_HTML = r'''<!doctype html>
 <script>
 'use strict';
 const CATALOG={"regions":[{"id":"aorta","name":"Aorta","short":"Aorta","group":"Büyük damarlar","view":"front"},{"id":"mitral","name":"Mitral kapak","short":"Mitral kapak","group":"Kapaklar","view":"valves"},{"id":"laa","name":"Sol atriyal apendiks","short":"Sol atriyal apendiks","group":"Kalp boşlukları","view":"front"},{"id":"hepatic","name":"Hepatik venler","short":"Hepatik venler","group":"Büyük damarlar","view":"inferior"},{"id":"aortic_valve","name":"Aort kapağı","short":"Aort kapağı","group":"Kapaklar","view":"valves"},{"id":"tricuspid","name":"Triküspit kapak","short":"Triküspit","group":"Kapaklar","view":"valves"},{"id":"pulmonary_valve","name":"Pulmoner kapak","short":"Pulmoner kapak","group":"Kapaklar","view":"valves"},{"id":"lv","name":"Sol ventrikül","short":"Sol ventrikül","group":"Kalp boşlukları","view":"front"},{"id":"rv","name":"Sağ ventrikül","short":"Sağ ventrikül","group":"Kalp boşlukları","view":"front"},{"id":"la","name":"Sol atriyum","short":"Sol atriyum","group":"Kalp boşlukları","view":"back"},{"id":"ra","name":"Sağ atriyum","short":"Sağ atriyum","group":"Kalp boşlukları","view":"front"},{"id":"pa","name":"Pulmoner arter","short":"Pulmoner arter","group":"Büyük damarlar","view":"front"},{"id":"pv","name":"Pulmoner venler","short":"Pulmoner venler","group":"Büyük damarlar","view":"back"},{"id":"svc","name":"Vena kava superior","short":"V. kava superior","group":"Büyük damarlar","view":"front"},{"id":"ivc","name":"Vena kava inferior","short":"V. kava inferior","group":"Büyük damarlar","view":"inferior"},{"id":"coronary","name":"Koroner arterler","short":"Koroner arterler","group":"Koroner dolaşım","view":"front"}],"samples":{"aorta":[{"id":"demo-aorta-1","stem":"Çıkan aortadan arkusa ilerlerken tipik sol aort arkının ilk dalı hangisidir?","options":[["A","Sol ana karotis arter"],["B","Brakiyosefalik trunkus"],["C","Sol subklavyen arter"],["D","Sağ koroner arter"]],"key":"B","why":"Arkusun tipik dal sırası brakiyosefalik trunkus, sol ana karotis ve sol subklavyen arterdir. Koroner arterler daha proksimalde, aort kökünden çıkar.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-aorta-2","stem":"Normal bir aort kökünde koroner ostiyumlar hangi düzeyde yer alır?","options":[["A","Sinotübüler bileşkenin belirgin distalinde"],["B","Anulusun ventriküler yüzünde"],["C","Sağ ve sol Valsalva sinüslerinde"],["D","Arkusun küçük kurvaturunda"]],"key":"C","why":"Sağ ve sol koroner arterler karşılık gelen aort sinüslerinden köken alır. Üçüncü sinüs nonkoroner sinüstür.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"mitral":[{"id":"demo-mitral-1","stem":"3B TEE’nin cerrahi görünümünde posterior mitral yaprakçığın ortasındaki prolabe segment nasıl adlandırılır?","options":[["A","A2"],["B","P1"],["C","P2"],["D","P3"]],"key":"C","why":"Posterior yaprakçığın orta tarağı P2’dir. Karşısında anterior yaprakçığın A2 bölgesi bulunur.","source":["BSE · Mitral kapak değerlendirmesi","https://doi.org/10.1530/ERP-20-0034"]},{"id":"demo-mitral-2","stem":"Marjinal kordası kopan bir mitral segmentte sistolde hangi hareket beklenir?","options":[["A","Serbest kenarın sol atriyuma dönmesi"],["B","Anulusun aortaya doğru ayrılması"],["C","Diyastolde komissürlerin birleşmesi"],["D","Papiller kasın atriyuma göç etmesi"]],"key":"A","why":"Marjinal kordalar yaprakçığın serbest kenarını destekler. Destek kaybolduğunda kenar sol atriyuma dönebilir ve flail segment görülebilir.","source":["BSE · Mitral kapak değerlendirmesi","https://doi.org/10.1530/ERP-20-0034"]}],"laa":[{"id":"demo-laa-1","stem":"TEE’de sol atriyal apendiks içinde, duvarla birlikte hareket eden paralel kas bantları görülüyor. Normal anatomide bunlar nedir?","options":[["A","Moderatör bant"],["B","Korda tendinealar"],["C","Östaki kapakçığı"],["D","Pektinat kaslar"]],"key":"D","why":"Pektinat kaslar apendiksin trabeküllü iç yüzeyini oluşturur. Farklı TEE düzlemlerinde duvarla sürekliliklerini izlemek trombüs ayrımına yardımcı olur.","source":["LAA morfolojisi ve ekokardiyografik değerlendirme","https://pmc.ncbi.nlm.nih.gov/articles/PMC11285475/"]},{"id":"demo-laa-2","stem":"TEE’de görülen Coumadin sırtı, sol atriyal apendiksi hangi yapıdan ayırır?","options":[["A","Sol üst pulmoner ven"],["B","Vena kava superior"],["C","Sağ alt pulmoner ven"],["D","Koroner sinüs ostiyumu"]],"key":"A","why":"Sol lateral atriyal sırt, apendiks ağzı ile sol üst pulmoner ven arasında uzanır. Belirgin olduğunda kitleyi taklit edebilir.","source":["LAA morfolojisi ve ekokardiyografik değerlendirme","https://pmc.ncbi.nlm.nih.gov/articles/PMC11285475/"]}],"hepatic":[{"id":"demo-hepatic-1","stem":"Hepatik venlerde pulsed-wave Doppler ile sistol boyunca ters akım izleniyor. Bu bulgu en çok hangi kapak lezyonunu destekler?","options":[["A","Mitral darlığı"],["B","Ciddi triküspit yetersizliği"],["C","Pulmoner darlık"],["D","Aort yetersizliği"]],"key":"B","why":"Ciddi triküspit yetersizliğinde sistolik geri akım sağ atriyumdan hepatik venlere iletilebilir. Yorumda ritim, sağ atriyum basıncı ve diğer yetersizlik ölçütleri birlikte değerlendirilir.","source":["EACVI · Doğal kapak yetersizliklerinin değerlendirilmesi","https://doi.org/10.1093/ehjci/jeab253"]},{"id":"demo-hepatic-2","stem":"Karaciğerden çıkan kan, ana hepatik venlerden sonra önce hangi damara ulaşır?","options":[["A","Portal ven"],["B","Vena kava superior"],["C","Vena kava inferior"],["D","Pulmoner ven"]],"key":"C","why":"Hepatik venler diyaframın hemen altında vena kava inferiora açılır. Kan oradan sağ atriyuma döner.","source":["AJR · Hepatik ven anatomisi","https://doi.org/10.2214/ajr.180.6.1801583"]}],"aortic_valve":[{"id":"demo-aortic_valve-1","stem":"Normal kardiyak siklusta aort kapağını hangi basınç değişikliği açar?","options":[["A","Aort basıncının sol ventrikül basıncını aşması"],["B","Sol atriyum basıncının sol ventrikülü aşması"],["C","Sağ ventrikül basıncının pulmoner arteri aşması"],["D","Sol ventrikül basıncının aort basıncını aşması"]],"key":"D","why":"İzovolümetrik kontraksiyonun sonunda sol ventrikül basıncı aort basıncını aşınca kapak açılır ve ejeksiyon başlar.","source":["OpenStax · Kardiyak siklus","https://openstax.org/books/anatomy-and-physiology/pages/19-3-cardiac-cycle"]},{"id":"demo-aortic_valve-2","stem":"Kısa eksende normal bir triküspit aort kapağının yaprakçıkları nasıl adlandırılır?","options":[["A","Sağ koroner, sol koroner ve nonkoroner"],["B","Anterior, septal ve inferior"],["C","A1, A2 ve A3"],["D","Sağ, sol ve komissüral"]],"key":"A","why":"Aort yaprakçıklarının isimleri komşu sinüslerin koroner ostiyumlarla ilişkisine dayanır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"tricuspid":[{"id":"demo-tricuspid-1","stem":"Triküspit kapaktan diyastolde geçen kan hangi yolu izler?","options":[["A","Sol atriyumdan sol ventriküle"],["B","Sağ ventrikülden pulmoner artere"],["C","Sağ atriyumdan sağ ventriküle"],["D","Sağ atriyumdan sol atriyuma"]],"key":"C","why":"Triküspit kapak sağ atriyum ile sağ ventrikül arasındaki atriyoventriküler kapaktır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-tricuspid-2","stem":"Triküspit kapağın hangi yaprakçığı interventriküler septuma komşudur?","options":[["A","Posterior mitral yaprakçık"],["B","Septal yaprakçık"],["C","Nonkoroner yaprakçık"],["D","Sol koroner yaprakçık"]],"key":"B","why":"Septal yaprakçık sağ ventrikülün septal tarafına tutunur. Apikal dört boşluk kesitinde bu ilişki izlenebilir.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"pulmonary_valve":[{"id":"demo-pulmonary_valve-1","stem":"Pulmoner kapak hangi iki yapı arasında bulunur?","options":[["A","Sağ ventrikül çıkış yolu ve pulmoner trunkus"],["B","Sol ventrikül çıkış yolu ve aorta"],["C","Sağ atriyum ve sağ ventrikül"],["D","Sol atriyum ve pulmoner ven"]],"key":"A","why":"Sağ ventrikülden çıkan kan pulmoner kapağı geçerek pulmoner trunkusa girer.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pulmonary_valve-2","stem":"Pulmoner kapağı triküspit kapaktan ayıran yapısal özellik hangisidir?","options":[["A","İki boşluğu birleştirmesi"],["B","Sadece diyastolde açılması"],["C","Bir septal yaprakçığının olması"],["D","Yaprakçıklarının korda ve papiller kas bağlantısı taşımaması"]],"key":"D","why":"Pulmoner kapak bir semilunar kapaktır. Yaprakçıkları korda tendinealarla papiller kaslara bağlanmaz.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"lv":[{"id":"demo-lv-1","stem":"Normal kalpte apeksi ağırlıklı olarak hangi boşluk oluşturur?","options":[["A","Sol ventrikül"],["B","Sağ atriyum"],["C","Sağ ventrikül çıkış yolu"],["D","Sol atriyum"]],"key":"A","why":"Sol ventrikül apeksi oluşturur. Dış yüzeyde ön interventriküler oluk, iki ventrikül arasındaki sınırı izlemeye yardım eder.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-lv-2","stem":"Sol ventrikül duvarının sağ ventriküle göre daha kalın olmasının temel nedeni nedir?","options":[["A","Kalp hızının daha yüksek olması"],["B","Daha fazla atım hacmi pompalaması"],["C","Sistemik dolaşımın daha yüksek basıncına karşı çalışması"],["D","Kanı daha uzun süre depolaması"]],"key":"C","why":"İki ventrikül kararlı durumda benzer atım hacmi pompalar. Sol ventrikül sistemik dolaşımın daha yüksek basıncını oluşturur.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"rv":[{"id":"demo-rv-1","stem":"Apikal dört boşluk kesitinde moderatör bant hangi boşluğu tanımaya yardım eder?","options":[["A","Sol atriyum"],["B","Sağ ventrikül"],["C","Sol ventrikül"],["D","Sağ atriyum"]],"key":"B","why":"Moderatör bant morfolojik sağ ventrikülde septum ile anterior papiller kas bölgesini birleştirir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-rv-2","stem":"TAPSE ölçümü, sağ ventrikülün hangi hareketini örnekler?","options":[["A","Septumun çevresel deformasyonunu"],["B","Çıkış yolunun radyal genişlemesini"],["C","Sağ atriyum rezervuar fonksiyonunu"],["D","Lateral triküspit anulusun sistolik uzunlamasına yer değiştirmesini"]],"key":"D","why":"TAPSE, lateral triküspit anulusun sistolde apekse doğru hareketini ölçer. Sağ ventrikülün uzunlamasına işlevi hakkında bilgi verir.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"la":[{"id":"demo-la-1","stem":"Arka görünümde sol atriyuma giren damarlar hangi dolaşımdan kan getirir?","options":[["A","Sistemik venöz dolaşımdan"],["B","Koroner venöz dolaşımdan"],["C","Pulmoner venöz dolaşımdan"],["D","Portal dolaşımdan"]],"key":"C","why":"Pulmoner venler akciğerlerde oksijenlenen kanı sol atriyuma taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-la-2","stem":"Ventrikül diyastolünde sol atriyumdan çıkan kan sırasıyla hangi yapılara ulaşır?","options":[["A","Triküspit kapak ve sağ ventrikül"],["B","Mitral kapak ve sol ventrikül"],["C","Aort kapağı ve aorta"],["D","Pulmoner kapak ve pulmoner arter"]],"key":"B","why":"Sol atriyumun çıkışında mitral kapak yer alır. Kapak açıldığında kan sol ventriküle geçer.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"ra":[{"id":"demo-ra-1","stem":"Miyokardın venöz kanının büyük bölümünü sağ atriyuma hangi yapı getirir?","options":[["A","Pulmoner trunkus"],["B","Sol üst pulmoner ven"],["C","Brakiyosefalik arter"],["D","Koroner sinüs"]],"key":"D","why":"Koroner sinüs, kalp venlerinin topladığı kanın büyük kısmını sağ atriyuma boşaltır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-ra-2","stem":"Tipik anatomide sinüs düğümü sağ atriyumun hangi damar bileşkesine yakındır?","options":[["A","Vena kava superior"],["B","Sol üst pulmoner ven"],["C","Vena kava inferior"],["D","Koroner sinüs"]],"key":"A","why":"Sinüs düğümü sağ atriyumun üst kısmında, vena kava superiorun girişine yakın yerleşir.","source":["OpenStax · Kardiyak ileti sistemi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-2-cardiac-muscle-and-electrical-activity"]}],"pa":[{"id":"demo-pa-1","stem":"Ana pulmoner arterin bifurkasyonu hangi iki dala ayrılır?","options":[["A","Sağ ve sol pulmoner venlere"],["B","Sağ ve sol pulmoner arterlere"],["C","Sağ ve sol koroner arterlere"],["D","İnen aorta ve aort arkına"]],"key":"B","why":"Pulmoner trunkus sağ ve sol pulmoner arterlere ayrılır. Bu dallar kanı ilgili akciğere taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pa-2","stem":"Normal dolaşımda ana pulmoner arterdeki kanın özelliği nedir?","options":[["A","Akciğerlerden sol atriyuma dönmektedir"],["B","Aort kökünü yeni geçmiştir"],["C","Oksijen içeriği pulmoner ven kanından daha düşüktür"],["D","Karaciğerden doğrudan gelmektedir"]],"key":"C","why":"Pulmoner arter sağ ventrikülden akciğere henüz oksijenlenmemiş kan taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"pv":[{"id":"demo-pv-1","stem":"Klasik anatomide sol atriyuma ayrı ostiyumlarla açılan kaç pulmoner ven vardır?","options":[["A","İki"],["B","Üç"],["C","Altı"],["D","Dört"]],"key":"D","why":"Tipik olarak sağ ve sol akciğerden birer üst ve alt pulmoner ven gelir. Ostiyum sayısı anatomik varyantlarda değişebilir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pv-2","stem":"Pulmoner ven Dopplerinde sistolik akımın tersine dönmesi hangi lezyonun şiddetini destekler?","options":[["A","Ciddi mitral yetersizliği"],["B","Ciddi pulmoner darlık"],["C","Triküspit darlığı"],["D","İzole aort darlığı"]],"key":"A","why":"Ciddi mitral yetersizliğinde sistolik jet ve sol atriyum basınç artışı pulmoner ven akımını tersine çevirebilir. Jet yönü ve örneklenen ven bulguyu etkiler.","source":["EACVI · Doğal kapak yetersizliklerinin değerlendirilmesi","https://doi.org/10.1093/ehjci/jeab253"]}],"svc":[{"id":"demo-svc-1","stem":"Vena kava superior hangi iki venin birleşmesiyle oluşur?","options":[["A","Sağ ve sol brakiyosefalik venler"],["B","Sağ ve sol hepatik venler"],["C","Sağ ve sol pulmoner venler"],["D","Sağ ve sol ana iliak venler"]],"key":"A","why":"Sağ ve sol brakiyosefalik venler birleşerek vena kava superioru oluşturur. Vena kava superior sağ atriyuma açılır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-svc-2","stem":"Normal anatomide baş ve üst ekstremitelerin venöz kanı sağ atriyuma hangi yolla döner?","options":[["A","Koroner sinüs"],["B","Pulmoner venler"],["C","Vena kava superior"],["D","Portal ven"]],"key":"C","why":"Baş-boyun ve üst ekstremite kanı brakiyosefalik venlerden vena kava superiora ulaşır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"ivc":[{"id":"demo-ivc-1","stem":"Subkostal uzun eksende vena kava inferioru kraniyale doğru takip ediyorsunuz. Hangi boşluğa ulaşırsınız?","options":[["A","Sol atriyum"],["B","Sağ atriyum"],["C","Sağ ventrikül"],["D","Sol ventrikül"]],"key":"B","why":"Vena kava inferior diyaframı geçerek sağ atriyumun alt bölümüne açılır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-ivc-2","stem":"Spontan soluyan erişkinde vena kava inferior çapı ve inspiratuvar kollapsı birlikte hangi basıncın tahmininde kullanılır?","options":[["A","Aort diyastolik basıncı"],["B","Sol atriyum basıncı"],["C","Pulmoner kapiller kama basıncı"],["D","Sağ atriyum basıncı"]],"key":"D","why":"Kaval çap ve inspirasyonla değişimi tahmini sağ atriyum basıncına katkı sağlar. Yorumda solunum biçimi ve klinik koşullar dikkate alınır.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"coronary":[{"id":"demo-coronary-1","stem":"Ön interventriküler olukta apekse doğru seyreden koroner arter hangisidir?","options":[["A","Sirkumfleks arter"],["B","Sağ marjinal arter"],["C","Sol ön inen arter (LAD)"],["D","Posterior inen arter"]],"key":"C","why":"LAD, anterior interventriküler olukta izlenir ve seyri boyunca septal ve diyagonal dallar verir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-coronary-2","stem":"Sol ana koroner arterin tipik iki terminal dalı hangileridir?","options":[["A","LAD ve sirkumfleks arter"],["B","LAD ve sağ koroner arter"],["C","Sağ koroner ve posterior inen arter"],["D","Sirkumfleks ve sağ marjinal arter"]],"key":"A","why":"Sol ana koroner arter tipik olarak sol ön inen ve sirkumfleks arterlere ayrılır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}]}};
+CATALOG.regions.push(
+  {id:'apex',name:'Sol ventrikül apeksi',short:'Apeks',group:'Kalp duvarı',view:'front',includeSamples:true},
+  {id:'myocardium',name:'Kalp kası (miyokart)',short:'Miyokart',group:'Kalp duvarı',view:'front',includeSamples:true,detail:'Bu bölümde endokardit, miyokardit ve perikardit vakalarını tutulan yapıya göre ayırt edebilirsiniz.'},
+  {id:'prosthesis',name:'Protez kapak',short:'Protez kapak',group:'Kapaklar',view:'prosthetic',includeSamples:true,detail:'Modelde mitral konumda çift diskli mekanik protez görülüyor. Sorular aort ve mitral protezlerini kapsar.'},
+  {id:'valve_mass',name:'Kapak üzerindeki kitle',short:'Kapak kitlesi',group:'Kapaklar',view:'valves',includeSamples:true,detail:'Triküspit yaprakçığına bağlı kitle şematiktir. Her vakada kitleyi soruda verilen bulgularla değerlendirin.'}
+);
+const clinicalSources={
+  takotsubo:['EACVI/JSE · Takotsubo sendromunda görüntüleme','https://pmc.ncbi.nlm.nih.gov/articles/PMC7471594/'],
+  aneurysm:['JACC Case Reports · Ventriküler anevrizmaların görüntülenmesi','https://pubmed.ncbi.nlm.nih.gov/41945539/'],
+  lvThrombus:['AHA · Sol ventrikül trombüsü','https://pubmed.ncbi.nlm.nih.gov/36106537/'],
+  valves:['ASE/SCMR/SCCT · Protez kapakların görüntülenmesi, 2024','https://www.asecho.org/wp-content/uploads/2025/04/PIIS0894731723005333.pdf'],
+  masses:['Structural Heart · Ekokardiyografide kardiyak kitleler','https://pmc.ncbi.nlm.nih.gov/articles/PMC10382990/'],
+  endocarditis:['ESC · İnfektif endokardit kılavuzu, 2023','https://doi.org/10.1093/eurheartj/ehad193'],
+  inflammation:['ESC · Miyokardit ve perikardit kılavuzu, 2025','https://doi.org/10.1093/eurheartj/ehaf192']
+};
+Object.assign(CATALOG.samples,{
+  apex:[
+    {id:'atlas-apex-1',stem:'Akut göğüs ağrısıyla başvuran bir hastada hangi duvar hareketi paterni klasik apikal Takotsubo sendromunu destekler?',
+     options:[['A','Yalnızca bazal segmentlerde çevresel akinezi ve apikal hiperkinezi'],['B','Tek bir koroner dağılımla sınırlı olmayan orta-apikal akinezi ve bazal hiperkinezi'],['C','Yalnız bazal inferior duvarda akinezi'],['D','Tüm segmentlerde benzer derecede kalıcı hipokinezi']],key:'B',
+     why:'Klasik apikal tipte orta ve apikal segmentlerin tutulumu çoğunlukla tek bir epikardiyal koroner arterin alanını aşar. Akut başvuruda koroner sendrom açısından değerlendirme de gerekir.',source:clinicalSources.takotsubo},
+    {id:'atlas-apex-2',stem:'Eski anterior enfarktüs sonrası apikal dışa bombeleşme saptanıyor. Hangi bulgu gerçek sol ventrikül anevrizmasını destekler?',
+     options:[['A','Kese girişinde miyokartta ani kesinti'],['B','Kese duvarını yalnızca perikart ve organize hematomun oluşturması'],['C','Kesenin komşu miyokartla eşzamanlı ve güçlü kasılması'],['D','Geniş boyun boyunca devam eden incelmiş, skarlı ve diskinetik miyokart']],key:'D',
+     why:'Gerçek anevrizmanın duvarında skarlı ventrikül dokusu sürekliliğini korur. Psödoanevrizmada serbest duvar rüptürünü çevre dokular sınırlar.',source:clinicalSources.aneurysm},
+    {id:'atlas-apex-3',stem:'Anterior enfarktüs sonrası apeks akinetik. Ultrason kontrastı kullanıldığı halde apikal trombüs şüphesi netleşmedi. Hangi yöntem en fazla ek bilgi sağlar?',
+     options:[['A','Geç gadolinyum tutulumunu değerlendiren kardiyak MR'],['B','Apendiks akım hızını ölçen TEE'],['C','Koroner kalsiyum skoru'],['D','Egzersiz sırasında doku Doppler incelemesi']],key:'A',
+     why:'Kontrastlı ekokardiyografi sonuçsuz kaldığında kardiyak MR, avasküler trombüsü çevre miyokarttan ayırt etmeye yardımcı olur.',source:clinicalSources.lvThrombus},
+    {id:'atlas-apex-4',stem:'Anterior enfarktüs geçiren bir hastanın takibinde hangi bulgu apikal mural trombüs gelişimine en belirgin yerel zemini oluşturur?',
+     options:[['A','İzole bazal septal kalınlaşma'],['B','Normal apikal kasılma ile hafif mitral yetersizliği'],['C','Geniş bir apikal segmentte kalıcı akinezi ve kan stazı'],['D','İzole lateral mitral anülüs kalsifikasyonu']],key:'C',
+     why:'Geniş anteroapikal hasar bölgesinde akinezi, kanın apikal boşluktan uzaklaştırılmasını azaltır. Endokart hasarı ve staz mural trombüs gelişimine katkıda bulunur.',source:clinicalSources.lvThrombus},
+    {id:'atlas-apex-5',stem:'İlk incelemede apikal balonlaşma görülen bir hastada hangi izlem bulgusu Takotsubo tanısını destekler?',
+     options:[['A','Apikal duvarın giderek incelmesi ve kalıcı diskinezi'],['B','Aynı segmentlerin seri ekokardiyografide kasılma işlevini geri kazanması'],['C','Yeni bir apikal rüptür hattının görülmesi'],['D','Aynı bölgede transmural skar ile kalıcı anevrizma gelişmesi']],key:'B',
+     why:'Bölgesel sistolik işlevin izlemde düzelmesi Takotsubo sendromunun karakteristik seyridir. Seri incelemeler iyileşmeyi ve apikal trombüs gibi komplikasyonları izlemeyi sağlar.',source:clinicalSources.takotsubo}
+  ],
+  prosthesis:[
+    {id:'atlas-prosthesis-1',stem:'Aort protezinin ortalama gradiyenti ağır anemi sırasında yükselmiş. DVI bazal değerine yakın ve yaprakçık hareketleri normal. Öncelikle hangi mekanizma düşünülür?',
+     options:[['A','Artmış transprotez akım'],['B','Yeni gelişen obstrüktif pannus'],['C','İleri yapısal kapak dejenerasyonu'],['D','Hareketsiz bir mekanik disk']],key:'A',
+     why:'Gradiyent akıma bağımlıdır. Akım durumu, bazal Doppler ölçümleri, DVI ve yaprakçık hareketi birlikte değerlendirildiğinde yüksek akım ile obstrüksiyon ayırt edilebilir.',source:clinicalSources.valves},
+    {id:'atlas-prosthesis-2',stem:'Mekanik mitral kapakta 3B TEE ile sistolik bir jet görülüyor. Hangi bulgu paravalvüler kaçağın yerini gösterir?',
+     options:[['A','Jetin iki disk arasındaki merkezi aralıktan çıkması'],['B','Akımın disk menteşesindeki yıkama jetinden kaynaklanması'],['C','Jetin dikiş halkası ile doğal anülüs arasından sol atriyuma geçmesi'],['D','Beklenen transvalvüler diyastolik akımın hızlanması']],key:'C',
+     why:'Kaçağı sınıflandırırken jetin başlangıcı izlenir. Paravalvüler kaçakta kan, protezin dikiş halkasının dışındaki bağlantı defektinden geçer.',source:clinicalSources.valves},
+    {id:'atlas-prosthesis-3',stem:'Aort protezinin gradiyenti ilk ameliyat sonrası incelemeden beri yüksek. Disk hareketi normal ve vücut yüzey alanına indekslenen efektif orifis alanı küçük. En olası açıklama nedir?',
+     options:[['A','Yeni gelişen protez trombozu'],['B','Akut dikiş halkası ayrışması'],['C','Geç gelişen pannus'],['D','Hasta-protez uyumsuzluğu']],key:'D',
+     why:'Normal hareket eden protezin efektif orifisi hastanın vücut ölçülerine göre küçük kalabilir. İlk incelemeden beri gözlenen patern, sonradan gelişen obstrüksiyondan ayrımda değerlidir.',source:clinicalSources.valves},
+    {id:'atlas-prosthesis-4',stem:'Mekanik aort protezinde bir diskin açılımı kısıtlı. Floroskopi hareket kısıtlılığını gösteriyor. Obstrüksiyona yol açan pannus ile trombüs ayrımında hangi inceleme ek bilgi sağlar?',
+     options:[['A','Tek başına istirahat EKG’si'],['B','EKG eşlemeli kontrastlı kardiyak BT'],['C','Koroner kalsiyum skoru'],['D','Periferik arter Doppleri']],key:'B',
+     why:'Kardiyak BT, periprostetik dokunun yerini, morfolojisini ve atenüasyonunu değerlendirir. Bu bilgiler klinik başlangıç ve antikoagülasyon öyküsüyle birlikte yorumlanır.',source:clinicalSources.valves},
+    {id:'atlas-prosthesis-5',stem:'Mitral protezin seri Doppler incelemelerinde ortalama gradiyent karşılaştırılırken hangi ölçüm mutlaka kayda alınmalıdır?',
+     options:[['A','Sol atriyumun tek düzlem çapı'],['B','Aort anülüsünün sistolik çapı'],['C','Ölçüm sırasındaki kalp hızı'],['D','Triküspit anülüsünün lateral sistolik hızı']],key:'C',
+     why:'Taşikardi diyastolik dolum süresini kısaltarak mitral protez gradiyentini yükseltebilir. Kalp hızı ve akım koşulları bazal incelemeyle karşılaştırmaya anlam kazandırır.',source:clinicalSources.valves}
+  ],
+  valve_mass:[
+    {id:'atlas-mass-1',stem:'Doğal triküspit kapakta hareketli bir kitle izleniyor. Hangi ek bulgu infektif vejetasyon olasılığını en çok artırır?',
+     options:[['A','Kitlenin yalnız bir kesitte parlak görünmesi'],['B','Kitlenin sistolde hareket etmesi'],['C','İzole hafif triküspit yetersizliği'],['D','Ayrı alınan kan kültürlerinde Staphylococcus aureus üremesi']],key:'D',
+     why:'Tipik etkenin ayrı kan kültürlerinde gösterilmesi görüntüleme bulgusuna bağımsız mikrobiyolojik kanıt ekler. Kitlenin hareketliliği tek başına etiyolojiyi belirlemez.',source:clinicalSources.endocarditis},
+    {id:'atlas-mass-2',stem:'Ateşi ve inflamasyon bulgusu olmayan bir hastada aort kapağında küçük, saplı, hareketli ve ince püsküllü kenarları olan bir kitle görülüyor. Hangi tümör en iyi uyar?',
+     options:[['A','Papiller fibroelastom'],['B','Atriyal miksoma'],['C','Kardiyak lipom'],['D','Primer kardiyak lenfoma']],key:'A',
+     why:'Papiller fibroelastomlar sıklıkla kapaklarda yer alır. Sap ve ince papiller çıkıntılar bu tanıyı destekler. Klinik bağlamda vejetasyon ve trombüs de değerlendirilir.',source:clinicalSources.masses},
+    {id:'atlas-mass-3',stem:'Adenokarsinomlu bir hastada tekrarlayan sistemik emboliler ve sol kalp kapaklarında küçük kitleler saptanıyor. Enfeksiyon yönünden ayrıntılı inceleme sonuçsuz. Hangi tanı özellikle düşünülür?',
+     options:[['A','Kalsifik anülüs dejenerasyonu'],['B','Nonbakteriyel trombotik endokardit'],['C','Apikal ventrikül anevrizması'],['D','Kardiyak rabdomiyom']],key:'B',
+     why:'Maligniteyle ilişkili hiperkoagülabilite kapaklarda steril trombosit-fibrin birikimine ve sistemik emboliye yol açabilir. Kültür negatif infektif endokardit de ayırıcı tanıda araştırılır.',source:clinicalSources.masses},
+    {id:'atlas-mass-4',stem:'Mekanik mitral protezli hastada antikoagülasyon kesintisinden kısa süre sonra dispne başlamış. TEE’de disk hareketini sınırlayan yeni yumuşak bir kitle var. En olası tanı hangisidir?',
+     options:[['A','Papiller fibroelastom'],['B','Yavaş büyüyen fibröz pannus'],['C','Protez kapak trombüsü'],['D','Lambl ekskresansı']],key:'C',
+     why:'Kısa klinik seyir, yetersiz antikoagülasyon ve yeni kitle birlikte trombüsü destekler. Pannus daha yavaş gelişir. Gerektiğinde kardiyak BT ek anatomik bilgi sağlar.',source:clinicalSources.valves},
+    {id:'atlas-mass-5',stem:'Sol atriyumda fossa ovalis bölgesine sapla tutunan, diyastolde mitral orifise doğru hareket eden bir kitle görülüyor. En olası tanı nedir?',
+     options:[['A','Atriyal miksoma'],['B','Mitral anülüsün kazeöz kalsifikasyonu'],['C','Apendiks trombüsü'],['D','Mitral yaprakçık vejetasyonu']],key:'A',
+     why:'Kitle kapağa yaklaşsa da kökeni interatriyal septumdur. Fossa ovalise sapla tutunma ve diyastolde mitral orifise prolapsus, atriyal miksoma için tipiktir.',source:clinicalSources.masses}
+  ],
+  myocardium:[
+    {id:'atlas-muscle-1',stem:'Akut miyokardit düşünülen bir hastada kardiyak MR’da hangi birliktelik aktif miyokardiyal inflamasyonu en güçlü biçimde destekler?',
+     options:[['A','Yalnız hafif perikardiyal efüzyon ve normal doku haritaları'],['B','İzole sol atriyal genişleme ve düşük atriyal strain'],['C','Tek koroner alanda kronik subendokardiyal skar ve normal T2'],['D','Artmış miyokardiyal T2 ile birlikte noniskemik dağılımlı geç gadolinyum tutulumu']],key:'D',
+     why:'Güncellenmiş Lake Louise yaklaşımında T2 temelli ödem bulgusu ile T1 temelli doku hasarı bulgusunun birlikteliği tanısal özgüllüğü artırır.',source:clinicalSources.inflammation},
+    {id:'atlas-muscle-2',stem:'İnspirasyonla artan, öne eğilince azalan göğüs ağrısı olan hastada perikardiyal sürtünme sesi duyuluyor. Ekoda efüzyon görülmemesi nasıl yorumlanır?',
+     options:[['A','Semptomlar iyileşene dek ekokardiyografi yorumlanamaz'],['B','Efüzyon olmadan da akut perikardit görülebilir'],['C','Bu bulgu izole miyokarditi kesinleştirir'],['D','Tanı için mutlaka perikardiyosentez gerekir']],key:'B',
+     why:'Akut perikarditte sıvı birikimi zorunlu değildir. Tipik ağrı ve sürtünme sesi gibi bulgular tanısal değerlendirmeye katkı sağlar.',source:clinicalSources.inflammation},
+    {id:'atlas-muscle-3',stem:'Protez aort kapağı olan bir hastada persistan bakteriyemi var ve infektif endokardit şüphesi yüksek. TTE protez gölgelenmesi nedeniyle yetersiz. En uygun sonraki ekokardiyografik inceleme hangisidir?',
+     options:[['A','Transözofageal ekokardiyografi'],['B','Dobutamin stres ekokardiyografisi'],['C','Yalnız apikal dört boşluk strain analizi'],['D','Egzersiz sonrası sağ ventrikül Doppleri']],key:'A',
+     why:'Endokardit endokardiyal yüzeyi, sıklıkla kapağı tutar. TEE, protez üzerindeki vejetasyonları ve perivalvüler komplikasyonları değerlendirmede önemlidir.',source:clinicalSources.endocarditis},
+    {id:'atlas-muscle-4',stem:'Yakın zamanda viral enfeksiyon geçiren bir hastada troponin yüksek, koroner arterler açık. Kardiyak MR’da hangi geç gadolinyum tutulumu paterni miyokarditi destekler?',
+     options:[['A','LAD alanı ile sınırlı subendokardiyal tutulum'],['B','İnferior duvarda bir koroner alana uyan transmural tutulum'],['C','Perikartla sınırlı tutulum ve normal miyokart'],['D','İnferolateral duvarda subepikardiyal, koroner dağılıma uymayan tutulum']],key:'D',
+     why:'Miyokarditte subepikardiyal veya orta duvar tutulumu görülebilir. İskemik hasar ise tipik olarak subendokarttan başlar ve bir koroner arter dağılımını izler.',source:clinicalSources.inflammation},
+    {id:'atlas-muscle-5',stem:'Perikarditli bir hastada hipotansiyon ve belirgin perikardiyal efüzyon gelişiyor. Hangi ekokardiyografik bulgu tamponad fizyolojisini destekler?',
+     options:[['A','İzole bazal septal hipertrofi'],['B','Hepatik venlerde yalnız sistolik akım azalması'],['C','Sağ ventrikül serbest duvarında erken diyastolik kollaps'],['D','Sol atriyum hacim indeksinde kronik artış']],key:'C',
+     why:'Erken diyastolde perikart basıncı sağ ventrikül basıncını aştığında serbest duvarda içe çökme görülebilir. Hemodinamik önem hastanın kliniği ve diğer eko bulgularıyla birlikte değerlendirilir.',source:clinicalSources.inflammation}
+  ]
+});
+
 // Patient coordinates: +x left, +y superior, +z anterior. Dimensions are schematic.
 const TAU = 2 * Math.PI;
 const add = (a,b) => a.map((x,i) => x+b[i]);
@@ -866,7 +983,7 @@ function spline(nodes,t){
 const regionIndex = Object.fromEntries(CATALOG.regions.map((r,i)=>[r.id,i+1]));
 function beatPoint(p,id,phase){
   const [x,y,z]=p;
-  if (['lv','rv','coronary'].includes(id)){
+  if (['lv','rv','coronary','apex','myocardium'].includes(id)){
     const h=clamp((y+1.68)/2.35,0,1), cx=0.50*(1-h), cz=0.28*(1-h);
     const twist=phase*(0.085-0.13*h), shrink=1-phase*(0.025+0.074*Math.sin(pi*h));
     const dx=(x-cx)*shrink, dz=(z-cz)*shrink;
@@ -885,12 +1002,13 @@ function beatPoint(p,id,phase){
 const palette={
   lv:'#bf6258',rv:'#b67167',ra:'#976879',la:'#ad6a72',laa:'#d98578',aorta:'#da735b',
   pa:'#5a92aa',pv:'#ce807b',ivc:'#7299ab',svc:'#7199b2',hepatic:'#79a8b6',
-  coronary:'#e1ac72',mitral:'#e1b892',tricuspid:'#bdcdbc',aortic_valve:'#e1a078',pulmonary_valve:'#a8cbd4'
+  coronary:'#e1ac72',mitral:'#e1b892',tricuspid:'#bdcdbc',aortic_valve:'#e1a078',pulmonary_valve:'#a8cbd4',
+  apex:'#d89176',myocardium:'#ad4f4f',prosthesis:'#bcc9c9',valve_mass:'#e2b660'
 };
 const rgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
 
 function buildHeart(){
-  const vertices=[], indices=[];
+  const vertices=[], indices=[], landmarks={};
   function surface(id,layer,nu,nv,point,base=palette[id],wrap=true,customBeat=false,skipCell=null){
     const start=vertices.length/16, color=typeof base==='string'?rgb(base):base;
     for(let j=0;j<=nv;j++){
@@ -960,8 +1078,41 @@ function buildHeart(){
             z+(rz+offset)*Math.sin(a)*(1+.025*Math.cos(3*a))*s];
   };
   const front=t=>1.24+.08*Math.sin(pi*t), back=t=>4.27+.13*t;
-  surface('rv',0,39,33,(u,t)=>vent(t,front(t)+(back(t)-front(t))*u),palette.rv,false);
-  surface('lv',0,45,33,(u,t)=>vent(t,back(t)+(front(t)+TAU-back(t))*u),palette.lv,false);
+  // All adjacent patches share the original ventricular surface and the same motion.
+  // Each triangle has one selectable structure, including at the edge of the apex.
+  const tip=.22, muscleLow=.31, muscleHigh=.71;
+  function ventricularPoint(side,t,u,offset=0){
+    const a=front(t), b=back(t);
+    return vent(t,side==='rv'?a+(b-a)*u:b+(a+TAU-b)*u,offset);
+  }
+  function wallBand(id,side,start,end,rows,columns){
+    surface(id,0,columns,rows,(u,v)=>ventricularPoint(side,start+(end-start)*v,u),palette[id],false);
+  }
+  for(const [side,columns] of [['rv',40],['lv',46]])wallBand('apex',side,0,tip,10,columns);
+  wallBand('lv','lv',tip,1,27,46);
+  wallBand('rv','rv',tip,muscleLow,4,40);
+  wallBand('rv','rv',muscleHigh,1,11,40);
+  function muscleEdges(v){
+    const center=.19+.06*v, width=.153*Math.pow(Math.max(0,Math.sin(pi*v)),.7);
+    return [0,center-width,center+width,1];
+  }
+  for(const [i,id,columns] of [[0,'rv',12],[1,'myocardium',16],[2,'rv',31]]){
+    surface(id,0,columns,20,(u,v)=>{
+      const edges=muscleEdges(v), t=muscleLow+(muscleHigh-muscleLow)*v;
+      return ventricularPoint('rv',t,edges[i]+(edges[i+1]-edges[i])*u);
+    },palette[id],false);
+  }
+  // Parallel fascicles mark the schematic window onto the ventricular muscle.
+  for(const f of [.15,.32,.49,.66,.83]){
+    surface('myocardium',0,2,18,(u,v)=>{
+      const h=.11+.77*v, t=muscleLow+(muscleHigh-muscleLow)*h;
+      const [,left,right]=muscleEdges(h), along=f+.12*(v-.5)+.010*(u-.5);
+      return ventricularPoint('rv',t,left+(right-left)*along,.005);
+    },'#d68473',false);
+  }
+  for(const [id,p] of [['apex',ventricularPoint('lv',.115,.85)],['myocardium',ventricularPoint('rv',.50,.222)]]){
+    landmarks[id]=[p,beatPoint(p,id,1)];
+  }
   // Infundibulum continuous with the anterior RV free wall.
   tube('rv',1,[[-.36,-.02,.10,.11],[-.27,.18,.22,.27],[-.17,.36,.35,.335],[-.04,.51,.44,.34],[.07,.62,.51,.322],[.13,.74,.53,.28]],{color:'#b97166',around:25});
   chamber('ra',[-.79,.69,.015],[.57,.58,.52],-.05);
@@ -1034,34 +1185,84 @@ function buildHeart(){
 
   for(const [id,x,y,z,rx,rz,n,turn] of valves){
     const av=id==='mitral'||id==='tricuspid';
+    // Layer 2 is shared. Layers 3 and 4 occupy the same mitral orifice in alternative views.
+    const layer=id==='mitral'?3:2;
     function place(xx,yy,zz,beat){
       return [x+xx*Math.cos(turn)-zz*Math.sin(turn),y+yy-.10*beat,z+zz*Math.cos(turn)+xx*Math.sin(turn)];
     }
-    surface(id,2,48,10,(u,v,b)=>{
+    surface(id,layer,48,10,(u,v,b)=>{
       const a=u*TAU, t=v*TAU, ridge=av?.023:.019;
       return place((rx+ridge*Math.cos(t))*Math.cos(a),ridge*Math.sin(t)+.028*Math.cos(2*a),(rz+ridge*Math.cos(t))*Math.sin(a),b);
     },palette[id],true,true);
-    surface(id,2,40,9,(u,v,b)=>{
+    surface(id,layer,40,9,(u,v,b)=>{
       const a=u*TAU, r=1-.987*v;
       return place(rx*r*Math.cos(a),-.049-.56*Math.pow(v,.62),rz*r*Math.sin(a),b);
     },av?'#642f41':'#603e49',true,true);
+    function leaflet(l,u,v,b){
+      const theta=(l+u)*TAU/n+(av?0:pi/6), scallop=Math.sin(pi*u);
+      const open=av?1-b:b, radius=1-v*((1-open)*.985+open*(.16+.22*scallop));
+      let xx=rx*radius*Math.cos(theta), zz=rz*radius*Math.sin(theta);
+      if(n===2){
+        xx=rx*Math.cos(theta)*(1-.12*v);
+        zz=rz*Math.sin(theta)*(1-v*(.992-open*.54));
+      }
+      const deep=av?-.17*open:.085*open;
+      const yy=.027*Math.cos(2*theta)*(1-v)+v*(deep*scallop-.037)+.058*Math.sin(pi*v)*scallop;
+      return place(xx,yy,zz,b);
+    }
     for(let l=0;l<n;l++){
-      surface(id,2,20,9,(u,v,b)=>{
-        const theta=(l+u)*TAU/n+(av?0:pi/6), scallop=Math.sin(pi*u);
-        const open=av?1-b:b, radius=1-v*((1-open)*.985+open*(.16+.22*scallop));
-        let xx=rx*radius*Math.cos(theta), zz=rz*radius*Math.sin(theta);
-        if(n===2){
-          // Anterior and posterior leaflets meet along a transverse coaptation line.
-          xx=rx*Math.cos(theta)*(1-.12*v);
-          zz=rz*Math.sin(theta)*(1-v*(.992-open*.54));
-        }
-        const deep=av?-.17*open:.085*open;
-        const yy=.027*Math.cos(2*theta)*(1-v)+v*(deep*scallop-.037)+.058*Math.sin(pi*v)*scallop;
-        return place(xx,yy,zz,b);
-      },mix(rgb(palette[id]),[1,.87,.76],l%2?.08:.20),false,true);
+      surface(id,layer,20,9,(u,v,b)=>leaflet(l,u,v,b),mix(rgb(palette[id]),[1,.87,.76],l%2?.08:.20),false,true);
+    }
+    if(id==='tricuspid'){
+      // The pedicle stays attached to the atrial face of this moving leaflet.
+      function massCenter(v,b){
+        const root=leaflet(0,.77,.32,b);
+        return add(root,[-v*(.125+.09*b),.25*v,v*(.045-.04*b)]);
+      }
+      surface('valve_mass',2,30,18,(u,v,b)=>{
+        const a=TAU*u, body=Math.pow(Math.max(0,Math.sin(pi*v)),.70);
+        const radius=.019*(1-v)+(.067+.109*v)*body;
+        const lobe=1+.17*Math.cos(3*a+2*v)+.08*Math.sin(5*a-4*v);
+        return add(massCenter(v,b),[radius*lobe*Math.cos(a),.022*body*Math.cos(2*a+v),radius*lobe*Math.sin(a)]);
+      },palette.valve_mass,true,true);
+      landmarks.valve_mass=[massCenter(.63,0),massCenter(.63,1)];
+    }
+    if(id==='mitral'){
+      const prostheticLayer=4, radius=.354;
+      // A circular sewing cuff sits inside the native annular footprint.
+      function rim(major,minor,height,color){
+        surface('prosthesis',prostheticLayer,64,12,(u,v,b)=>{
+          const angle=u*TAU, crossSection=v*TAU, r=major+minor*Math.cos(crossSection);
+          return place(r*Math.cos(angle),height+minor*Math.sin(crossSection),r*Math.sin(angle),b);
+        },color,true,true);
+      }
+      // The outer cuff bridges the native annulus to the circular mechanical housing.
+      surface('prosthesis',prostheticLayer,64,5,(u,v,b)=>{
+        const a=u*TAU, cuff=.020*Math.sin(pi*v);
+        return place(((1-v)*(rx+.022)+v*radius)*Math.cos(a),.020+cuff,
+                     ((1-v)*(rz+.020)+v*radius)*Math.sin(a),b);
+      },'#aabdc0',true,true);
+      rim(radius,.029,.042,'#dbe1d9');rim(radius-.027,.015,.033,'#647d87');
+      // A dark recess gives the openings depth when the occluders swing into the ventricle.
+      surface('prosthesis',prostheticLayer,48,8,(u,v,b)=>{
+        const a=u*TAU, r=(radius-.022)*(1-v);
+        return place(r*Math.cos(a),-.40-.08*v,r*Math.sin(a),b);
+      },'#423a46',true,true);
+      for(const sign of [-1,1]){
+        const disk=(u,v,b)=>{
+          const a=pi*u, r=radius-.045, hinge=.102, d=r*Math.sin(a)*v-hinge;
+          const angle=(76-72*b)*pi/180;
+          return place(r*Math.cos(a),.034-d*Math.sin(angle),sign*(.007+hinge+d*Math.cos(angle)),b);
+        };
+        surface('prosthesis',prostheticLayer,38,8,disk,'#465560',false,true);
+        surface('prosthesis',prostheticLayer,38,2,(u,v,b)=>{
+          const p=disk(u,.96+.04*v,b);p[1]+=.004;return p;
+        },'#a6b9b9',false,true);
+      }
+      landmarks.prosthesis=[0,1].map(b=>place(radius,.063,0,b));
     }
   }
-  return {vertices:new Float32Array(vertices), indices:new Uint16Array(indices)};
+  return {vertices:new Float32Array(vertices), indices:new Uint16Array(indices), landmarks};
 }
 
 const PRESETS={
@@ -1070,6 +1271,8 @@ const PRESETS={
   valves:{yaw:-.075,tilt:1.32,center:[0,.56,.11],zoom:1.62},
   inferior:{yaw:-.79,tilt:-.25,center:[-.30,-.27,-.22],zoom:1.18}
 };
+PRESETS.prosthetic=PRESETS.valves;
+const sectionLayer=view=>view==='valves'?3:view==='prosthetic'?4:0;
 const ANCHORS={
   aorta:[-.17,1.72,.27],mitral:[.54,.69,-.40],laa:[1.04,1.12,.11],hepatic:[-1.35,-.87,-.27],
   tricuspid:[-.58,.67,-.02],aortic_valve:[-.037,.79,.07],pulmonary_valve:[.28,.82,.58],
@@ -1079,10 +1282,11 @@ const ANCHORS={
 };
 // The overlay only shows landmarks in a preset orientation. Free rotation uses surface picking.
 const GUIDE={
-  front:[['aorta',-1,-24],['laa',1,-4],['hepatic',-1,18],['lv',1,21]],
+  front:[['aorta',-1,-24],['laa',1,-4],['myocardium',-1,-7],['hepatic',-1,18],['lv',1,4],['apex',1,11]],
   back:[['pv',-1,-21],['la',1,-19],['ivc',1,20]],
-  valves:[['mitral',1,-16],['tricuspid',-1,-4],['aortic_valve',-1,-54],['pulmonary_valve',1,35]],
-  inferior:[['hepatic',-1,-14],['ivc',1,28],['ra',-1,-36]]
+  valves:[['mitral',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35]],
+  prosthetic:[['prosthesis',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35]],
+  inferior:[['hepatic',-1,-14],['ivc',1,28],['ra',-1,-36],['apex',1,15]]
 };
 
 function createGL(canvas,mesh){
@@ -1100,7 +1304,7 @@ function createGL(canvas,mesh){
     void main(){
       vec3 pos=mix(p0,p1,phase), r=rot(pos-center); float layer=floor(item/32.0);
       id=mod(item,32.0); visible=1.0;
-      if((cut<0.5&&layer>1.5)||(cut>0.5&&layer<1.5)) visible=0.0;
+      if(cut<0.5 ? layer>1.5 : (abs(layer-2.0)>.25 && abs(layer-cut)>.25)) visible=0.0;
       normal=rot(mix(n0,n1,phase)); col=base; modelPos=p0; depth=r.z;
       gl_Position=vec4(r.x*extent.x,r.y*extent.y,-r.z*.16,1.);
     }`;
@@ -1156,7 +1360,7 @@ function createGL(canvas,mesh){
     gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     gl.uniform4f(u.cam,Math.cos(s.yaw),Math.sin(s.yaw),Math.cos(s.tilt),Math.sin(s.tilt));
     gl.uniform3fv(u.center,s.center);gl.uniform2f(u.extent,2*s.scale/s.w,2*s.scale/s.h);
-    gl.uniform1f(u.phase,s.phase);gl.uniform1f(u.cut,s.view==='valves'?1:0);
+    gl.uniform1f(u.phase,s.phase);gl.uniform1f(u.cut,sectionLayer(s.view));
     gl.uniform1f(u.selected,regionIndex[s.selected]||0);gl.uniform1f(u.picking,pick?1:0);
     gl.drawElements(gl.TRIANGLES,mesh.indices.length,gl.UNSIGNED_SHORT,0);
   }
@@ -1190,10 +1394,10 @@ function createSoftware(canvas,mesh){
       const sel=(Math.round(v[k+15])%32===regionIndex[s.selected]) ? .18 : 0;
       for(let c=0;c<3;c++)screen[j+3+c]=255*((v[k+12+c]*light+spec+rim)*(1-sel)+[1,.76,.49][c]*sel);
     }
-    const pix=img.data;
+    const pix=img.data, cut=sectionLayer(s.view);
     for(let t=0;t<ix.length;t+=3){
       const info=v[16*ix[t]+15],layer=Math.floor(info/32);
-      if(s.view==='valves'?layer!==2:layer===2) continue;
+      if(cut ? layer!==2&&layer!==cut : layer>1) continue;
       const a=6*ix[t],b=6*ix[t+1],c=6*ix[t+2];
       const ax=screen[a],ay=screen[a+1],bx=screen[b],by=screen[b+1],cx=screen[c],cyy=screen[c+1];
       const den=(by-cyy)*(ax-cx)+(cx-bx)*(ay-cyy);
@@ -1228,7 +1432,7 @@ function mountHeart(onPick){
   if(!engine) useSoftware();
   const s={view:'front',selected:'aorta',...PRESETS.front,playing:!matchMedia('(prefers-reduced-motion: reduce)').matches,
     guides:true,clock:.58,phase:0,w:1,h:1,scale:1,zoomExtra:1};
-  let tags=[],dirty=true,inView=true,last=0,tick=null,drag=null;
+  let tags=[],dirty=true,inView=true,last=0,tick=null,drag=null,lastValveView='valves';
   function resize(){
     const rect=box.getBoundingClientRect(); s.w=Math.max(1,rect.width);s.h=Math.max(1,rect.height);
     const dpr=window.devicePixelRatio||1, ratio=Math.min(dpr,engine.limit), od=Math.min(dpr,2);
@@ -1248,8 +1452,9 @@ function mountHeart(onPick){
     const list=GUIDE[s.view],h=compact?23:25, margin=compact?6:12;
     ctx.font=(compact?'500 10px':'500 11px')+' system-ui,sans-serif';
     const proposed=list.map(([id,side,shift])=>{
-      let p=beatPoint(ANCHORS[id],id,s.phase);
-      if(s.view==='valves')p=[p[0],p[1]-.10*s.phase,p[2]];
+      const endpoints=mesh.landmarks[id];
+      let p=endpoints?mix(endpoints[0],endpoints[1],s.phase):beatPoint(ANCHORS[id],id,s.phase);
+      if(!endpoints&&sectionLayer(s.view))p=[p[0],p[1]-.10*s.phase,p[2]];
       const [x,y]=project(p),r=CATALOG.regions[regionIndex[id]-1],label=r.short;
       const w=Math.ceil(ctx.measureText(label).width)+16;
       return {id,x,y,w,h,side,label,tx:side===1?s.w-margin-w:margin,ty:clamp(y+shift,15,s.h-16)};
@@ -1294,7 +1499,11 @@ function mountHeart(onPick){
   function refresh(){dirty=true;schedule();}
   function view(id){
     s.view=id;Object.assign(s,PRESETS[id]);s.zoomExtra=1;
-    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===id)));
+    const onPlane=Boolean(sectionLayer(id));
+    if(onPlane)lastValveView=id;
+    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===(onPlane?'valves':id))));
+    document.getElementById('valve-views').hidden=!onPlane;
+    document.querySelectorAll('[data-valve]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.valve===id)));
     refresh();
   }
   function zoom(step){s.zoomExtra=clamp(s.zoomExtra*step,.72,1.85);refresh();}
@@ -1303,7 +1512,10 @@ function mountHeart(onPick){
     b.setAttribute('aria-label',s.playing?'Kalp hareketini durdur':'Kalp hareketini oynat');b.setAttribute('aria-pressed',String(!s.playing));
   }
   function toggle(){s.playing=!s.playing;last=0;motion();refresh();}
-  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));
+  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view==='valves'?lastValveView:b.dataset.view)));
+  document.querySelectorAll('[data-valve]').forEach(b=>b.addEventListener('click',()=>{
+    view(b.dataset.valve);onPick(b.dataset.valve==='prosthetic'?'prosthesis':'mitral',false);
+  }));
   document.getElementById('zoom-in').onclick=()=>zoom(1.14);document.getElementById('zoom-out').onclick=()=>zoom(1/1.14);
   document.getElementById('motion').onclick=toggle;
   document.getElementById('guides').onclick=e=>{s.guides=!s.guides;e.currentTarget.setAttribute('aria-pressed',String(s.guides));refresh();};
@@ -1340,12 +1552,16 @@ function mountHeart(onPick){
   motion();view('front');resize();
   return {setRegion(id,fromList=false){
     s.selected=id;const r=CATALOG.regions[regionIndex[id]-1];
-    if(fromList)view(r.view);else refresh();
+    if(fromList){
+      const sharedValve=r.view==='valves'&&id!=='mitral';
+      view(sharedValve?lastValveView:r.view);
+    }else refresh();
   },getView:()=>s.view};
 }
 
 const byId = id=>document.getElementById(id);
 const allRegions=CATALOG.regions;
+byId('region-count').textContent=allRegions.length+' seçilebilir yapı';
 const regions=Object.fromEntries(allRegions.map(r=>[r.id,r]));
 const select=byId('region'), optionLetters='ABCDE';
 const state={scope:'neu-kalp-atlasi-ornek-v1',banks:{},records:{},region:'aorta',bankStatus:'standalone',flags:new Set(),pendingFlag:null};
@@ -1365,7 +1581,18 @@ function loadState(){
   state.flags=new Set(Array.isArray(raw.flags)?raw.flags:[]);
   state.region=Object.hasOwn(regions,raw.region)?raw.region:'aorta';
 }
-function bankFor(id){return state.banks[id]?.length?state.banks[id]:CATALOG.samples[id];}
+function bankFor(id){return state.banks[id]||CATALOG.samples[id];}
+function loadBanks(banks){
+  state.banks={};
+  for(const r of allRegions){
+    const rows=banks[r.id];
+    if(!Array.isArray(rows)||!rows.length)continue;
+    if(!r.includeSamples){state.banks[r.id]=rows;continue;}
+    const normalizeStem=s=>s.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g,' ');
+    const existing=new Set(rows.map(q=>normalizeStem(q.stem)));
+    state.banks[r.id]=rows.concat(CATALOG.samples[r.id].filter(q=>!existing.has(normalizeStem(q.stem))));
+  }
+}
 function recordFor(id){
   const bank=bankFor(id),ids=bank.map(q=>q.id),old=state.records[id];
   if(old?.order?.length===ids.length&&new Set(old.order).size===ids.length&&ids.every(q=>old.order.includes(q))&&old.answers&&Number.isInteger(old.index)&&old.index>=0&&old.index<ids.length)return old;
@@ -1390,8 +1617,10 @@ function scoreOf(rec,bank){return bank.reduce((sum,q)=>sum+(rec.answers[q.id]===
 function render(){
   const {q,rec,bank}=current(),id=state.region;
   const answered=Object.hasOwn(rec.answers,q.id),selection=answered?rec.answers[q.id]:rec.pick;
-  const totalAnswered=Object.keys(rec.answers).length,score=scoreOf(rec,bank),fromSheet=Boolean(state.banks[id]?.length);
+  const totalAnswered=Object.keys(rec.answers).length,score=scoreOf(rec,bank),fromSheet=q.id.startsWith('s-');
   select.value=id;
+  const detail=byId('topic-detail');
+  detail.textContent=regions[id].detail||'';detail.hidden=!detail.textContent;
   byId('source').textContent=fromSheet?'Kurum bankası':'Örnek sorular';
   byId('source').classList.toggle('bank',fromSheet);
   byId('q-index').textContent=rec.done?'Tur tamamlandı':'Soru '+(rec.index+1)+' / '+bank.length;
@@ -1429,8 +1658,8 @@ function render(){
   const done=allRegions.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
   byId('course-label').textContent=done+' / '+allRegions.length+' yapı tamamlandı';
   const note=byId('bank-note');
-  if(state.bankStatus==='standalone')note.textContent='Bu önizlemede her yapı için kaynaklı iki örnek soru bulunur.';
-  else if(state.bankStatus==='ready')note.textContent=fromSheet?'':'Bu yapı için eşleşen aktif kurum sorusu bulunamadı. Örnek sorular gösteriliyor.';
+  if(state.bankStatus==='standalone')note.textContent='Önizlemede atlasın kaynaklı örnek sorularını çözebilirsiniz.';
+  else if(state.bankStatus==='ready')note.textContent=state.banks[id]?'':'Bu yapı için eşleşen aktif kurum sorusu bulunamadı. Örnek sorular gösteriliyor.';
   else note.textContent=state.bankStatus==='schema'?'SoruBankasi başlıkları okunamadı. Örnek sorular gösteriliyor.':'Kurum soru bankası şu anda kullanılamıyor. Örnek sorular gösteriliyor.';
   note.hidden=!note.textContent;
 }
@@ -1471,7 +1700,7 @@ function frameHeight(){
 }
 byId('flag').onclick=()=>{
   const {q}=current();
-  if(!frameOrigin||!state.banks[state.region]?.some(x=>x.id===q.id)||state.pendingFlag||state.flags.has(q.id))return;
+  if(!frameOrigin||!q.id.startsWith('s-')||state.pendingFlag||state.flags.has(q.id))return;
   state.pendingFlag={qid:q.id,nonce:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9)};
   render();post('setComponentValue',{dataType:'json',value:state.pendingFlag});
 };
@@ -1482,7 +1711,7 @@ window.addEventListener('message',e=>{
   const args=e.data.args,nextScope='neu-kalp-atlasi-'+args.atlasScope;
   const changed=state.scope!==nextScope;
   if(changed){state.scope=nextScope;loadState();}
-  state.banks=args.banks||{};state.bankStatus=args.status;
+  loadBanks(args.banks||{});state.bankStatus=args.status;
   const ack=args.ack;
   if(ack&&ack.nonce===state.pendingFlag?.nonce){
     state.pendingFlag=null;
@@ -1493,7 +1722,7 @@ window.addEventListener('message',e=>{
   frameHeight();
 });
 loadState();render();
-model=mountHeart(id=>choose(id,false,true));model.setRegion(state.region,true);
+model=mountHeart((id,move=true)=>choose(id,false,move));model.setRegion(state.region,true);
 new ResizeObserver(frameHeight).observe(document.querySelector('.atlas'));
 post('componentReady',{apiVersion:1});
 
@@ -4821,3 +5050,6 @@ elif menu == "🏥 H-Type HT Çalışması":
 # =========================================================
 else:
     st.warning("Menü seçimi tanınmadı.")
+
+
+
