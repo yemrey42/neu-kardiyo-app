@@ -2,17 +2,13 @@
 # NEÜ-KARDİYO | Streamlit + Google Sheets (CRUD)
 # Not: Excel/CSV indirme YOK (isteğe göre kaldırıldı)
 
-import base64
-from html import escape
 import hashlib
 import json
 import re
 import tempfile
 import unicodedata
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
-
-import requests
+from urllib.parse import urlsplit, parse_qs
 
 import time
 import random
@@ -30,21 +26,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ===================== AYARLAR =====================
 st.set_page_config(page_title="NEÜ-KARDİYO", page_icon="❤️", layout="wide")
 
-# Ana Google Sheets (mevcut klinik modüller ve soru bankası) — DEĞİŞTİRMEYİN.
+# Tek bir Google Sheet içinde sekmeler:
 SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4"
-
-# İkinci Google Sheets — yalnızca fotoğraf ve video soruları.
-# Yeni dosyanızın URL'sinde /d/ ile /edit arasındaki değeri buraya girin.
-# Bu ID gizli anahtar değildir; servis hesabının JSON bilgileri Secrets'ta kalır.
-MEDIA_SHEET_ID = "1nrAcMsjEpYmhWThlA5XfKfmCykJ_2w8zCaE00iTaXGI"
-MEDIA_PHOTO_TAB = "Fotograflar"
-MEDIA_VIDEO_TAB = "Videolar"
-
-# Google Drive: Fotoğraf ve videolar tek klasörde tutulur.
-# Drive klasör URL'sindeki /folders/ kısmından sonraki ID'yi girin.
-MEDIA_DRIVE_FOLDER_ID = "1PkQu5DBmYKKNrLBHQtnLJwCyNgM6f2OQ"
-
-
 def _sheet_index(key, default):
     try:
         return int(st.secrets.get(key, default))
@@ -60,7 +43,7 @@ AFMR_WS_INDEX = _sheet_index("afmr_ws_index", 4)         # AFMR
 CVABL_WS_INDEX = _sheet_index("cvabl_ws_index", 5)       # Kardiyoversiyon-Ablasyon / TEE-GLS
 PBMV_WS_INDEX = _sheet_index("pbmv_ws_index", 7)         # PBMV – RV-PA Coupling
 FEATURED_WS_INDEX = _sheet_index("featured_ws_index", 6) # Özellikli Vakalar
-QUESTION_WS_INDEX = 2  # Soru bankası dosyasındaki üçüncü sekme (metin soruları).
+QUESTION_WS_INDEX = _sheet_index("question_ws_index", 8) # Soru Bankası
 
 APP_TITLE = "❤️ NEÜ-KARDİYO"
 
@@ -193,12 +176,9 @@ def connect_to_gsheets() -> gspread.Client:
     return gspread.authorize(creds)
 
 
-def get_ws(sheet_id: str, worksheet_index):
-    """Mevcut sayısal sekme indeksleri ve yeni isimli medya sekmeleri."""
+def get_ws(sheet_id: str, worksheet_index: int):
     client = connect_to_gsheets()
     sh = client.open_by_key(sheet_id)
-    if isinstance(worksheet_index, str):
-        return sh.worksheet(worksheet_index)
     return sh.get_worksheet(worksheet_index)
 
 
@@ -220,227 +200,6 @@ def load_data(sheet_id: str, worksheet_index: int, required_col: Optional[str] =
         return df
     except Exception:
         return pd.DataFrame()
-
-
-
-def _media_sheet_is_configured():
-    return bool(MEDIA_SHEET_ID.strip() and MEDIA_SHEET_ID != "YENI_SHEETS_ID_BURAYA")
-
-
-def _media_folder_is_configured():
-    return bool(re.fullmatch(r"[A-Za-z0-9_-]{10,}", MEDIA_DRIVE_FOLDER_ID.strip()) and
-                MEDIA_DRIVE_FOLDER_ID != "YENI_DRIVE_KLASOR_ID_BURAYA")
-
-
-def _media_link(value):
-    """Only http(s) links are accepted as legacy URL input."""
-    url = str(value or "").strip()
-    parsed = urlparse(url)
-    if parsed.scheme.lower() not in {"https", "http"} or not parsed.netloc:
-        return ""
-    return url
-
-
-def _drive_file_id(url):
-    """Extract a file ID from standard Google Drive sharing URLs."""
-    parsed = urlparse(url)
-    if parsed.hostname not in {"drive.google.com", "www.drive.google.com"}:
-        return None
-    match = re.search(r"/file/d/([A-Za-z0-9_-]{10,})", parsed.path)
-    if match:
-        return match.group(1)
-    file_id = parse_qs(parsed.query).get("id", [None])[0]
-    if file_id and re.fullmatch(r"[A-Za-z0-9_-]{10,}", file_id):
-        return file_id
-    return None
-
-
-@st.cache_resource(show_spinner=False)
-def _drive_credentials():
-    """The same service account as Sheets; never expose its token to the browser."""
-    info = _get_service_account_info()
-    return ServiceAccountCredentials.from_json_keyfile_dict(
-        info, ["https://www.googleapis.com/auth/drive.readonly"]
-    )
-
-
-def _drive_get(url, *, params=None, stream=False, timeout=(10, 45)):
-    # oauth2client refreshes the token on demand; all requests are server-side.
-    token = _drive_credentials().get_access_token().access_token
-    return requests.get(
-        url,
-        headers={"Authorization": f"Bearer {token}"},
-        params=params,
-        stream=stream,
-        timeout=timeout,
-    )
-
-
-@st.cache_data(ttl=120, max_entries=3, show_spinner=False)
-def _list_drive_media(folder_id):
-    """List files in the shared folder, not in the entire Google Drive.
-
-    Returns a filename -> metadata lookup. No public-sharing URLs required.
-    """
-    items = {}
-    page_token = None
-    while True:
-        params = {
-            "q": f"'{folder_id}' in parents and trashed = false",
-            "fields": "nextPageToken,files(id,name,mimeType,size,modifiedTime)",
-            "pageSize": 1000,
-            "supportsAllDrives": "true",
-            "includeItemsFromAllDrives": "true",
-        }
-        if page_token:
-            params["pageToken"] = page_token
-        response = _drive_get("https://www.googleapis.com/drive/v3/files", params=params)
-        try:
-            response.raise_for_status()
-            data = response.json()
-        finally:
-            response.close()
-        for item in data.get("files", []):
-            # Case-insensitive lookup; duplicate names must be renamed by the owner.
-            key = str(item.get("name", "")).strip().casefold()
-            if key:
-                items.setdefault(key, []).append(item)
-        page_token = data.get("nextPageToken")
-        if not page_token:
-            return items
-
-
-@st.cache_data(ttl=3600, max_entries=6, show_spinner=False)
-def _download_drive_media(file_id, modified_time, max_bytes):
-    """Download only a size-limited media file; the bytes stay on Streamlit server.
-
-    modified_time is used as a cache-busting parameter when the file is updated.
-    """
-    response = _drive_get(
-        f"https://www.googleapis.com/drive/v3/files/{file_id}",
-        params={"alt": "media", "supportsAllDrives": "true"},
-        stream=True, timeout=(10, 90),
-    )
-    try:
-        response.raise_for_status()
-        declared_size = response.headers.get("Content-Length", "")
-        if declared_size.isdigit() and int(declared_size) > max_bytes:
-            raise ValueError(f"Dosya {max_bytes // (1024 * 1024)} MB sınırını aşıyor.")
-        contents, total = [], 0
-        for part in response.iter_content(chunk_size=256 * 1024):
-            if not part:
-                continue
-            total += len(part)
-            if total > max_bytes:
-                raise ValueError(f"Dosya {max_bytes // (1024 * 1024)} MB sınırını aşıyor.")
-            contents.append(part)
-        return b"".join(contents)
-    finally:
-        response.close()
-
-
-def _show_question_video(source):
-    st.markdown(
-        f'<video src="{escape(source, quote=True)}" controls controlslist="nodownload" '
-        'playsinline loop oncontextmenu="return false" '
-        'style="display:block;width:100%;height:auto"></video>',
-        unsafe_allow_html=True,
-    )
-
-
-def _show_drive_media_by_name(filename, kind):
-    """Look up the exact filename in the private Drive folder and display it."""
-    if not _media_folder_is_configured():
-        st.warning("Drive klasörü ayarlanmadı: web_app.py içinde MEDIA_DRIVE_FOLDER_ID değerini girin.")
-        return
-    filename = str(filename).strip()
-    if not filename or "/" in filename or "\\" in filename or len(filename) > 250:
-        st.warning("Dosya adını uzantısıyla yazın. Örnek: coronary_sinus.png")
-        return
-    try:
-        index = _list_drive_media(MEDIA_DRIVE_FOLDER_ID)
-        matches = index.get(filename.casefold(), [])
-        if not matches:
-            st.warning(f"Drive klasöründe '{filename}' bulunamadı. Dosya adı ve uzantısını kontrol edin.")
-            st.caption("Yeni yüklediyseniz 'Drive listesini yenile' düğmesini kullanın.")
-            return
-        if len(matches) > 1:
-            st.error(f"Klasörde '{filename}' adında birden fazla dosya var. Her dosyaya benzersiz ad verin.")
-            return
-        file = matches[0]
-        mime = str(file.get("mimeType", "")).lower()
-        accepted = (
-            {"image/jpeg", "image/png", "image/webp", "image/gif"}
-            if kind == "photo" else {"video/mp4", "video/webm", "video/ogg"}
-        )
-        if mime not in accepted:
-            st.warning(f"'{filename}' dosyasının biçimi ({mime or 'bilinmiyor'}) desteklenmiyor. "
-                       + ("PNG/JPG/WebP/GIF kullanın." if kind == "photo" else "MP4 (H.264) önerilir."))
-            return
-        limit = 15 * 1024 * 1024 if kind == "photo" else 60 * 1024 * 1024
-        size = str(file.get("size", ""))
-        if size.isdigit() and int(size) > limit:
-            st.warning(f"'{filename}' fazla büyük. "
-                       f"{'Fotoğraf' if kind == 'photo' else 'Video'} başına sınır "
-                       f"{limit // (1024 * 1024)} MB; videoyu sıkıştırın.")
-            return
-        payload = _download_drive_media(file["id"], file.get("modifiedTime", ""), limit)
-        if kind == "photo":
-            st.image(payload, caption="Ekokardiyografi sorusu", use_container_width=True)
-        else:
-            encoded = base64.b64encode(payload).decode("ascii")
-            _show_question_video(f"data:{mime};base64,{encoded}")
-    except requests.exceptions.HTTPError as exc:
-        code = exc.response.status_code if exc.response is not None else "?"
-        st.error(f"Drive dosyasına erişilemedi (HTTP {code}). Klasör paylaşımını ve Drive API'yi kontrol edin.")
-    except requests.exceptions.RequestException:
-        st.error("Drive bağlantısı sırasında ağ hatası oluştu; yeniden deneyin.")
-    except ValueError as exc:
-        st.warning(str(exc))
-    except Exception:
-        st.error("Medya yüklenemedi. Klasör ID'sini, dosya adını ve servis hesabı erişimini kontrol edin.")
-
-
-def _show_question_media(row, kind):
-    """Use Drive filename first, or fall back to the older URL columns."""
-    if kind == "photo":
-        filename_cols = ("GorselDosya", "GörselDosya", "DosyaAdi", "DosyaAdı")
-        link_cols = ("GorselURL", "GörselURL", "FotoURL", "ResimURL", "MedyaURL")
-    else:
-        filename_cols = ("VideoDosya", "DosyaAdi", "DosyaAdı")
-        link_cols = ("VideoURL", "MedyaURL")
-
-    raw_name = next((str(row.get(k, "")).strip() for k in filename_cols
-                     if str(row.get(k, "")).strip()), "")
-    if raw_name:
-        _show_drive_media_by_name(raw_name, kind)
-        return
-
-    raw_url = next((str(row.get(k, "")).strip() for k in link_cols
-                    if str(row.get(k, "")).strip()), "")
-    if not raw_url:
-        st.info("Bu soruya henüz medya eklenmemiş. Sheets'te dosya adını yazın.")
-        return
-    url = _media_link(raw_url)
-    if not url:
-        # Backward compatibility: a filename placed into the old GorselURL/
-        # VideoURL column is also accepted, so no Sheets migration is needed.
-        _show_drive_media_by_name(raw_url, kind)
-        return
-    drive_id = _drive_file_id(url)
-    try:
-        if kind == "photo":
-            view_url = f"https://drive.google.com/thumbnail?id={drive_id}&sz=w1600" if drive_id else url
-            st.image(view_url, caption="Soruyla ilgili görüntü", use_container_width=True)
-        elif drive_id:
-            components.iframe(f"https://drive.google.com/file/d/{drive_id}/preview", height=475, scrolling=False)
-            st.caption("Drive video bağlantısında izleyici erişimi gerekir. Özel dosyalar için 'VideoDosya' sütununu kullanın.")
-        elif urlparse(url).hostname in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
-            st.video(url, loop=True)
-        else:
-            _show_question_video(url)
-    except Exception:
-        st.warning("URL ile medya gösterilemedi. Drive klasöründeki dosya adını kullanabilirsiniz.")
 
 
 def save_data_row(sheet_id: str, data_dict: Dict[str, Any], unique_col: str, worksheet_index: int = 0):
@@ -694,6 +453,25 @@ def _atlas_topics(value, *, as_tags=False):
     topics.update(key for key, pattern in _ATLAS_PATTERNS.items() if pattern.search(normalized))
     return topics
 
+def _question_drive_url(row):
+    """Accept Drive file-sharing links and retain optional link-access resource keys."""
+    value = _atlas_text(row.get("GorselURL"))
+    try:
+        url = urlsplit(value)
+        if url.scheme != "https" or url.netloc.lower() != "drive.google.com":
+            return ""
+        query = parse_qs(url.query)
+        path = re.fullmatch(r"/file/d/([A-Za-z0-9_-]+)(?:/(?:view|preview))?/?", url.path)
+        file_id = path.group(1) if path else query.get("id", [""])[0] if url.path in ("/open", "/uc") else ""
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", file_id):
+            return ""
+        key = query.get("resourcekey", [""])[0]
+        suffix = "?resourcekey=" + key if re.fullmatch(r"[A-Za-z0-9_-]+", key) else ""
+        return "https://drive.google.com/file/d/" + file_id + "/preview" + suffix
+    except ValueError:
+        return ""
+
+
 def _atlas_bank(df):
     """Only valid active questions are sent to the student component."""
     banks, lookup = {}, {}
@@ -728,6 +506,7 @@ def _atlas_bank(df):
         source = _atlas_text(row.get("Kaynak"))
         entry = {"id": uid, "stem": stem, "options": options, "key": correct, "why": _atlas_text(row.get("Aciklama")),
                  "source": [source, source if re.fullmatch(r"https?://\S+", source, re.I) else ""]}
+        entry["image"] = _question_drive_url(row)
         lookup[uid] = (sheet_id, stem)
         for topic in topics:
             banks.setdefault(topic, []).append(entry)
@@ -818,7 +597,7 @@ _ATLAS_HTML = r'''<!doctype html>
 <body>
 <div class="atlas">
   <header><span class="brand"><svg viewBox="0 0 32 27" fill="none" aria-hidden="true"><path d="M2 15h6l4-10 5 18 4-12 3 4h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>NEÜ KARDİYOLOJİ</span><span class="header-section">Soru bankası</span></header>
-  <div class="intro"><div><h1>Kalp atlası</h1><p>Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.</p></div><div class="course"><span id="course-label"></span></div></div>
+  <div class="intro"><div><h1>Kalp atlası</h1><p>Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.</p></div><div class="course"><span id="course-label"></span><div class="track"><i id="course-fill"></i></div></div></div>
   <main>
     <section aria-label="Etkileşimli anatomik model">
       <div class="model">
@@ -834,8 +613,8 @@ _ATLAS_HTML = r'''<!doctype html>
     <section class="right" id="quiz" aria-label="Seçilen yapının soruları">
       <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source"></span></div>
       <label class="select-wrap"><span class="sr">Anatomik yapı seç</span><select id="region"></select></label>
-      <div class="meter-label"><span id="q-index"></span><span id="score"></span></div>
-      <div id="exercise"><h2 class="question" id="stem"></h2><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
+      <div class="meter-label"><span id="q-index"></span><span id="score"></span></div><div class="track" id="qmeter"><i id="q-fill"></i></div>
+      <div id="exercise"><h2 class="question" id="stem"></h2><div id="question-media"></div><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
       <div class="end" id="complete" hidden><h3>Bu yapı tamamlandı.</h3><p id="result"></p></div>
       <button class="primary" id="submit" type="button">Yanıtı kontrol et</button>
       <div class="actions"><button class="text-button mobile-back" id="to-model">↑ Modele dön</button><button class="text-button" id="flag" hidden>Soruyu düzeltme için bildir</button></div><p class="flag-status" role="status" id="flag-status"></p>
@@ -1396,8 +1175,18 @@ function render(){
   byId('source').classList.toggle('bank',fromSheet);
   byId('q-index').textContent=rec.done?'Tur tamamlandı':'Soru '+(rec.index+1)+' / '+bank.length;
   byId('score').textContent=score+' doğru · '+(totalAnswered-score)+' yanlış';
+  byId('q-fill').style.width=(100*totalAnswered/bank.length)+'%';
   byId('exercise').hidden=rec.done;byId('complete').hidden=!rec.done;
   byId('stem').textContent=q.stem;
+  const media=byId('question-media'), url=q.image||'';
+  if(media.dataset.url!==url){
+    media.dataset.url=url;media.replaceChildren();
+    if(url.startsWith('https://drive.google.com/file/d/')){
+      const frame=make('iframe');frame.src=url;frame.title='Soru görseli';frame.style.cssText='width:100%;height:300px;border:0';
+      const link=make('a','reference','Görseli Drive’da aç');link.href=url.replace('/preview','/view');link.target='_blank';link.rel='noopener noreferrer';
+      media.append(frame,link);media.style.marginBottom='12px';
+    }else media.style.marginBottom='';
+  }
   const choices=byId('choices');choices.replaceChildren();
   q.options.forEach(([letter,text])=>{
     const button=make('button','opt');button.type='button';button.disabled=answered;
@@ -1428,6 +1217,7 @@ function render(){
   byId('flag-status').textContent=state.flags.has(q.id)?'Düzeltme isteği kaydedildi.':state.pendingFlag?.qid===q.id?'Kaydediliyor…':'';
   const done=allRegions.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
   byId('course-label').textContent=done+' / '+allRegions.length+' yapı tamamlandı';
+  byId('course-fill').style.width=100*done/allRegions.length+'%';
   const note=byId('bank-note');
   if(state.bankStatus==='standalone')note.textContent='Bu önizlemede her yapı için kaynaklı iki örnek soru bulunur.';
   else if(state.bankStatus==='ready')note.textContent=fromSheet?'':'Bu yapı için eşleşen aktif kurum sorusu bulunamadı. Örnek sorular gösteriliyor.';
@@ -1446,19 +1236,13 @@ for(const group of [...new Set(allRegions.map(r=>r.group))]){
 }
 select.onchange=()=>choose(select.value,true);
 byId('to-model').onclick=()=>byId('viewport').scrollIntoView({block:'center'});
-let atlasStreak=0;
 byId('submit').onclick=()=>{
   const {rec,q,bank}=current();
-  if(rec.done){atlasStreak=0;delete state.records[state.region];recordFor(state.region);}
+  if(rec.done){delete state.records[state.region];recordFor(state.region);}
   else if(Object.hasOwn(rec.answers,q.id)){
     rec.pick=null;
     if(rec.index+1>=bank.length)rec.done=true;else rec.index++;
-  }else if(q.options.some(([letter])=>letter===rec.pick)){rec.answers[q.id]=rec.pick;
-    atlasStreak=rec.pick===q.key ? atlasStreak+1 : 0;
-    if(atlasStreak && frameOrigin){
-      post('setComponentValue',{dataType:'json',value:{type:'streak',qid:q.id,nonce:crypto.randomUUID(),streak:atlasStreak}});
-    }
-  }
+  }else if(q.options.some(([letter])=>letter===rec.pick)){rec.answers[q.id]=rec.pick;}
   storeState();render();
 };
 function post(type,body,origin=frameOrigin||'*'){
@@ -1518,43 +1302,10 @@ def _atlas_read_bank(sheet_id, index):
         return {}, {}, "unavailable"
     return _atlas_bank(load_data(sheet_id, index, required_col="SoruID"))
 
-def _quiz_records_sheet():
-    book = connect_to_gsheets().open_by_key(MEDIA_SHEET_ID)
-    try:
-        return book.worksheet("SeriRekorlari")
-    except gspread.WorksheetNotFound:
-        try:
-            return book.add_worksheet(title="SeriRekorlari", rows=1000, cols=3)
-        except gspread.exceptions.APIError:
-            return book.worksheet("SeriRekorlari")
-
-
-def _rank_quiz_records(rows, mode):
-    best = {}
-    for row in rows:
-        if len(row) < 3 or row[0] != mode or not row[2].isdigit():
-            continue
-        name, score = row[1], int(row[2])
-        key = name.casefold()
-        if score > best.get(key, ("", 0))[1]:
-            best[key] = (name, score)
-    return sorted(best.values(), key=lambda entry: (-entry[1], entry[0].casefold()))
-
-
-def _record_quiz_streak(mode, streak):
-    if streak < 1:
-        return
-    sheet = _quiz_records_sheet()
-    name = st.session_state.quiz_player
-    ranks = _rank_quiz_records(sheet.get_all_values(), mode)
-    if all(player.casefold() != name.casefold() or score < streak for player, score in ranks):
-        sheet.append_row([mode, name, streak], value_input_option="RAW")
-
-
 def _render_heart_atlas():
-    banks, lookup, status = _atlas_read_bank(MEDIA_SHEET_ID, QUESTION_WS_INDEX)
+    banks, lookup, status = _atlas_read_bank(SHEET_ID, QUESTION_WS_INDEX)
     component = components.declare_component("neu_kalp_atlasi", path=_atlas_directory(_ATLAS_HTML).name)
-    scope = hashlib.sha256(f"{MEDIA_SHEET_ID}/{QUESTION_WS_INDEX}/{st.session_state.quiz_player.casefold()}".encode()).hexdigest()[:12]
+    scope = hashlib.sha256(f"{SHEET_ID}/{QUESTION_WS_INDEX}".encode()).hexdigest()[:12]
     previous = st.session_state.get("atlas_review_ack", {})
     event = component(atlasScope=scope, banks=banks, status=status, ack=previous,
                       key="neu_kalp_atlasi", default=None)
@@ -1563,18 +1314,8 @@ def _render_heart_atlas():
     uid, nonce = event.get("qid"), event.get("nonce")
     if not isinstance(uid, str) or not isinstance(nonce, str) or not 1 <= len(nonce) <= 80 or previous.get("nonce") == nonce:
         return
-    if event.get("type") == "streak":
-        streak = event.get("streak")
-        if type(streak) is int and streak > 0:
-            try:
-                _record_quiz_streak("Kalp atlası", streak)
-            except gspread.exceptions.GSpreadException:
-                st.warning("Atlas rekoru kaydedilemedi. Yeniden denemek için sayfada bir işlem yapın.")
-                return
-        st.session_state.atlas_review_ack = {"nonce": nonce, "ok": True}
-        st.rerun()
     target = lookup.get(uid)
-    ok = bool(target and flag_question_for_review(MEDIA_SHEET_ID, QUESTION_WS_INDEX, *target))
+    ok = bool(target and flag_question_for_review(SHEET_ID, QUESTION_WS_INDEX, *target))
     st.session_state.atlas_review_ack = {"qid": uid, "nonce": nonce, "ok": ok}
     st.rerun()
 
@@ -1667,81 +1408,35 @@ with st.sidebar:
 # ===================== EKRAN 0: SORU BANKASI / QUIZ =======
 # =========================================================
 if menu == "🧠 Soru Bankası":
-    if not st.session_state.get("quiz_player"):
-        with st.form("quiz_login"):
-            name = st.text_input("Kullanıcı adı", max_chars=30)
-            if st.form_submit_button("Giriş yap"):
-                name = " ".join(name.split())
-                if name:
-                    st.session_state.quiz_player = name
-                    st.rerun()
-                st.warning("Kullanıcı adını gir.")
-        st.stop()
-    if st.button("Kullanıcı değiştir", help=st.session_state.quiz_player):
-        for key in list(st.session_state):
-            if key.startswith(("quiz_", "atlas_review_")):
-                del st.session_state[key]
-        st.rerun()
-    mode = st.radio(
-        "Soru bankası modu",
-        ["Kalp atlası", "Fotoğraflı test", "Videolu test", "Karışık test"],
-        format_func=lambda mode: {"Fotoğraflı test": "Fotoğraflı sorular", "Videolu test": "Videolu sorular"}.get(mode, mode),
-        horizontal=True, key="soru_bankasi_modu",
-    )
-    if mode != "Karışık test":
-        st.subheader("🏆 En uzun doğru serisi")
-        try:
-            ranks = _rank_quiz_records(_quiz_records_sheet().get_all_values(), mode)
-            if ranks:
-                for medal, column, (player, score) in zip(("🥇", "🥈", "🥉"), st.columns(3), ranks):
-                    column.metric(f"{medal} {player}", f"{score} doğru")
-            else:
-                st.caption("İlk doğru serisiyle sıralama başlayacak.")
-        except gspread.exceptions.GSpreadException:
-            st.warning("Seri sıralaması şu anda okunamadı.")
+    mode = st.radio("Soru bankası modu", ["Kalp atlası", "Karışık test"], horizontal=True, key="soru_bankasi_modu")
     if mode == "Kalp atlası":
         _render_heart_atlas()
         st.stop()
 
     st.header("🧠 Kardiyoloji Soru Bankası")
 
-    # Metin soruları üçüncü sekmeden, medya soruları isimli sekmelerden okunur.
-    media_kind = "photo" if mode == "Fotoğraflı test" else "video" if mode == "Videolu test" else None
-    quiz_sheet_id = MEDIA_SHEET_ID
-    quiz_ws = QUESTION_WS_INDEX if not media_kind else MEDIA_PHOTO_TAB if media_kind == "photo" else MEDIA_VIDEO_TAB
-    if not _media_sheet_is_configured():
-        st.warning("Yeni Google Sheets bağlantısı henüz ayarlanmamış.")
-        st.code('MEDIA_SHEET_ID = "YENI_SHEETS_ID_BURAYA"', language="python")
-        st.info("web_app.py dosyasında bu değeri yeni Google Sheets ID'si ile değiştirin. Secrets'a yeni bir ID eklemeniz gerekmiyor.")
-        st.stop()
+    # -----------------------------------------------------
+    # Google Sheets başlık yapısı:
+    # SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak
+    # -----------------------------------------------------
+    dfq = load_data(SHEET_ID, QUESTION_WS_INDEX, required_col="SoruID")
 
-    if media_kind and _media_folder_is_configured():
-        if st.button("🔄 Drive listesini yenile", key=f"drive_refresh_{media_kind}",
-                     help="Klasöre yeni eklenen veya adı değişen dosyaları yeniden tara."):
-            _list_drive_media.clear()
-            st.rerun()
-
-    dfq = load_data(quiz_sheet_id, quiz_ws, required_col="SoruID")
     if dfq.empty:
-        if media_kind:
-            st.warning(f"'{quiz_ws}' sekmesi okunamadı veya henüz soru eklenmedi.")
-            st.info("Yeni Google Sheets'i servis hesabının client_email adresiyle Düzenleyici olarak paylaşın. Sekme adlarını ve başlıkları kontrol edin.")
-        else:
-            st.warning("Henüz soru yok veya üçüncü sekmenin başlıkları uygun değil.")
-            st.info("İlk satır: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`. Metin soruları üçüncü sekmede olmalı.")
+        st.warning("Henüz soru yok veya SoruBankasi sekmesi başlıkları uygun değil.")
+        st.info(
+            "Google Sheets içinde `SoruBankasi` isimli sekme açıp ilk satırı şu şekilde yap:\n\n"
+            "`SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`\n\n"
+            "Not: Bu kodda varsayılan `question_ws_index = 8`. "
+            "SoruBankasi farklı sıradaysa Streamlit secrets içine doğru index değerini ekle."
+        )
         st.stop()
 
-    # Yeni medya tablolarında Kaynak isteğe bağlıdır; eski testin şeması değişmez.
-    required_cols = ["SoruID", "Aktif", "Kategori", "Soru", "A", "B", "C", "D", "E", "Dogru", "Aciklama"]
-    if not media_kind:
-        required_cols.append("Kaynak")
+    required_cols = ["SoruID", "Aktif", "Kategori", "Soru", "A", "B", "C", "D", "E", "Dogru", "Aciklama", "Kaynak"]
     missing_cols = [c for c in required_cols if c not in dfq.columns]
     if missing_cols:
-        st.error(f"{quiz_ws} sekmesinde eksik kolon var: " + ", ".join(missing_cols))
-        st.info("Başlıklar: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`; fotoğraf için `GorselDosya`, video için `VideoDosya` ekleyin.")
+        st.error("SoruBankasi sekmesinde eksik kolon var: " + ", ".join(missing_cols))
+        st.info("Başlık satırı birebir şöyle olmalı: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`")
         st.stop()
-    if "Kaynak" not in dfq.columns:
-        dfq["Kaynak"] = ""
 
     # Sadece aktif sorular. Aktif kolonu TRUE/1/evet/yes/aktif olmalı.
     dfq = dfq[
@@ -1767,7 +1462,7 @@ if menu == "🧠 Soru Bankası":
     # SoruID tekrar etse bile oturum sırası bozulmasın diye benzersiz iç UID oluştur.
     dfq["_quiz_uid"] = dfq["SoruID"].astype(str).str.strip() + "__" + dfq.index.astype(str)
     question_uids_current = dfq["_quiz_uid"].tolist()
-    quiz_source_signature = (mode, tuple(question_uids_current))
+    quiz_source_signature = tuple(question_uids_current)
 
     # Her yeni tarayıcı oturumunda veya soru listesi değişince random sıra üret.
     # Streamlit rerun oldukça sıra değişmesin diye session_state içinde saklanır.
@@ -1782,7 +1477,6 @@ if menu == "🧠 Soru Bankası":
         st.session_state.quiz_index = 0
         st.session_state.quiz_answered = False
         st.session_state.quiz_selected = None
-        st.session_state.quiz_streak = 0
         st.session_state.quiz_score = 0
         st.session_state.quiz_done = False
 
@@ -1798,7 +1492,6 @@ if menu == "🧠 Soru Bankası":
     if "quiz_selected" not in st.session_state:
         st.session_state.quiz_selected = None
     if "quiz_score" not in st.session_state:
-        st.session_state.quiz_streak = 0
         st.session_state.quiz_score = 0
     if "quiz_done" not in st.session_state:
         st.session_state.quiz_done = False
@@ -1819,7 +1512,6 @@ if menu == "🧠 Soru Bankası":
         st.session_state.quiz_index = 0
         st.session_state.quiz_answered = False
         st.session_state.quiz_selected = None
-        st.session_state.quiz_streak = 0
         st.session_state.quiz_score = 0
         st.session_state.quiz_done = False
 
@@ -2013,12 +1705,11 @@ if menu == "🧠 Soru Bankası":
         c1.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
         c2.metric("Başarı", f"%{success_pct}")
 
-        if not media_kind:
-            _render_quiz_completion_bar(
-                correct_count=correct_count,
-                answered_count=answered_count,
-                total_count=total_q,
-            )
+        _render_quiz_completion_bar(
+            correct_count=correct_count,
+            answered_count=answered_count,
+            total_count=total_q,
+        )
 
         st.success(f"Test tamamlandı: {correct_count} doğru, {wrong_count} yanlış, başarı %{success_pct}.")
 
@@ -2058,12 +1749,11 @@ if menu == "🧠 Soru Bankası":
     answered_count = st.session_state.quiz_index + (1 if st.session_state.quiz_answered else 0)
     correct_count = int(st.session_state.quiz_score)
 
-    if not media_kind:
-        _render_quiz_completion_bar(
-            correct_count=correct_count,
-            answered_count=answered_count,
-            total_count=total_q,
-        )
+    _render_quiz_completion_bar(
+        correct_count=correct_count,
+        answered_count=answered_count,
+        total_count=total_q,
+    )
 
     st.markdown("---")
 
@@ -2072,8 +1762,10 @@ if menu == "🧠 Soru Bankası":
     if kategori:
         st.caption(f"Kategori: {kategori}")
     st.markdown(f"#### {soru}")
-    if media_kind:
-        _show_question_media(row, media_kind)
+    drive_url = _question_drive_url(row)
+    if drive_url:
+        components.iframe(drive_url, height=360, scrolling=True)
+        st.markdown("[Görseli Drive’da aç](" + drive_url.replace("/preview", "/view") + ")")
 
     radio_options = list(range(len(secenekler)))
 
@@ -2084,7 +1776,7 @@ if menu == "🧠 Soru Bankası":
         format_func=lambda i: f"{secenekler[i][0]}) {secenekler[i][1]}",
         index=st.session_state.quiz_selected if st.session_state.quiz_selected is not None else None,
         disabled=st.session_state.quiz_answered,
-        key=f"quiz_radio_{media_kind or 'standard'}_{quiz_uid}",
+        key=f"quiz_radio_{quiz_uid}",
     )
 
     st.session_state.quiz_selected = selected
@@ -2097,16 +1789,8 @@ if menu == "🧠 Soru Bankası":
             if st.session_state.quiz_selected is None:
                 st.warning("Önce bir seçenek işaretle kral.")
             else:
-                secilen_harf = secenekler[st.session_state.quiz_selected][0]
-                if media_kind:
-                    streak = st.session_state.quiz_streak + 1 if secilen_harf == dogru else 0
-                    try:
-                        _record_quiz_streak(mode, streak)
-                    except gspread.exceptions.GSpreadException:
-                        st.error("Seri kaydedilemedi. Tekrar Cevapla düğmesine basın.")
-                        st.stop()
-                    st.session_state.quiz_streak = streak
                 st.session_state.quiz_answered = True
+                secilen_harf = secenekler[st.session_state.quiz_selected][0]
                 if secilen_harf == dogru:
                     st.session_state.quiz_score += 1
                 st.rerun()
@@ -2125,8 +1809,8 @@ if menu == "🧠 Soru Bankası":
     with col3:
         if st.button("☑️ Soru düzelt", help="Bu soruyu Google Sheets'te 'Soru Düzelt' kolonu altında işaretler."):
             ok = flag_question_for_review(
-                quiz_sheet_id,
-                quiz_ws,
+                SHEET_ID,
+                QUESTION_WS_INDEX,
                 soru_id=soru_id,
                 soru_text=soru,
                 flag_col="Soru Düzelt",
