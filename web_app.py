@@ -2,6 +2,8 @@
 # NEÜ-KARDİYO | Streamlit + Google Sheets (CRUD)
 # Not: Excel/CSV indirme YOK (isteğe göre kaldırıldı)
 
+import base64
+from html import escape
 import hashlib
 import json
 import re
@@ -337,6 +339,15 @@ def _download_drive_media(file_id, modified_time, max_bytes):
         response.close()
 
 
+def _show_question_video(source):
+    st.markdown(
+        f'<video src="{escape(source, quote=True)}" controls controlslist="nodownload" '
+        'playsinline loop oncontextmenu="return false" '
+        'style="display:block;width:100%;height:auto"></video>',
+        unsafe_allow_html=True,
+    )
+
+
 def _show_drive_media_by_name(filename, kind):
     """Look up the exact filename in the private Drive folder and display it."""
     if not _media_folder_is_configured():
@@ -377,7 +388,8 @@ def _show_drive_media_by_name(filename, kind):
         if kind == "photo":
             st.image(payload, caption="Ekokardiyografi sorusu", use_container_width=True)
         else:
-            st.video(payload, format=mime, loop=True)
+            encoded = base64.b64encode(payload).decode("ascii")
+            _show_question_video(f"data:{mime};base64,{encoded}")
     except requests.exceptions.HTTPError as exc:
         code = exc.response.status_code if exc.response is not None else "?"
         st.error(f"Drive dosyasına erişilemedi (HTTP {code}). Klasör paylaşımını ve Drive API'yi kontrol edin.")
@@ -423,8 +435,10 @@ def _show_question_media(row, kind):
         elif drive_id:
             components.iframe(f"https://drive.google.com/file/d/{drive_id}/preview", height=475, scrolling=False)
             st.caption("Drive video bağlantısında izleyici erişimi gerekir. Özel dosyalar için 'VideoDosya' sütununu kullanın.")
-        else:
+        elif urlparse(url).hostname in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
             st.video(url, loop=True)
+        else:
+            _show_question_video(url)
     except Exception:
         st.warning("URL ile medya gösterilemedi. Drive klasöründeki dosya adını kullanabilirsiniz.")
 
