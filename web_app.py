@@ -60,7 +60,7 @@ AFMR_WS_INDEX = _sheet_index("afmr_ws_index", 4)         # AFMR
 CVABL_WS_INDEX = _sheet_index("cvabl_ws_index", 5)       # Kardiyoversiyon-Ablasyon / TEE-GLS
 PBMV_WS_INDEX = _sheet_index("pbmv_ws_index", 7)         # PBMV – RV-PA Coupling
 FEATURED_WS_INDEX = _sheet_index("featured_ws_index", 6) # Özellikli Vakalar
-QUESTION_WS_INDEX = _sheet_index("question_ws_index", 8) # Soru Bankası
+QUESTION_WS_INDEX = 2  # Soru bankası dosyasındaki üçüncü sekme (metin soruları).
 
 APP_TITLE = "❤️ NEÜ-KARDİYO"
 
@@ -818,7 +818,7 @@ _ATLAS_HTML = r'''<!doctype html>
 <body>
 <div class="atlas">
   <header><span class="brand"><svg viewBox="0 0 32 27" fill="none" aria-hidden="true"><path d="M2 15h6l4-10 5 18 4-12 3 4h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>NEÜ KARDİYOLOJİ</span><span class="header-section">Soru bankası</span></header>
-  <div class="intro"><div><h1>Kalp atlası</h1><p>Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.</p></div><div class="course"><span id="course-label"></span><div class="track"><i id="course-fill"></i></div></div></div>
+  <div class="intro"><div><h1>Kalp atlası</h1><p>Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.</p></div><div class="course"><span id="course-label"></span></div></div>
   <main>
     <section aria-label="Etkileşimli anatomik model">
       <div class="model">
@@ -834,7 +834,7 @@ _ATLAS_HTML = r'''<!doctype html>
     <section class="right" id="quiz" aria-label="Seçilen yapının soruları">
       <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source"></span></div>
       <label class="select-wrap"><span class="sr">Anatomik yapı seç</span><select id="region"></select></label>
-      <div class="meter-label"><span id="q-index"></span><span id="score"></span></div><div class="track" id="qmeter"><i id="q-fill"></i></div>
+      <div class="meter-label"><span id="q-index"></span><span id="score"></span></div>
       <div id="exercise"><h2 class="question" id="stem"></h2><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
       <div class="end" id="complete" hidden><h3>Bu yapı tamamlandı.</h3><p id="result"></p></div>
       <button class="primary" id="submit" type="button">Yanıtı kontrol et</button>
@@ -1396,7 +1396,6 @@ function render(){
   byId('source').classList.toggle('bank',fromSheet);
   byId('q-index').textContent=rec.done?'Tur tamamlandı':'Soru '+(rec.index+1)+' / '+bank.length;
   byId('score').textContent=score+' doğru · '+(totalAnswered-score)+' yanlış';
-  byId('q-fill').style.width=(100*totalAnswered/bank.length)+'%';
   byId('exercise').hidden=rec.done;byId('complete').hidden=!rec.done;
   byId('stem').textContent=q.stem;
   const choices=byId('choices');choices.replaceChildren();
@@ -1429,7 +1428,6 @@ function render(){
   byId('flag-status').textContent=state.flags.has(q.id)?'Düzeltme isteği kaydedildi.':state.pendingFlag?.qid===q.id?'Kaydediliyor…':'';
   const done=allRegions.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
   byId('course-label').textContent=done+' / '+allRegions.length+' yapı tamamlandı';
-  byId('course-fill').style.width=100*done/allRegions.length+'%';
   const note=byId('bank-note');
   if(state.bankStatus==='standalone')note.textContent='Bu önizlemede her yapı için kaynaklı iki örnek soru bulunur.';
   else if(state.bankStatus==='ready')note.textContent=fromSheet?'':'Bu yapı için eşleşen aktif kurum sorusu bulunamadı. Örnek sorular gösteriliyor.';
@@ -1448,13 +1446,19 @@ for(const group of [...new Set(allRegions.map(r=>r.group))]){
 }
 select.onchange=()=>choose(select.value,true);
 byId('to-model').onclick=()=>byId('viewport').scrollIntoView({block:'center'});
+let atlasStreak=0;
 byId('submit').onclick=()=>{
   const {rec,q,bank}=current();
-  if(rec.done){delete state.records[state.region];recordFor(state.region);}
+  if(rec.done){atlasStreak=0;delete state.records[state.region];recordFor(state.region);}
   else if(Object.hasOwn(rec.answers,q.id)){
     rec.pick=null;
     if(rec.index+1>=bank.length)rec.done=true;else rec.index++;
-  }else if(q.options.some(([letter])=>letter===rec.pick)){rec.answers[q.id]=rec.pick;}
+  }else if(q.options.some(([letter])=>letter===rec.pick)){rec.answers[q.id]=rec.pick;
+    atlasStreak=rec.pick===q.key ? atlasStreak+1 : 0;
+    if(atlasStreak && frameOrigin){
+      post('setComponentValue',{dataType:'json',value:{type:'streak',qid:q.id,nonce:crypto.randomUUID(),streak:atlasStreak}});
+    }
+  }
   storeState();render();
 };
 function post(type,body,origin=frameOrigin||'*'){
@@ -1514,10 +1518,43 @@ def _atlas_read_bank(sheet_id, index):
         return {}, {}, "unavailable"
     return _atlas_bank(load_data(sheet_id, index, required_col="SoruID"))
 
+def _quiz_records_sheet():
+    book = connect_to_gsheets().open_by_key(MEDIA_SHEET_ID)
+    try:
+        return book.worksheet("SeriRekorlari")
+    except gspread.WorksheetNotFound:
+        try:
+            return book.add_worksheet(title="SeriRekorlari", rows=1000, cols=3)
+        except gspread.exceptions.APIError:
+            return book.worksheet("SeriRekorlari")
+
+
+def _rank_quiz_records(rows, mode):
+    best = {}
+    for row in rows:
+        if len(row) < 3 or row[0] != mode or not row[2].isdigit():
+            continue
+        name, score = row[1], int(row[2])
+        key = name.casefold()
+        if score > best.get(key, ("", 0))[1]:
+            best[key] = (name, score)
+    return sorted(best.values(), key=lambda entry: (-entry[1], entry[0].casefold()))
+
+
+def _record_quiz_streak(mode, streak):
+    if streak < 1:
+        return
+    sheet = _quiz_records_sheet()
+    name = st.session_state.quiz_player
+    ranks = _rank_quiz_records(sheet.get_all_values(), mode)
+    if all(player.casefold() != name.casefold() or score < streak for player, score in ranks):
+        sheet.append_row([mode, name, streak], value_input_option="RAW")
+
+
 def _render_heart_atlas():
-    banks, lookup, status = _atlas_read_bank(SHEET_ID, QUESTION_WS_INDEX)
+    banks, lookup, status = _atlas_read_bank(MEDIA_SHEET_ID, QUESTION_WS_INDEX)
     component = components.declare_component("neu_kalp_atlasi", path=_atlas_directory(_ATLAS_HTML).name)
-    scope = hashlib.sha256(f"{SHEET_ID}/{QUESTION_WS_INDEX}".encode()).hexdigest()[:12]
+    scope = hashlib.sha256(f"{MEDIA_SHEET_ID}/{QUESTION_WS_INDEX}/{st.session_state.quiz_player.casefold()}".encode()).hexdigest()[:12]
     previous = st.session_state.get("atlas_review_ack", {})
     event = component(atlasScope=scope, banks=banks, status=status, ack=previous,
                       key="neu_kalp_atlasi", default=None)
@@ -1526,8 +1563,18 @@ def _render_heart_atlas():
     uid, nonce = event.get("qid"), event.get("nonce")
     if not isinstance(uid, str) or not isinstance(nonce, str) or not 1 <= len(nonce) <= 80 or previous.get("nonce") == nonce:
         return
+    if event.get("type") == "streak":
+        streak = event.get("streak")
+        if type(streak) is int and streak > 0:
+            try:
+                _record_quiz_streak("Kalp atlası", streak)
+            except gspread.exceptions.GSpreadException:
+                st.warning("Atlas rekoru kaydedilemedi. Yeniden denemek için sayfada bir işlem yapın.")
+                return
+        st.session_state.atlas_review_ack = {"nonce": nonce, "ok": True}
+        st.rerun()
     target = lookup.get(uid)
-    ok = bool(target and flag_question_for_review(SHEET_ID, QUESTION_WS_INDEX, *target))
+    ok = bool(target and flag_question_for_review(MEDIA_SHEET_ID, QUESTION_WS_INDEX, *target))
     st.session_state.atlas_review_ack = {"qid": uid, "nonce": nonce, "ok": ok}
     st.rerun()
 
@@ -1620,22 +1667,49 @@ with st.sidebar:
 # ===================== EKRAN 0: SORU BANKASI / QUIZ =======
 # =========================================================
 if menu == "🧠 Soru Bankası":
+    if not st.session_state.get("quiz_player"):
+        with st.form("quiz_login"):
+            name = st.text_input("Kullanıcı adı", max_chars=30)
+            if st.form_submit_button("Giriş yap"):
+                name = " ".join(name.split())
+                if name:
+                    st.session_state.quiz_player = name
+                    st.rerun()
+                st.warning("Kullanıcı adını gir.")
+        st.stop()
+    if st.button("Kullanıcı değiştir", help=st.session_state.quiz_player):
+        for key in list(st.session_state):
+            if key.startswith(("quiz_", "atlas_review_")):
+                del st.session_state[key]
+        st.rerun()
     mode = st.radio(
         "Soru bankası modu",
-        ["Kalp atlası", "Karışık test", "Fotoğraflı test", "Videolu test"],
+        ["Kalp atlası", "Fotoğraflı test", "Videolu test", "Karışık test"],
+        format_func=lambda mode: {"Fotoğraflı test": "Fotoğraflı sorular", "Videolu test": "Videolu sorular"}.get(mode, mode),
         horizontal=True, key="soru_bankasi_modu",
     )
+    if mode != "Karışık test":
+        st.subheader("🏆 En uzun doğru serisi")
+        try:
+            ranks = _rank_quiz_records(_quiz_records_sheet().get_all_values(), mode)
+            if ranks:
+                for medal, column, (player, score) in zip(("🥇", "🥈", "🥉"), st.columns(3), ranks):
+                    column.metric(f"{medal} {player}", f"{score} doğru")
+            else:
+                st.caption("İlk doğru serisiyle sıralama başlayacak.")
+        except gspread.exceptions.GSpreadException:
+            st.warning("Seri sıralaması şu anda okunamadı.")
     if mode == "Kalp atlası":
         _render_heart_atlas()
         st.stop()
 
     st.header("🧠 Kardiyoloji Soru Bankası")
 
-    # Karışık test eski dosyadan, medya soruları ikinci dosyadaki isimli sekmelerden okunur.
+    # Metin soruları üçüncü sekmeden, medya soruları isimli sekmelerden okunur.
     media_kind = "photo" if mode == "Fotoğraflı test" else "video" if mode == "Videolu test" else None
-    quiz_sheet_id = SHEET_ID if not media_kind else MEDIA_SHEET_ID
+    quiz_sheet_id = MEDIA_SHEET_ID
     quiz_ws = QUESTION_WS_INDEX if not media_kind else MEDIA_PHOTO_TAB if media_kind == "photo" else MEDIA_VIDEO_TAB
-    if media_kind and not _media_sheet_is_configured():
+    if not _media_sheet_is_configured():
         st.warning("Yeni Google Sheets bağlantısı henüz ayarlanmamış.")
         st.code('MEDIA_SHEET_ID = "YENI_SHEETS_ID_BURAYA"', language="python")
         st.info("web_app.py dosyasında bu değeri yeni Google Sheets ID'si ile değiştirin. Secrets'a yeni bir ID eklemeniz gerekmiyor.")
@@ -1653,8 +1727,8 @@ if menu == "🧠 Soru Bankası":
             st.warning(f"'{quiz_ws}' sekmesi okunamadı veya henüz soru eklenmedi.")
             st.info("Yeni Google Sheets'i servis hesabının client_email adresiyle Düzenleyici olarak paylaşın. Sekme adlarını ve başlıkları kontrol edin.")
         else:
-            st.warning("Henüz soru yok veya SoruBankasi sekmesi başlıkları uygun değil.")
-            st.info("İlk satır: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`. Varsayılan sekme indeksi: 8.")
+            st.warning("Henüz soru yok veya üçüncü sekmenin başlıkları uygun değil.")
+            st.info("İlk satır: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`. Metin soruları üçüncü sekmede olmalı.")
         st.stop()
 
     # Yeni medya tablolarında Kaynak isteğe bağlıdır; eski testin şeması değişmez.
@@ -1708,6 +1782,7 @@ if menu == "🧠 Soru Bankası":
         st.session_state.quiz_index = 0
         st.session_state.quiz_answered = False
         st.session_state.quiz_selected = None
+        st.session_state.quiz_streak = 0
         st.session_state.quiz_score = 0
         st.session_state.quiz_done = False
 
@@ -1723,6 +1798,7 @@ if menu == "🧠 Soru Bankası":
     if "quiz_selected" not in st.session_state:
         st.session_state.quiz_selected = None
     if "quiz_score" not in st.session_state:
+        st.session_state.quiz_streak = 0
         st.session_state.quiz_score = 0
     if "quiz_done" not in st.session_state:
         st.session_state.quiz_done = False
@@ -1743,6 +1819,7 @@ if menu == "🧠 Soru Bankası":
         st.session_state.quiz_index = 0
         st.session_state.quiz_answered = False
         st.session_state.quiz_selected = None
+        st.session_state.quiz_streak = 0
         st.session_state.quiz_score = 0
         st.session_state.quiz_done = False
 
@@ -1936,11 +2013,12 @@ if menu == "🧠 Soru Bankası":
         c1.metric("Doğru / Yanlış", f"{correct_count} / {wrong_count}")
         c2.metric("Başarı", f"%{success_pct}")
 
-        _render_quiz_completion_bar(
-            correct_count=correct_count,
-            answered_count=answered_count,
-            total_count=total_q,
-        )
+        if not media_kind:
+            _render_quiz_completion_bar(
+                correct_count=correct_count,
+                answered_count=answered_count,
+                total_count=total_q,
+            )
 
         st.success(f"Test tamamlandı: {correct_count} doğru, {wrong_count} yanlış, başarı %{success_pct}.")
 
@@ -1980,11 +2058,12 @@ if menu == "🧠 Soru Bankası":
     answered_count = st.session_state.quiz_index + (1 if st.session_state.quiz_answered else 0)
     correct_count = int(st.session_state.quiz_score)
 
-    _render_quiz_completion_bar(
-        correct_count=correct_count,
-        answered_count=answered_count,
-        total_count=total_q,
-    )
+    if not media_kind:
+        _render_quiz_completion_bar(
+            correct_count=correct_count,
+            answered_count=answered_count,
+            total_count=total_q,
+        )
 
     st.markdown("---")
 
@@ -2018,8 +2097,16 @@ if menu == "🧠 Soru Bankası":
             if st.session_state.quiz_selected is None:
                 st.warning("Önce bir seçenek işaretle kral.")
             else:
-                st.session_state.quiz_answered = True
                 secilen_harf = secenekler[st.session_state.quiz_selected][0]
+                if media_kind:
+                    streak = st.session_state.quiz_streak + 1 if secilen_harf == dogru else 0
+                    try:
+                        _record_quiz_streak(mode, streak)
+                    except gspread.exceptions.GSpreadException:
+                        st.error("Seri kaydedilemedi. Tekrar Cevapla düğmesine basın.")
+                        st.stop()
+                    st.session_state.quiz_streak = streak
+                st.session_state.quiz_answered = True
                 if secilen_harf == dogru:
                     st.session_state.quiz_score += 1
                 st.rerun()
