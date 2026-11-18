@@ -827,6 +827,7 @@ _ATLAS_HTML = r'''<!doctype html>
     .text-button{background:none;border:none;font-size:11px;color:#4c6c60;text-decoration:underline;text-underline-offset:3px;padding:4px 0}
     .flag-status,.bank-notice{color:#5d6b63;font-size:12px;line-height:1.45}.flag-status{margin-top:5px}
     .bank-notice{margin:12px 0 0}.model-foot{display:flex;justify-content:space-between;gap:8px;align-items:start;margin:9px 2px 0;line-height:1.45;font-size:11px;color:var(--mute)}
+    .login-notice{margin:16px 0 6px;padding:18px 16px;border:1px solid #d2dfd1;border-radius:9px;background:#eff5ec;color:#315745;font-size:15px;line-height:1.55}
     .model-foot strong{font-weight:600;color:#465f51}.mobile-back{display:none}
     .end{min-height:145px;display:flex;flex-direction:column;justify-content:center;gap:9px}.end h3{font:32px var(--serif);color:#28533f}.end p{color:#50665b}
     .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
@@ -844,7 +845,7 @@ _ATLAS_HTML = r'''<!doctype html>
 <body>
 <div class="atlas">
   <header><span class="brand"><svg viewBox="0 0 32 27" fill="none" aria-hidden="true"><path d="M2 15h6l4-10 5 18 4-12 3 4h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>NEÜ KARDİYOLOJİ</span><span class="header-section">Soru bankası</span></header>
-  <div class="intro"><div><h1>Kalp atlası</h1><p>Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.</p></div><div class="course"><span id="course-label"></span></div></div>
+  <div class="intro"><div><h1>Kalp atlası</h1><p id="atlas-instructions">Kalbi sürükleyerek döndürün. Bir yapıya dokunarak inceleyin.</p></div><div class="course" hidden><span id="course-label"></span></div></div>
   <main>
     <section aria-label="Etkileşimli anatomik model">
       <div class="model">
@@ -861,14 +862,17 @@ _ATLAS_HTML = r'''<!doctype html>
       <div class="model-foot"><span><strong>3B + zaman</strong> · Şematik kalp döngüsü</span><span id="region-count"></span></div>
     </section>
     <section class="right" id="quiz" aria-label="Seçilen yapının soruları">
-      <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source"></span></div>
+      <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source" hidden></span></div>
       <label class="select-wrap"><span class="sr">Anatomik yapı seç</span><select id="region"></select></label>
       <p id="topic-detail" hidden></p>
+      <p class="login-notice" id="login-notice" role="status">Soruları görmek için kullanıcı adı girin.</p>
+      <div id="question-content" hidden>
       <div class="meter-label"><span id="q-index"></span><span id="score"></span></div>
       <div id="exercise"><h2 class="question" id="stem"></h2><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
       <div class="end" id="complete" hidden><h3>Bu yapı tamamlandı.</h3><p id="result"></p></div>
       <button class="primary" id="submit" type="button">Yanıtı kontrol et</button>
       <div class="actions"><button class="text-button mobile-back" id="to-model">↑ Modele dön</button><button class="text-button" id="flag" hidden>Soruyu düzeltme için bildir</button></div><p class="flag-status" role="status" id="flag-status"></p>
+      </div>
     </section>
   </main>
   <p class="bank-notice" id="bank-note"></p>
@@ -1542,7 +1546,7 @@ const allRegions=CATALOG.regions;
 byId('region-count').textContent=allRegions.length+' seçilebilir yapı';
 const regions=Object.fromEntries(allRegions.map(r=>[r.id,r]));
 const select=byId('region'), optionLetters='ABCDE';
-const state={scope:'neu-kalp-atlasi-ornek-v1',banks:{},records:{},region:'aorta',bankStatus:'standalone',flags:new Set(),pendingFlag:null};
+const state={scope:'neu-kalp-atlasi-guest',banks:{},records:{},region:'aorta',questionsEnabled:false,bankStatus:'locked',flags:new Set(),pendingFlag:null};
 let model,frameOrigin=null,lastHeight=0;
 
 function shuffle(items){
@@ -1593,7 +1597,21 @@ function safeSource(feedback,q){
 }
 function scoreOf(rec,bank){return bank.reduce((sum,q)=>sum+(rec.answers[q.id]===q.key?1:0),0);}
 function render(){
-  const {q,rec,bank}=current(),id=state.region;
+  const id=state.region,enabled=state.questionsEnabled;
+  select.value=id;
+  byId('question-content').hidden=!enabled;
+  byId('login-notice').hidden=enabled;
+  byId('source').hidden=!enabled;
+  byId('course-label').parentElement.hidden=!enabled;
+  byId('atlas-instructions').textContent=enabled?'Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.':'Kalbi sürükleyerek döndürün. Bir yapıya dokunarak inceleyin.';
+  if(!enabled){
+    for(const field of ['stem','choices','feedback','q-index','score','result','flag-status','bank-note','topic-detail','course-label'])byId(field).replaceChildren();
+    byId('topic-detail').hidden=true;
+    byId('bank-note').hidden=true;
+    byId('submit').disabled=true;
+    return;
+  }
+  const {q,rec,bank}=current();
   const answered=Object.hasOwn(rec.answers,q.id),selection=answered?rec.answers[q.id]:rec.pick;
   const totalAnswered=Object.keys(rec.answers).length,score=scoreOf(rec,bank),fromSheet=q.id.startsWith('s-');
   select.value=id;
@@ -1612,7 +1630,7 @@ function render(){
     if(answered&&letter===q.key)button.classList.add('correct');
     if(answered&&letter===selection&&letter!==q.key)button.classList.add('wrong');
     button.onclick=()=>{
-      if(rec.done||Object.hasOwn(rec.answers,q.id))return;
+      if(!state.questionsEnabled||rec.done||Object.hasOwn(rec.answers,q.id))return;
       rec.pick=letter;storeState();
       [...choices.children].forEach((b,i)=>b.setAttribute('aria-pressed',String(q.options[i][0]===letter)));
       byId('submit').disabled=false;
@@ -1644,7 +1662,7 @@ function render(){
 function choose(id,fromList=false,move=false){
   if(!Object.hasOwn(regions,id))return;
   state.region=id;model?.setRegion(id,fromList);render();storeState();
-  if(move&&window.matchMedia('(max-width:740px)').matches)byId('quiz').scrollIntoView({block:'start',behavior:'instant'});
+  if(move&&state.questionsEnabled&&window.matchMedia('(max-width:740px)').matches)byId('quiz').scrollIntoView({block:'start',behavior:'instant'});
 }
 for(const group of [...new Set(allRegions.map(r=>r.group))]){
   const og=make('optgroup');og.label=group;
@@ -1655,6 +1673,7 @@ select.onchange=()=>choose(select.value,true);
 byId('to-model').onclick=()=>byId('viewport').scrollIntoView({block:'center'});
 let atlasStreak=0;
 byId('submit').onclick=()=>{
+  if(!state.questionsEnabled)return;
   const {rec,q,bank}=current();
   if(rec.done){atlasStreak=0;delete state.records[state.region];recordFor(state.region);}
   else if(Object.hasOwn(rec.answers,q.id)){
@@ -1677,6 +1696,7 @@ function frameHeight(){
   if(height!==lastHeight){lastHeight=height;post('setFrameHeight',{height});}
 }
 byId('flag').onclick=()=>{
+  if(!state.questionsEnabled)return;
   const {q}=current();
   if(!frameOrigin||!q.id.startsWith('s-')||state.pendingFlag||state.flags.has(q.id))return;
   state.pendingFlag={qid:q.id,nonce:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9)};
@@ -1688,15 +1708,16 @@ window.addEventListener('message',e=>{
   frameOrigin=e.origin==='null'?'*':e.origin;
   const args=e.data.args,nextScope='neu-kalp-atlasi-'+args.atlasScope;
   const changed=state.scope!==nextScope;
-  if(changed){state.scope=nextScope;loadState();}
-  loadBanks(args.banks||{});state.bankStatus=args.status;
+  if(changed){state.scope=nextScope;state.pendingFlag=null;atlasStreak=0;loadState();}
+  state.questionsEnabled=args.questionsEnabled===true;
+  loadBanks(state.questionsEnabled?args.banks||{}:{});state.bankStatus=args.status;
   const ack=args.ack;
   if(ack&&ack.nonce===state.pendingFlag?.nonce){
     state.pendingFlag=null;
     if(ack.ok){state.flags.add(ack.qid);storeState();}
   }
   if(changed)model?.setRegion(state.region,true);
-  render();if(ack&&!ack.ok&&current().q.id===ack.qid)byId('flag-status').textContent='Kaydedilemedi. Yeniden deneyebilirsiniz.';
+  render();if(state.questionsEnabled&&ack&&!ack.ok&&current().q.id===ack.qid)byId('flag-status').textContent='Kaydedilemedi. Yeniden deneyebilirsiniz.';
   frameHeight();
 });
 loadState();render();
@@ -1759,13 +1780,15 @@ def _record_quiz_streak(mode, streak):
 
 
 def _render_heart_atlas():
-    banks, lookup, status = _atlas_read_bank(MEDIA_SHEET_ID, QUESTION_WS_INDEX)
+    player = st.session_state.get("quiz_player", "")
+    questions_enabled = bool(player)
+    banks, lookup, status = _atlas_read_bank(MEDIA_SHEET_ID, QUESTION_WS_INDEX) if questions_enabled else ({}, {}, "locked")
     component = components.declare_component("neu_kalp_atlasi", path=_atlas_directory(_ATLAS_HTML).name)
-    scope = hashlib.sha256(f"{MEDIA_SHEET_ID}/{QUESTION_WS_INDEX}/{st.session_state.quiz_player.casefold()}".encode()).hexdigest()[:12]
+    scope = hashlib.sha256(f"{MEDIA_SHEET_ID}/{QUESTION_WS_INDEX}/{player.casefold()}".encode()).hexdigest()[:12]
     previous = st.session_state.get("atlas_review_ack", {})
-    event = component(atlasScope=scope, banks=banks, status=status, ack=previous,
-                      key="neu_kalp_atlasi", default=None)
-    if not isinstance(event, dict):
+    event = component(atlasScope=scope, questionsEnabled=questions_enabled, banks=banks, status=status, ack=previous,
+                      key=f"neu_kalp_atlasi_{scope}", default=None)
+    if not questions_enabled or not isinstance(event, dict):
         return
     uid, nonce = event.get("qid"), event.get("nonce")
     if not isinstance(uid, str) or not isinstance(nonce, str) or not 1 <= len(nonce) <= 80 or previous.get("nonce") == nonce:
@@ -1893,6 +1916,7 @@ if menu == "🧠 Soru Bankası":
                     st.session_state.quiz_player = name
                     st.rerun()
                 st.warning("Kullanıcı adını gir.")
+        _render_heart_atlas()
         st.stop()
     if st.button("Kullanıcı değiştir", help=st.session_state.quiz_player):
         for key in list(st.session_state):
