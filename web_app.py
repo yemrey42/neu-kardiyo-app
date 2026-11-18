@@ -668,11 +668,12 @@ _ATLAS_TERMS = {
                   r"intrakardial|kardiyal|kalpteki|kalp|kapak\w*|kapag\w*) (?:\w+ ){0,2}(?:kitle\w*|tumor\w*)|"
                   r"(?:(?:kardiyak|intrakardiyak|valvuler|kapak\w*|kapag\w*|protez\w*) (?:uzerinde\w* )?tromb\w*)|"
                   r"(?:cardiac|intracardiac|valvular|valve) (?:\w+ ){0,2}(?:mass\w*|tumou?r\w*|thromb\w*))\b"),
+    "cardiomyopathy": r"\b(?:kardiyo?miyopati\w*|kardiyomyopati\w*|cardiomyopath\w*|kmp|hcm|hkm|hocm|dcm|dkm|arvc|lvnc)\b",
     "myocardium": (r"\b(?:miyokar[dt](?:i|in|ina)?(?! (?:enfarkt|infarkt|iskemi))|myocardium|kalp kas\w*|endokardit\w*|endocarditis|"
                    r"(?:miyokard|myokard|myocard|perikard|pericard|miyoperikard|myopericard|perimiyokard|perimyocard)it\w*)\b"),
 }
 _ATLAS_PATTERNS = {key: re.compile(pattern) for key, pattern in _ATLAS_TERMS.items()}
-_ATLAS_CLINICAL_TOPICS = {"apex", "prosthesis", "valve_mass", "myocardium"}
+_ATLAS_CLINICAL_TOPICS = {"apex", "prosthesis", "valve_mass", "myocardium", "cardiomyopathy"}
 _ATLAS_SHORT_TAGS = {"mr": "mitral", "my": "mitral", "tr": "tricuspid", "ty": "tricuspid",
                      "as": "aortic_valve", "ay": "aortic_valve", "ad": "aortic_valve",
                      "lv": "lv", "rv": "rv", "ra": "ra", "la": "la"}
@@ -882,6 +883,7 @@ _ATLAS_HTML = r'''<!doctype html>
 const CATALOG={"regions": [{"id": "aorta", "name": "Aorta", "short": "Aorta", "group": "Büyük damarlar", "view": "front"}, {"id": "mitral", "name": "Mitral kapak", "short": "Mitral kapak", "group": "Kapaklar", "view": "valves"}, {"id": "laa", "name": "Sol atriyal apendiks", "short": "Sol atriyal apendiks", "group": "Kalp boşlukları", "view": "front"}, {"id": "hepatic", "name": "Hepatik venler", "short": "Hepatik venler", "group": "Büyük damarlar", "view": "inferior"}, {"id": "aortic_valve", "name": "Aort kapağı", "short": "Aort kapağı", "group": "Kapaklar", "view": "valves"}, {"id": "tricuspid", "name": "Triküspit kapak", "short": "Triküspit", "group": "Kapaklar", "view": "valves"}, {"id": "pulmonary_valve", "name": "Pulmoner kapak", "short": "Pulmoner kapak", "group": "Kapaklar", "view": "valves"}, {"id": "lv", "name": "Sol ventrikül", "short": "Sol ventrikül", "group": "Kalp boşlukları", "view": "front"}, {"id": "rv", "name": "Sağ ventrikül", "short": "Sağ ventrikül", "group": "Kalp boşlukları", "view": "front"}, {"id": "la", "name": "Sol atriyum", "short": "Sol atriyum", "group": "Kalp boşlukları", "view": "back"}, {"id": "ra", "name": "Sağ atriyum", "short": "Sağ atriyum", "group": "Kalp boşlukları", "view": "front"}, {"id": "pa", "name": "Pulmoner arter", "short": "Pulmoner arter", "group": "Büyük damarlar", "view": "front"}, {"id": "pv", "name": "Pulmoner venler", "short": "Pulmoner venler", "group": "Büyük damarlar", "view": "back"}, {"id": "svc", "name": "Vena kava superior", "short": "V. kava superior", "group": "Büyük damarlar", "view": "front"}, {"id": "ivc", "name": "Vena kava inferior", "short": "V. kava inferior", "group": "Büyük damarlar", "view": "inferior"}]};
 CATALOG.regions.push(
   {id:'apex',name:'Sol ventrikül apeksi',short:'Apeks',group:'Kalp duvarı',view:'front'},
+  {id:'cardiomyopathy',name:'Kardiyomiyopatiler',short:'Kardiyomiyopatiler',group:'Kalp duvarı',view:'valves'},
   {id:'myocardium',name:'Kalp kası (miyokart)',short:'Miyokart',group:'Kalp duvarı',view:'front',detail:'Bu bölümde endokardit, miyokardit ve perikardit vakalarını tutulan yapıya göre ayırt edebilirsiniz.'},
   {id:'prosthesis',name:'Protez kapak',short:'Protez kapak',group:'Kapaklar',view:'prosthetic',detail:'Modelde mitral konumda çift diskli mekanik protez görülüyor. Sorular aort ve mitral protezlerini kapsar.'},
   {id:'valve_mass',name:'Kapak üzerindeki kitle',short:'Kapak kitlesi',group:'Kapaklar',view:'valves',detail:'Triküspit yaprakçığına bağlı kitle şematiktir. Her vakada kitleyi soruda verilen bulgularla değerlendirin.'}
@@ -1080,7 +1082,8 @@ function buildHeart(){
     });
   }
   // The section has a true opening under each annulus; its tissue never spans an orifice.
-  surface('lv',2,144,52,section,'#b16c64',true,true,inOrifice);
+  landmarks.cardiomyopathy=[section(.10,.86,0),section(.10,.86,1)];
+  surface('cardiomyopathy',2,144,52,section,'#b16c64',true,true,inOrifice);
   surface('rv',2,96,10,(u,v,b)=>{
     const p=section(u,1,b),r=1-.10*v;
     return [p[0]*r,p[1]-.35*v,p[2]*r];
@@ -1187,8 +1190,8 @@ const ANCHORS={
 const GUIDE={
   front:[['aorta',-1,-24],['laa',1,-4],['myocardium',-1,-7],['hepatic',-1,18],['lv',1,4],['apex',1,11]],
   back:[['pv',-1,-21],['la',1,-19],['ivc',1,20]],
-  valves:[['mitral',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35]],
-  prosthetic:[['prosthesis',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35]],
+  valves:[['mitral',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35],['cardiomyopathy',1,20]],
+  prosthetic:[['prosthesis',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35],['cardiomyopathy',1,20]],
   inferior:[['hepatic',-1,-14],['ivc',1,28],['ra',-1,-36],['apex',1,15]]
 };
 
@@ -1893,6 +1896,8 @@ if menu == "🧠 Soru Bankası":
         st.error(f"{quiz_ws} sekmesinde eksik kolon var: " + ", ".join(missing_cols))
         st.info("Başlıklar: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`; fotoğraf için `GorselDosya`, video için `VideoDosya` ekleyin.")
         st.stop()
+    if media_kind and "Kaynak" not in dfq.columns:
+        dfq = dfq.rename(columns={c: "Kaynak" for c in dfq.columns if c.strip().casefold() == "kaynak"})
     if "Kaynak" not in dfq.columns:
         dfq["Kaynak"] = ""
 
@@ -2227,6 +2232,8 @@ if menu == "🧠 Soru Bankası":
     st.markdown(f"#### {soru}")
     if media_kind:
         _show_question_media(row, media_kind)
+        if kaynak:
+            st.caption(f"Görüntü kaynağı: {kaynak}")
 
     radio_options = list(range(len(secenekler)))
 
@@ -2315,7 +2322,7 @@ if menu == "🧠 Soru Bankası":
         if aciklama:
             st.info(f"📌 Açıklama: {aciklama}")
 
-        if kaynak:
+        if kaynak and not media_kind:
             st.caption(f"📚 Kaynak: {kaynak}")
 
 
