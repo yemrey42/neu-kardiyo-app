@@ -879,92 +879,13 @@ _ATLAS_HTML = r'''<!doctype html>
 </div>
 <script>
 'use strict';
-const CATALOG={"regions":[{"id":"aorta","name":"Aorta","short":"Aorta","group":"Büyük damarlar","view":"front"},{"id":"mitral","name":"Mitral kapak","short":"Mitral kapak","group":"Kapaklar","view":"valves"},{"id":"laa","name":"Sol atriyal apendiks","short":"Sol atriyal apendiks","group":"Kalp boşlukları","view":"front"},{"id":"hepatic","name":"Hepatik venler","short":"Hepatik venler","group":"Büyük damarlar","view":"inferior"},{"id":"aortic_valve","name":"Aort kapağı","short":"Aort kapağı","group":"Kapaklar","view":"valves"},{"id":"tricuspid","name":"Triküspit kapak","short":"Triküspit","group":"Kapaklar","view":"valves"},{"id":"pulmonary_valve","name":"Pulmoner kapak","short":"Pulmoner kapak","group":"Kapaklar","view":"valves"},{"id":"lv","name":"Sol ventrikül","short":"Sol ventrikül","group":"Kalp boşlukları","view":"front"},{"id":"rv","name":"Sağ ventrikül","short":"Sağ ventrikül","group":"Kalp boşlukları","view":"front"},{"id":"la","name":"Sol atriyum","short":"Sol atriyum","group":"Kalp boşlukları","view":"back"},{"id":"ra","name":"Sağ atriyum","short":"Sağ atriyum","group":"Kalp boşlukları","view":"front"},{"id":"pa","name":"Pulmoner arter","short":"Pulmoner arter","group":"Büyük damarlar","view":"front"},{"id":"pv","name":"Pulmoner venler","short":"Pulmoner venler","group":"Büyük damarlar","view":"back"},{"id":"svc","name":"Vena kava superior","short":"V. kava superior","group":"Büyük damarlar","view":"front"},{"id":"ivc","name":"Vena kava inferior","short":"V. kava inferior","group":"Büyük damarlar","view":"inferior"}],"samples":{"aorta":[{"id":"demo-aorta-1","stem":"Çıkan aortadan arkusa ilerlerken tipik sol aort arkının ilk dalı hangisidir?","options":[["A","Sol ana karotis arter"],["B","Brakiyosefalik trunkus"],["C","Sol subklavyen arter"],["D","Sağ koroner arter"]],"key":"B","why":"Arkusun tipik dal sırası brakiyosefalik trunkus, sol ana karotis ve sol subklavyen arterdir. Koroner arterler daha proksimalde, aort kökünden çıkar.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-aorta-2","stem":"Normal bir aort kökünde koroner ostiyumlar hangi düzeyde yer alır?","options":[["A","Sinotübüler bileşkenin belirgin distalinde"],["B","Anulusun ventriküler yüzünde"],["C","Sağ ve sol Valsalva sinüslerinde"],["D","Arkusun küçük kurvaturunda"]],"key":"C","why":"Sağ ve sol koroner arterler karşılık gelen aort sinüslerinden köken alır. Üçüncü sinüs nonkoroner sinüstür.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"mitral":[{"id":"demo-mitral-1","stem":"3B TEE’nin cerrahi görünümünde posterior mitral yaprakçığın ortasındaki prolabe segment nasıl adlandırılır?","options":[["A","A2"],["B","P1"],["C","P2"],["D","P3"]],"key":"C","why":"Posterior yaprakçığın orta tarağı P2’dir. Karşısında anterior yaprakçığın A2 bölgesi bulunur.","source":["BSE · Mitral kapak değerlendirmesi","https://doi.org/10.1530/ERP-20-0034"]},{"id":"demo-mitral-2","stem":"Marjinal kordası kopan bir mitral segmentte sistolde hangi hareket beklenir?","options":[["A","Serbest kenarın sol atriyuma dönmesi"],["B","Anulusun aortaya doğru ayrılması"],["C","Diyastolde komissürlerin birleşmesi"],["D","Papiller kasın atriyuma göç etmesi"]],"key":"A","why":"Marjinal kordalar yaprakçığın serbest kenarını destekler. Destek kaybolduğunda kenar sol atriyuma dönebilir ve flail segment görülebilir.","source":["BSE · Mitral kapak değerlendirmesi","https://doi.org/10.1530/ERP-20-0034"]}],"laa":[{"id":"demo-laa-1","stem":"TEE’de sol atriyal apendiks içinde, duvarla birlikte hareket eden paralel kas bantları görülüyor. Normal anatomide bunlar nedir?","options":[["A","Moderatör bant"],["B","Korda tendinealar"],["C","Östaki kapakçığı"],["D","Pektinat kaslar"]],"key":"D","why":"Pektinat kaslar apendiksin trabeküllü iç yüzeyini oluşturur. Farklı TEE düzlemlerinde duvarla sürekliliklerini izlemek trombüs ayrımına yardımcı olur.","source":["LAA morfolojisi ve ekokardiyografik değerlendirme","https://pmc.ncbi.nlm.nih.gov/articles/PMC11285475/"]},{"id":"demo-laa-2","stem":"TEE’de görülen Coumadin sırtı, sol atriyal apendiksi hangi yapıdan ayırır?","options":[["A","Sol üst pulmoner ven"],["B","Vena kava superior"],["C","Sağ alt pulmoner ven"],["D","Koroner sinüs ostiyumu"]],"key":"A","why":"Sol lateral atriyal sırt, apendiks ağzı ile sol üst pulmoner ven arasında uzanır. Belirgin olduğunda kitleyi taklit edebilir.","source":["LAA morfolojisi ve ekokardiyografik değerlendirme","https://pmc.ncbi.nlm.nih.gov/articles/PMC11285475/"]}],"hepatic":[{"id":"demo-hepatic-1","stem":"Hepatik venlerde pulsed-wave Doppler ile sistol boyunca ters akım izleniyor. Bu bulgu en çok hangi kapak lezyonunu destekler?","options":[["A","Mitral darlığı"],["B","Ciddi triküspit yetersizliği"],["C","Pulmoner darlık"],["D","Aort yetersizliği"]],"key":"B","why":"Ciddi triküspit yetersizliğinde sistolik geri akım sağ atriyumdan hepatik venlere iletilebilir. Yorumda ritim, sağ atriyum basıncı ve diğer yetersizlik ölçütleri birlikte değerlendirilir.","source":["EACVI · Doğal kapak yetersizliklerinin değerlendirilmesi","https://doi.org/10.1093/ehjci/jeab253"]},{"id":"demo-hepatic-2","stem":"Karaciğerden çıkan kan, ana hepatik venlerden sonra önce hangi damara ulaşır?","options":[["A","Portal ven"],["B","Vena kava superior"],["C","Vena kava inferior"],["D","Pulmoner ven"]],"key":"C","why":"Hepatik venler diyaframın hemen altında vena kava inferiora açılır. Kan oradan sağ atriyuma döner.","source":["AJR · Hepatik ven anatomisi","https://doi.org/10.2214/ajr.180.6.1801583"]}],"aortic_valve":[{"id":"demo-aortic_valve-1","stem":"Normal kardiyak siklusta aort kapağını hangi basınç değişikliği açar?","options":[["A","Aort basıncının sol ventrikül basıncını aşması"],["B","Sol atriyum basıncının sol ventrikülü aşması"],["C","Sağ ventrikül basıncının pulmoner arteri aşması"],["D","Sol ventrikül basıncının aort basıncını aşması"]],"key":"D","why":"İzovolümetrik kontraksiyonun sonunda sol ventrikül basıncı aort basıncını aşınca kapak açılır ve ejeksiyon başlar.","source":["OpenStax · Kardiyak siklus","https://openstax.org/books/anatomy-and-physiology/pages/19-3-cardiac-cycle"]},{"id":"demo-aortic_valve-2","stem":"Kısa eksende normal bir triküspit aort kapağının yaprakçıkları nasıl adlandırılır?","options":[["A","Sağ koroner, sol koroner ve nonkoroner"],["B","Anterior, septal ve inferior"],["C","A1, A2 ve A3"],["D","Sağ, sol ve komissüral"]],"key":"A","why":"Aort yaprakçıklarının isimleri komşu sinüslerin koroner ostiyumlarla ilişkisine dayanır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"tricuspid":[{"id":"demo-tricuspid-1","stem":"Triküspit kapaktan diyastolde geçen kan hangi yolu izler?","options":[["A","Sol atriyumdan sol ventriküle"],["B","Sağ ventrikülden pulmoner artere"],["C","Sağ atriyumdan sağ ventriküle"],["D","Sağ atriyumdan sol atriyuma"]],"key":"C","why":"Triküspit kapak sağ atriyum ile sağ ventrikül arasındaki atriyoventriküler kapaktır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-tricuspid-2","stem":"Triküspit kapağın hangi yaprakçığı interventriküler septuma komşudur?","options":[["A","Posterior mitral yaprakçık"],["B","Septal yaprakçık"],["C","Nonkoroner yaprakçık"],["D","Sol koroner yaprakçık"]],"key":"B","why":"Septal yaprakçık sağ ventrikülün septal tarafına tutunur. Apikal dört boşluk kesitinde bu ilişki izlenebilir.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"pulmonary_valve":[{"id":"demo-pulmonary_valve-1","stem":"Pulmoner kapak hangi iki yapı arasında bulunur?","options":[["A","Sağ ventrikül çıkış yolu ve pulmoner trunkus"],["B","Sol ventrikül çıkış yolu ve aorta"],["C","Sağ atriyum ve sağ ventrikül"],["D","Sol atriyum ve pulmoner ven"]],"key":"A","why":"Sağ ventrikülden çıkan kan pulmoner kapağı geçerek pulmoner trunkusa girer.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pulmonary_valve-2","stem":"Pulmoner kapağı triküspit kapaktan ayıran yapısal özellik hangisidir?","options":[["A","İki boşluğu birleştirmesi"],["B","Sadece diyastolde açılması"],["C","Bir septal yaprakçığının olması"],["D","Yaprakçıklarının korda ve papiller kas bağlantısı taşımaması"]],"key":"D","why":"Pulmoner kapak bir semilunar kapaktır. Yaprakçıkları korda tendinealarla papiller kaslara bağlanmaz.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"lv":[{"id":"demo-lv-1","stem":"Normal kalpte apeksi ağırlıklı olarak hangi boşluk oluşturur?","options":[["A","Sol ventrikül"],["B","Sağ atriyum"],["C","Sağ ventrikül çıkış yolu"],["D","Sol atriyum"]],"key":"A","why":"Sol ventrikül apeksi oluşturur. Dış yüzeyde ön interventriküler oluk, iki ventrikül arasındaki sınırı izlemeye yardım eder.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-lv-2","stem":"Sol ventrikül duvarının sağ ventriküle göre daha kalın olmasının temel nedeni nedir?","options":[["A","Kalp hızının daha yüksek olması"],["B","Daha fazla atım hacmi pompalaması"],["C","Sistemik dolaşımın daha yüksek basıncına karşı çalışması"],["D","Kanı daha uzun süre depolaması"]],"key":"C","why":"İki ventrikül kararlı durumda benzer atım hacmi pompalar. Sol ventrikül sistemik dolaşımın daha yüksek basıncını oluşturur.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"rv":[{"id":"demo-rv-1","stem":"Apikal dört boşluk kesitinde moderatör bant hangi boşluğu tanımaya yardım eder?","options":[["A","Sol atriyum"],["B","Sağ ventrikül"],["C","Sol ventrikül"],["D","Sağ atriyum"]],"key":"B","why":"Moderatör bant morfolojik sağ ventrikülde septum ile anterior papiller kas bölgesini birleştirir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-rv-2","stem":"TAPSE ölçümü, sağ ventrikülün hangi hareketini örnekler?","options":[["A","Septumun çevresel deformasyonunu"],["B","Çıkış yolunun radyal genişlemesini"],["C","Sağ atriyum rezervuar fonksiyonunu"],["D","Lateral triküspit anulusun sistolik uzunlamasına yer değiştirmesini"]],"key":"D","why":"TAPSE, lateral triküspit anulusun sistolde apekse doğru hareketini ölçer. Sağ ventrikülün uzunlamasına işlevi hakkında bilgi verir.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}],"la":[{"id":"demo-la-1","stem":"Arka görünümde sol atriyuma giren damarlar hangi dolaşımdan kan getirir?","options":[["A","Sistemik venöz dolaşımdan"],["B","Koroner venöz dolaşımdan"],["C","Pulmoner venöz dolaşımdan"],["D","Portal dolaşımdan"]],"key":"C","why":"Pulmoner venler akciğerlerde oksijenlenen kanı sol atriyuma taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-la-2","stem":"Ventrikül diyastolünde sol atriyumdan çıkan kan sırasıyla hangi yapılara ulaşır?","options":[["A","Triküspit kapak ve sağ ventrikül"],["B","Mitral kapak ve sol ventrikül"],["C","Aort kapağı ve aorta"],["D","Pulmoner kapak ve pulmoner arter"]],"key":"B","why":"Sol atriyumun çıkışında mitral kapak yer alır. Kapak açıldığında kan sol ventriküle geçer.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"ra":[{"id":"demo-ra-1","stem":"Miyokardın venöz kanının büyük bölümünü sağ atriyuma hangi yapı getirir?","options":[["A","Pulmoner trunkus"],["B","Sol üst pulmoner ven"],["C","Brakiyosefalik arter"],["D","Koroner sinüs"]],"key":"D","why":"Koroner sinüs, kalp venlerinin topladığı kanın büyük kısmını sağ atriyuma boşaltır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-ra-2","stem":"Tipik anatomide sinüs düğümü sağ atriyumun hangi damar bileşkesine yakındır?","options":[["A","Vena kava superior"],["B","Sol üst pulmoner ven"],["C","Vena kava inferior"],["D","Koroner sinüs"]],"key":"A","why":"Sinüs düğümü sağ atriyumun üst kısmında, vena kava superiorun girişine yakın yerleşir.","source":["OpenStax · Kardiyak ileti sistemi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-2-cardiac-muscle-and-electrical-activity"]}],"pa":[{"id":"demo-pa-1","stem":"Ana pulmoner arterin bifurkasyonu hangi iki dala ayrılır?","options":[["A","Sağ ve sol pulmoner venlere"],["B","Sağ ve sol pulmoner arterlere"],["C","Sağ ve sol koroner arterlere"],["D","İnen aorta ve aort arkına"]],"key":"B","why":"Pulmoner trunkus sağ ve sol pulmoner arterlere ayrılır. Bu dallar kanı ilgili akciğere taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pa-2","stem":"Normal dolaşımda ana pulmoner arterdeki kanın özelliği nedir?","options":[["A","Akciğerlerden sol atriyuma dönmektedir"],["B","Aort kökünü yeni geçmiştir"],["C","Oksijen içeriği pulmoner ven kanından daha düşüktür"],["D","Karaciğerden doğrudan gelmektedir"]],"key":"C","why":"Pulmoner arter sağ ventrikülden akciğere henüz oksijenlenmemiş kan taşır.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]}],"pv":[{"id":"demo-pv-1","stem":"Klasik anatomide sol atriyuma ayrı ostiyumlarla açılan kaç pulmoner ven vardır?","options":[["A","İki"],["B","Üç"],["C","Altı"],["D","Dört"]],"key":"D","why":"Tipik olarak sağ ve sol akciğerden birer üst ve alt pulmoner ven gelir. Ostiyum sayısı anatomik varyantlarda değişebilir.","source":["OpenStax · Kalp anatomisi","https://openstax.org/books/anatomy-and-physiology-2e/pages/19-1-heart-anatomy"]},{"id":"demo-pv-2","stem":"Pulmoner ven Dopplerinde sistolik akımın tersine dönmesi hangi lezyonun şiddetini destekler?","options":[["A","Ciddi mitral yetersizliği"],["B","Ciddi pulmoner darlık"],["C","Triküspit darlığı"],["D","İzole aort darlığı"]],"key":"A","why":"Ciddi mitral yetersizliğinde sistolik jet ve sol atriyum basınç artışı pulmoner ven akımını tersine çevirebilir. Jet yönü ve örneklenen ven bulguyu etkiler.","source":["EACVI · Doğal kapak yetersizliklerinin değerlendirilmesi","https://doi.org/10.1093/ehjci/jeab253"]}],"svc":[{"id":"demo-svc-1","stem":"Vena kava superior hangi iki venin birleşmesiyle oluşur?","options":[["A","Sağ ve sol brakiyosefalik venler"],["B","Sağ ve sol hepatik venler"],["C","Sağ ve sol pulmoner venler"],["D","Sağ ve sol ana iliak venler"]],"key":"A","why":"Sağ ve sol brakiyosefalik venler birleşerek vena kava superioru oluşturur. Vena kava superior sağ atriyuma açılır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-svc-2","stem":"Normal anatomide baş ve üst ekstremitelerin venöz kanı sağ atriyuma hangi yolla döner?","options":[["A","Koroner sinüs"],["B","Pulmoner venler"],["C","Vena kava superior"],["D","Portal ven"]],"key":"C","why":"Baş-boyun ve üst ekstremite kanı brakiyosefalik venlerden vena kava superiora ulaşır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]}],"ivc":[{"id":"demo-ivc-1","stem":"Subkostal uzun eksende vena kava inferioru kraniyale doğru takip ediyorsunuz. Hangi boşluğa ulaşırsınız?","options":[["A","Sol atriyum"],["B","Sağ atriyum"],["C","Sağ ventrikül"],["D","Sol ventrikül"]],"key":"B","why":"Vena kava inferior diyaframı geçerek sağ atriyumun alt bölümüne açılır.","source":["OpenStax · Sistemik dolaşım","https://openstax.org/books/anatomy-and-physiology/pages/20-5-circulatory-pathways"]},{"id":"demo-ivc-2","stem":"Spontan soluyan erişkinde vena kava inferior çapı ve inspiratuvar kollapsı birlikte hangi basıncın tahmininde kullanılır?","options":[["A","Aort diyastolik basıncı"],["B","Sol atriyum basıncı"],["C","Pulmoner kapiller kama basıncı"],["D","Sağ atriyum basıncı"]],"key":"D","why":"Kaval çap ve inspirasyonla değişimi tahmini sağ atriyum basıncına katkı sağlar. Yorumda solunum biçimi ve klinik koşullar dikkate alınır.","source":["BSE · Sağ kalbin ekokardiyografik değerlendirmesi","https://doi.org/10.1530/ERP-19-0051"]}]}};
+const CATALOG={"regions": [{"id": "aorta", "name": "Aorta", "short": "Aorta", "group": "Büyük damarlar", "view": "front"}, {"id": "mitral", "name": "Mitral kapak", "short": "Mitral kapak", "group": "Kapaklar", "view": "valves"}, {"id": "laa", "name": "Sol atriyal apendiks", "short": "Sol atriyal apendiks", "group": "Kalp boşlukları", "view": "front"}, {"id": "hepatic", "name": "Hepatik venler", "short": "Hepatik venler", "group": "Büyük damarlar", "view": "inferior"}, {"id": "aortic_valve", "name": "Aort kapağı", "short": "Aort kapağı", "group": "Kapaklar", "view": "valves"}, {"id": "tricuspid", "name": "Triküspit kapak", "short": "Triküspit", "group": "Kapaklar", "view": "valves"}, {"id": "pulmonary_valve", "name": "Pulmoner kapak", "short": "Pulmoner kapak", "group": "Kapaklar", "view": "valves"}, {"id": "lv", "name": "Sol ventrikül", "short": "Sol ventrikül", "group": "Kalp boşlukları", "view": "front"}, {"id": "rv", "name": "Sağ ventrikül", "short": "Sağ ventrikül", "group": "Kalp boşlukları", "view": "front"}, {"id": "la", "name": "Sol atriyum", "short": "Sol atriyum", "group": "Kalp boşlukları", "view": "back"}, {"id": "ra", "name": "Sağ atriyum", "short": "Sağ atriyum", "group": "Kalp boşlukları", "view": "front"}, {"id": "pa", "name": "Pulmoner arter", "short": "Pulmoner arter", "group": "Büyük damarlar", "view": "front"}, {"id": "pv", "name": "Pulmoner venler", "short": "Pulmoner venler", "group": "Büyük damarlar", "view": "back"}, {"id": "svc", "name": "Vena kava superior", "short": "V. kava superior", "group": "Büyük damarlar", "view": "front"}, {"id": "ivc", "name": "Vena kava inferior", "short": "V. kava inferior", "group": "Büyük damarlar", "view": "inferior"}]};
 CATALOG.regions.push(
-  {id:'apex',name:'Sol ventrikül apeksi',short:'Apeks',group:'Kalp duvarı',view:'front',includeSamples:true},
-  {id:'myocardium',name:'Kalp kası (miyokart)',short:'Miyokart',group:'Kalp duvarı',view:'front',includeSamples:true,detail:'Bu bölümde endokardit, miyokardit ve perikardit vakalarını tutulan yapıya göre ayırt edebilirsiniz.'},
-  {id:'prosthesis',name:'Protez kapak',short:'Protez kapak',group:'Kapaklar',view:'prosthetic',includeSamples:true,detail:'Modelde mitral konumda çift diskli mekanik protez görülüyor. Sorular aort ve mitral protezlerini kapsar.'},
-  {id:'valve_mass',name:'Kapak üzerindeki kitle',short:'Kapak kitlesi',group:'Kapaklar',view:'valves',includeSamples:true,detail:'Triküspit yaprakçığına bağlı kitle şematiktir. Her vakada kitleyi soruda verilen bulgularla değerlendirin.'}
+  {id:'apex',name:'Sol ventrikül apeksi',short:'Apeks',group:'Kalp duvarı',view:'front'},
+  {id:'myocardium',name:'Kalp kası (miyokart)',short:'Miyokart',group:'Kalp duvarı',view:'front',detail:'Bu bölümde endokardit, miyokardit ve perikardit vakalarını tutulan yapıya göre ayırt edebilirsiniz.'},
+  {id:'prosthesis',name:'Protez kapak',short:'Protez kapak',group:'Kapaklar',view:'prosthetic',detail:'Modelde mitral konumda çift diskli mekanik protez görülüyor. Sorular aort ve mitral protezlerini kapsar.'},
+  {id:'valve_mass',name:'Kapak üzerindeki kitle',short:'Kapak kitlesi',group:'Kapaklar',view:'valves',detail:'Triküspit yaprakçığına bağlı kitle şematiktir. Her vakada kitleyi soruda verilen bulgularla değerlendirin.'}
 );
-const clinicalSources={
-  takotsubo:['EACVI/JSE · Takotsubo sendromunda görüntüleme','https://pmc.ncbi.nlm.nih.gov/articles/PMC7471594/'],
-  aneurysm:['JACC Case Reports · Ventriküler anevrizmaların görüntülenmesi','https://pubmed.ncbi.nlm.nih.gov/41945539/'],
-  lvThrombus:['AHA · Sol ventrikül trombüsü','https://pubmed.ncbi.nlm.nih.gov/36106537/'],
-  valves:['ASE/SCMR/SCCT · Protez kapakların görüntülenmesi, 2024','https://www.asecho.org/wp-content/uploads/2025/04/PIIS0894731723005333.pdf'],
-  masses:['Structural Heart · Ekokardiyografide kardiyak kitleler','https://pmc.ncbi.nlm.nih.gov/articles/PMC10382990/'],
-  endocarditis:['ESC · İnfektif endokardit kılavuzu, 2023','https://doi.org/10.1093/eurheartj/ehad193'],
-  inflammation:['ESC · Miyokardit ve perikardit kılavuzu, 2025','https://doi.org/10.1093/eurheartj/ehaf192']
-};
-Object.assign(CATALOG.samples,{
-  apex:[
-    {id:'atlas-apex-1',stem:'Akut göğüs ağrısıyla başvuran bir hastada hangi duvar hareketi paterni klasik apikal Takotsubo sendromunu destekler?',
-     options:[['A','Yalnızca bazal segmentlerde çevresel akinezi ve apikal hiperkinezi'],['B','Tek bir koroner dağılımla sınırlı olmayan orta-apikal akinezi ve bazal hiperkinezi'],['C','Yalnız bazal inferior duvarda akinezi'],['D','Tüm segmentlerde benzer derecede kalıcı hipokinezi']],key:'B',
-     why:'Klasik apikal tipte orta ve apikal segmentlerin tutulumu çoğunlukla tek bir epikardiyal koroner arterin alanını aşar. Akut başvuruda koroner sendrom açısından değerlendirme de gerekir.',source:clinicalSources.takotsubo},
-    {id:'atlas-apex-2',stem:'Eski anterior enfarktüs sonrası apikal dışa bombeleşme saptanıyor. Hangi bulgu gerçek sol ventrikül anevrizmasını destekler?',
-     options:[['A','Kese girişinde miyokartta ani kesinti'],['B','Kese duvarını yalnızca perikart ve organize hematomun oluşturması'],['C','Kesenin komşu miyokartla eşzamanlı ve güçlü kasılması'],['D','Geniş boyun boyunca devam eden incelmiş, skarlı ve diskinetik miyokart']],key:'D',
-     why:'Gerçek anevrizmanın duvarında skarlı ventrikül dokusu sürekliliğini korur. Psödoanevrizmada serbest duvar rüptürünü çevre dokular sınırlar.',source:clinicalSources.aneurysm},
-    {id:'atlas-apex-3',stem:'Anterior enfarktüs sonrası apeks akinetik. Ultrason kontrastı kullanıldığı halde apikal trombüs şüphesi netleşmedi. Hangi yöntem en fazla ek bilgi sağlar?',
-     options:[['A','Geç gadolinyum tutulumunu değerlendiren kardiyak MR'],['B','Apendiks akım hızını ölçen TEE'],['C','Koroner kalsiyum skoru'],['D','Egzersiz sırasında doku Doppler incelemesi']],key:'A',
-     why:'Kontrastlı ekokardiyografi sonuçsuz kaldığında kardiyak MR, avasküler trombüsü çevre miyokarttan ayırt etmeye yardımcı olur.',source:clinicalSources.lvThrombus},
-    {id:'atlas-apex-4',stem:'Anterior enfarktüs geçiren bir hastanın takibinde hangi bulgu apikal mural trombüs gelişimine en belirgin yerel zemini oluşturur?',
-     options:[['A','İzole bazal septal kalınlaşma'],['B','Normal apikal kasılma ile hafif mitral yetersizliği'],['C','Geniş bir apikal segmentte kalıcı akinezi ve kan stazı'],['D','İzole lateral mitral anülüs kalsifikasyonu']],key:'C',
-     why:'Geniş anteroapikal hasar bölgesinde akinezi, kanın apikal boşluktan uzaklaştırılmasını azaltır. Endokart hasarı ve staz mural trombüs gelişimine katkıda bulunur.',source:clinicalSources.lvThrombus},
-    {id:'atlas-apex-5',stem:'İlk incelemede apikal balonlaşma görülen bir hastada hangi izlem bulgusu Takotsubo tanısını destekler?',
-     options:[['A','Apikal duvarın giderek incelmesi ve kalıcı diskinezi'],['B','Aynı segmentlerin seri ekokardiyografide kasılma işlevini geri kazanması'],['C','Yeni bir apikal rüptür hattının görülmesi'],['D','Aynı bölgede transmural skar ile kalıcı anevrizma gelişmesi']],key:'B',
-     why:'Bölgesel sistolik işlevin izlemde düzelmesi Takotsubo sendromunun karakteristik seyridir. Seri incelemeler iyileşmeyi ve apikal trombüs gibi komplikasyonları izlemeyi sağlar.',source:clinicalSources.takotsubo}
-  ],
-  prosthesis:[
-    {id:'atlas-prosthesis-1',stem:'Aort protezinin ortalama gradiyenti ağır anemi sırasında yükselmiş. DVI bazal değerine yakın ve yaprakçık hareketleri normal. Öncelikle hangi mekanizma düşünülür?',
-     options:[['A','Artmış transprotez akım'],['B','Yeni gelişen obstrüktif pannus'],['C','İleri yapısal kapak dejenerasyonu'],['D','Hareketsiz bir mekanik disk']],key:'A',
-     why:'Gradiyent akıma bağımlıdır. Akım durumu, bazal Doppler ölçümleri, DVI ve yaprakçık hareketi birlikte değerlendirildiğinde yüksek akım ile obstrüksiyon ayırt edilebilir.',source:clinicalSources.valves},
-    {id:'atlas-prosthesis-2',stem:'Mekanik mitral kapakta 3B TEE ile sistolik bir jet görülüyor. Hangi bulgu paravalvüler kaçağın yerini gösterir?',
-     options:[['A','Jetin iki disk arasındaki merkezi aralıktan çıkması'],['B','Akımın disk menteşesindeki yıkama jetinden kaynaklanması'],['C','Jetin dikiş halkası ile doğal anülüs arasından sol atriyuma geçmesi'],['D','Beklenen transvalvüler diyastolik akımın hızlanması']],key:'C',
-     why:'Kaçağı sınıflandırırken jetin başlangıcı izlenir. Paravalvüler kaçakta kan, protezin dikiş halkasının dışındaki bağlantı defektinden geçer.',source:clinicalSources.valves},
-    {id:'atlas-prosthesis-3',stem:'Aort protezinin gradiyenti ilk ameliyat sonrası incelemeden beri yüksek. Disk hareketi normal ve vücut yüzey alanına indekslenen efektif orifis alanı küçük. En olası açıklama nedir?',
-     options:[['A','Yeni gelişen protez trombozu'],['B','Akut dikiş halkası ayrışması'],['C','Geç gelişen pannus'],['D','Hasta-protez uyumsuzluğu']],key:'D',
-     why:'Normal hareket eden protezin efektif orifisi hastanın vücut ölçülerine göre küçük kalabilir. İlk incelemeden beri gözlenen patern, sonradan gelişen obstrüksiyondan ayrımda değerlidir.',source:clinicalSources.valves},
-    {id:'atlas-prosthesis-4',stem:'Mekanik aort protezinde bir diskin açılımı kısıtlı. Floroskopi hareket kısıtlılığını gösteriyor. Obstrüksiyona yol açan pannus ile trombüs ayrımında hangi inceleme ek bilgi sağlar?',
-     options:[['A','Tek başına istirahat EKG’si'],['B','EKG eşlemeli kontrastlı kardiyak BT'],['C','Koroner kalsiyum skoru'],['D','Periferik arter Doppleri']],key:'B',
-     why:'Kardiyak BT, periprostetik dokunun yerini, morfolojisini ve atenüasyonunu değerlendirir. Bu bilgiler klinik başlangıç ve antikoagülasyon öyküsüyle birlikte yorumlanır.',source:clinicalSources.valves},
-    {id:'atlas-prosthesis-5',stem:'Mitral protezin seri Doppler incelemelerinde ortalama gradiyent karşılaştırılırken hangi ölçüm mutlaka kayda alınmalıdır?',
-     options:[['A','Sol atriyumun tek düzlem çapı'],['B','Aort anülüsünün sistolik çapı'],['C','Ölçüm sırasındaki kalp hızı'],['D','Triküspit anülüsünün lateral sistolik hızı']],key:'C',
-     why:'Taşikardi diyastolik dolum süresini kısaltarak mitral protez gradiyentini yükseltebilir. Kalp hızı ve akım koşulları bazal incelemeyle karşılaştırmaya anlam kazandırır.',source:clinicalSources.valves}
-  ],
-  valve_mass:[
-    {id:'atlas-mass-1',stem:'Doğal triküspit kapakta hareketli bir kitle izleniyor. Hangi ek bulgu infektif vejetasyon olasılığını en çok artırır?',
-     options:[['A','Kitlenin yalnız bir kesitte parlak görünmesi'],['B','Kitlenin sistolde hareket etmesi'],['C','İzole hafif triküspit yetersizliği'],['D','Ayrı alınan kan kültürlerinde Staphylococcus aureus üremesi']],key:'D',
-     why:'Tipik etkenin ayrı kan kültürlerinde gösterilmesi görüntüleme bulgusuna bağımsız mikrobiyolojik kanıt ekler. Kitlenin hareketliliği tek başına etiyolojiyi belirlemez.',source:clinicalSources.endocarditis},
-    {id:'atlas-mass-2',stem:'Ateşi ve inflamasyon bulgusu olmayan bir hastada aort kapağında küçük, saplı, hareketli ve ince püsküllü kenarları olan bir kitle görülüyor. Hangi tümör en iyi uyar?',
-     options:[['A','Papiller fibroelastom'],['B','Atriyal miksoma'],['C','Kardiyak lipom'],['D','Primer kardiyak lenfoma']],key:'A',
-     why:'Papiller fibroelastomlar sıklıkla kapaklarda yer alır. Sap ve ince papiller çıkıntılar bu tanıyı destekler. Klinik bağlamda vejetasyon ve trombüs de değerlendirilir.',source:clinicalSources.masses},
-    {id:'atlas-mass-3',stem:'Adenokarsinomlu bir hastada tekrarlayan sistemik emboliler ve sol kalp kapaklarında küçük kitleler saptanıyor. Enfeksiyon yönünden ayrıntılı inceleme sonuçsuz. Hangi tanı özellikle düşünülür?',
-     options:[['A','Kalsifik anülüs dejenerasyonu'],['B','Nonbakteriyel trombotik endokardit'],['C','Apikal ventrikül anevrizması'],['D','Kardiyak rabdomiyom']],key:'B',
-     why:'Maligniteyle ilişkili hiperkoagülabilite kapaklarda steril trombosit-fibrin birikimine ve sistemik emboliye yol açabilir. Kültür negatif infektif endokardit de ayırıcı tanıda araştırılır.',source:clinicalSources.masses},
-    {id:'atlas-mass-4',stem:'Mekanik mitral protezli hastada antikoagülasyon kesintisinden kısa süre sonra dispne başlamış. TEE’de disk hareketini sınırlayan yeni yumuşak bir kitle var. En olası tanı hangisidir?',
-     options:[['A','Papiller fibroelastom'],['B','Yavaş büyüyen fibröz pannus'],['C','Protez kapak trombüsü'],['D','Lambl ekskresansı']],key:'C',
-     why:'Kısa klinik seyir, yetersiz antikoagülasyon ve yeni kitle birlikte trombüsü destekler. Pannus daha yavaş gelişir. Gerektiğinde kardiyak BT ek anatomik bilgi sağlar.',source:clinicalSources.valves},
-    {id:'atlas-mass-5',stem:'Sol atriyumda fossa ovalis bölgesine sapla tutunan, diyastolde mitral orifise doğru hareket eden bir kitle görülüyor. En olası tanı nedir?',
-     options:[['A','Atriyal miksoma'],['B','Mitral anülüsün kazeöz kalsifikasyonu'],['C','Apendiks trombüsü'],['D','Mitral yaprakçık vejetasyonu']],key:'A',
-     why:'Kitle kapağa yaklaşsa da kökeni interatriyal septumdur. Fossa ovalise sapla tutunma ve diyastolde mitral orifise prolapsus, atriyal miksoma için tipiktir.',source:clinicalSources.masses}
-  ],
-  myocardium:[
-    {id:'atlas-muscle-1',stem:'Akut miyokardit düşünülen bir hastada kardiyak MR’da hangi birliktelik aktif miyokardiyal inflamasyonu en güçlü biçimde destekler?',
-     options:[['A','Yalnız hafif perikardiyal efüzyon ve normal doku haritaları'],['B','İzole sol atriyal genişleme ve düşük atriyal strain'],['C','Tek koroner alanda kronik subendokardiyal skar ve normal T2'],['D','Artmış miyokardiyal T2 ile birlikte noniskemik dağılımlı geç gadolinyum tutulumu']],key:'D',
-     why:'Güncellenmiş Lake Louise yaklaşımında T2 temelli ödem bulgusu ile T1 temelli doku hasarı bulgusunun birlikteliği tanısal özgüllüğü artırır.',source:clinicalSources.inflammation},
-    {id:'atlas-muscle-2',stem:'İnspirasyonla artan, öne eğilince azalan göğüs ağrısı olan hastada perikardiyal sürtünme sesi duyuluyor. Ekoda efüzyon görülmemesi nasıl yorumlanır?',
-     options:[['A','Semptomlar iyileşene dek ekokardiyografi yorumlanamaz'],['B','Efüzyon olmadan da akut perikardit görülebilir'],['C','Bu bulgu izole miyokarditi kesinleştirir'],['D','Tanı için mutlaka perikardiyosentez gerekir']],key:'B',
-     why:'Akut perikarditte sıvı birikimi zorunlu değildir. Tipik ağrı ve sürtünme sesi gibi bulgular tanısal değerlendirmeye katkı sağlar.',source:clinicalSources.inflammation},
-    {id:'atlas-muscle-3',stem:'Protez aort kapağı olan bir hastada persistan bakteriyemi var ve infektif endokardit şüphesi yüksek. TTE protez gölgelenmesi nedeniyle yetersiz. En uygun sonraki ekokardiyografik inceleme hangisidir?',
-     options:[['A','Transözofageal ekokardiyografi'],['B','Dobutamin stres ekokardiyografisi'],['C','Yalnız apikal dört boşluk strain analizi'],['D','Egzersiz sonrası sağ ventrikül Doppleri']],key:'A',
-     why:'Endokardit endokardiyal yüzeyi, sıklıkla kapağı tutar. TEE, protez üzerindeki vejetasyonları ve perivalvüler komplikasyonları değerlendirmede önemlidir.',source:clinicalSources.endocarditis},
-    {id:'atlas-muscle-4',stem:'Yakın zamanda viral enfeksiyon geçiren bir hastada troponin yüksek, koroner arterler açık. Kardiyak MR’da hangi geç gadolinyum tutulumu paterni miyokarditi destekler?',
-     options:[['A','LAD alanı ile sınırlı subendokardiyal tutulum'],['B','İnferior duvarda bir koroner alana uyan transmural tutulum'],['C','Perikartla sınırlı tutulum ve normal miyokart'],['D','İnferolateral duvarda subepikardiyal, koroner dağılıma uymayan tutulum']],key:'D',
-     why:'Miyokarditte subepikardiyal veya orta duvar tutulumu görülebilir. İskemik hasar ise tipik olarak subendokarttan başlar ve bir koroner arter dağılımını izler.',source:clinicalSources.inflammation},
-    {id:'atlas-muscle-5',stem:'Perikarditli bir hastada hipotansiyon ve belirgin perikardiyal efüzyon gelişiyor. Hangi ekokardiyografik bulgu tamponad fizyolojisini destekler?',
-     options:[['A','İzole bazal septal hipertrofi'],['B','Hepatik venlerde yalnız sistolik akım azalması'],['C','Sağ ventrikül serbest duvarında erken diyastolik kollaps'],['D','Sol atriyum hacim indeksinde kronik artış']],key:'C',
-     why:'Erken diyastolde perikart basıncı sağ ventrikül basıncını aştığında serbest duvarda içe çökme görülebilir. Hemodinamik önem hastanın kliniği ve diğer eko bulgularıyla birlikte değerlendirilir.',source:clinicalSources.inflammation}
-  ]
-});
 
 // Patient coordinates: +x left, +y superior, +z anterior. Dimensions are schematic.
 const TAU = 2 * Math.PI;
@@ -1563,18 +1484,7 @@ function loadState(){
   state.flags=new Set(Array.isArray(raw.flags)?raw.flags:[]);
   state.region=Object.hasOwn(regions,raw.region)?raw.region:'aorta';
 }
-function bankFor(id){return state.banks[id]||CATALOG.samples[id];}
-function loadBanks(banks){
-  state.banks={};
-  for(const r of allRegions){
-    const rows=banks[r.id];
-    if(!Array.isArray(rows)||!rows.length)continue;
-    if(!r.includeSamples){state.banks[r.id]=rows;continue;}
-    const normalizeStem=s=>s.trim().toLocaleLowerCase('tr-TR').replace(/\s+/g,' ');
-    const existing=new Set(rows.map(q=>normalizeStem(q.stem)));
-    state.banks[r.id]=rows.concat(CATALOG.samples[r.id].filter(q=>!existing.has(normalizeStem(q.stem))));
-  }
-}
+function bankFor(id){return state.banks[id] || [];}
 function recordFor(id){
   const bank=bankFor(id),ids=bank.map(q=>q.id),old=state.records[id];
   if(old?.order?.length===ids.length&&new Set(old.order).size===ids.length&&ids.every(q=>old.order.includes(q))&&old.answers&&Number.isInteger(old.index)&&old.index>=0&&old.index<ids.length)return old;
@@ -1604,10 +1514,14 @@ function render(){
   byId('source').hidden=!enabled;
   byId('course-label').parentElement.hidden=!enabled;
   byId('atlas-instructions').textContent=enabled?'Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.':'Kalbi sürükleyerek döndürün. Bir yapıya dokunarak inceleyin.';
-  if(!enabled){
+  if(!enabled || !bankFor(id).length){
+    byId("question-content").hidden=true;
+    byId("source").hidden=true;
+    byId("course-label").parentElement.hidden=true;
     for(const field of ['stem','choices','feedback','q-index','score','result','flag-status','bank-note','topic-detail','course-label'])byId(field).replaceChildren();
     byId('topic-detail').hidden=true;
-    byId('bank-note').hidden=true;
+    byId('bank-note').hidden=!enabled;
+    if(enabled) byId('bank-note').textContent=state.bankStatus==='ready'?'Bu bölge için henüz aktif soru yok.':'Soru bankası şu anda okunamıyor.';
     byId('submit').disabled=true;
     return;
   }
@@ -1617,7 +1531,7 @@ function render(){
   select.value=id;
   const detail=byId('topic-detail');
   detail.textContent=regions[id].detail||'';detail.hidden=!detail.textContent;
-  byId('source').textContent=fromSheet?'Kurum bankası':'Örnek sorular';
+  byId('source').textContent='Kurum bankası';
   byId('source').classList.toggle('bank',fromSheet);
   byId('q-index').textContent=rec.done?'Tur tamamlandı':'Soru '+(rec.index+1)+' / '+bank.length;
   byId('score').textContent=score+' doğru · '+(totalAnswered-score)+' yanlış';
@@ -1651,13 +1565,11 @@ function render(){
   byId('flag').hidden=!fromSheet||rec.done||!frameOrigin;
   byId('flag').disabled=state.flags.has(q.id)||state.pendingFlag?.qid===q.id;
   byId('flag-status').textContent=state.flags.has(q.id)?'Düzeltme isteği kaydedildi.':state.pendingFlag?.qid===q.id?'Kaydediliyor…':'';
-  const done=allRegions.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
-  byId('course-label').textContent=done+' / '+allRegions.length+' yapı tamamlandı';
+  const available=allRegions.filter(r=>bankFor(r.id).length);
+  const done=available.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
+  byId('course-label').textContent=done+' / '+available.length+' yapı tamamlandı';
   const note=byId('bank-note');
-  if(state.bankStatus==='standalone')note.textContent='Önizlemede atlasın kaynaklı örnek sorularını çözebilirsiniz.';
-  else if(state.bankStatus==='ready')note.textContent=state.banks[id]?'':'Bu yapı için eşleşen aktif kurum sorusu bulunamadı. Örnek sorular gösteriliyor.';
-  else note.textContent=state.bankStatus==='schema'?'SoruBankasi başlıkları okunamadı. Örnek sorular gösteriliyor.':'Kurum soru bankası şu anda kullanılamıyor. Örnek sorular gösteriliyor.';
-  note.hidden=!note.textContent;
+  note.hidden=true;
 }
 function choose(id,fromList=false,move=false){
   if(!Object.hasOwn(regions,id))return;
@@ -1673,7 +1585,7 @@ select.onchange=()=>choose(select.value,true);
 byId('to-model').onclick=()=>byId('viewport').scrollIntoView({block:'center'});
 let atlasStreak=0;
 byId('submit').onclick=()=>{
-  if(!state.questionsEnabled)return;
+  if(!state.questionsEnabled || !bankFor(state.region).length)return;
   const {rec,q,bank}=current();
   if(rec.done){atlasStreak=0;delete state.records[state.region];recordFor(state.region);}
   else if(Object.hasOwn(rec.answers,q.id)){
@@ -1696,7 +1608,7 @@ function frameHeight(){
   if(height!==lastHeight){lastHeight=height;post('setFrameHeight',{height});}
 }
 byId('flag').onclick=()=>{
-  if(!state.questionsEnabled)return;
+  if(!state.questionsEnabled || !bankFor(state.region).length)return;
   const {q}=current();
   if(!frameOrigin||!q.id.startsWith('s-')||state.pendingFlag||state.flags.has(q.id))return;
   state.pendingFlag={qid:q.id,nonce:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9)};
@@ -1710,14 +1622,14 @@ window.addEventListener('message',e=>{
   const changed=state.scope!==nextScope;
   if(changed){state.scope=nextScope;state.pendingFlag=null;atlasStreak=0;loadState();}
   state.questionsEnabled=args.questionsEnabled===true;
-  loadBanks(state.questionsEnabled?args.banks||{}:{});state.bankStatus=args.status;
+  state.banks=state.questionsEnabled?(args.banks||{}):{};state.bankStatus=args.status;
   const ack=args.ack;
   if(ack&&ack.nonce===state.pendingFlag?.nonce){
     state.pendingFlag=null;
     if(ack.ok){state.flags.add(ack.qid);storeState();}
   }
   if(changed)model?.setRegion(state.region,true);
-  render();if(state.questionsEnabled&&ack&&!ack.ok&&current().q.id===ack.qid)byId('flag-status').textContent='Kaydedilemedi. Yeniden deneyebilirsiniz.';
+  render();if(state.questionsEnabled&&ack&&!ack.ok&&current().q?.id===ack.qid)byId('flag-status').textContent='Kaydedilemedi. Yeniden deneyebilirsiniz.';
   frameHeight();
 });
 loadState();render();
