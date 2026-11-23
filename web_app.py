@@ -1734,6 +1734,357 @@ CLINICAL_STUDIES = (
 )
 
 
+# ===================== KATETERİZASYON SİMÜLASYONU (HTML) =====================
+_CATH_SIM_HTML = r"""<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kardiyak Kateterizasyon Simülasyonu</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--tx:#1b2430;--mu:#5d6b7c;--bd:#dde2e8;--grid:#e3e8ee;--ac:#c0392b;--sh:#eef1f5;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141a;--card:#18202a;--tx:#e6ebf1;--mu:#9aa7b6;--bd:#2a3542;--grid:#27313d;--sh:#212b37;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141a;--card:#18202a;--tx:#e6ebf1;--mu:#9aa7b6;--bd:#2a3542;--grid:#27313d;--sh:#212b37;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:4px 0}.sub{color:var(--mu);margin:0 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:10px}
+select,input{font:inherit}select{padding:5px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+.grp{margin:6px 0}.grp small{display:block;color:var(--mu);font-size:12px;margin-bottom:3px}
+button{font:inherit;padding:6px 12px;margin:0 6px 6px 0;border-radius:18px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.grid{display:grid;grid-template-columns:1fr 290px;gap:12px;margin:10px 0}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+canvas{display:block;width:100%;height:300px}
+#live{font-size:13px;margin-top:6px;display:flex;flex-direction:column;gap:2px}
+#live b{font-variant-numeric:tabular-nums}
+svg{width:100%;height:auto;max-height:360px}
+svg .ch{fill:var(--sh);stroke:var(--bd)}svg text{fill:var(--mu);font-size:11px}
+svg .pth{fill:none;stroke:var(--mu);stroke-width:2;stroke-dasharray:4 3;opacity:.7}
+svg .dt{fill:var(--bd)}svg .dt.on{fill:var(--ac);stroke:var(--tx);stroke-width:1.5}
+#info h2{font-size:17px;margin:0 0 6px}#info ul{margin:6px 0;padding-left:20px}
+.tag{display:inline-block;font-size:12px;color:var(--mu);margin-right:6px}
+.nm{background:var(--sh);padding:6px 10px;border-radius:8px;margin:6px 0}
+.pit{border-left:3px solid var(--ac);padding-left:10px;margin:8px 0}
+.foot{color:var(--mu);font-size:12px}.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px}.sg div{background:var(--sh);border-radius:8px;padding:6px 10px}.sg small{display:block;color:var(--mu);font-size:11px}.sg b{font-size:17px}.sg .al b{color:var(--ac)}.cp{fill:none;stroke:var(--mu);stroke-width:2;stroke-dasharray:4 3;opacity:.4}.cp.on{stroke:var(--ac);stroke-width:3;stroke-dasharray:none;opacity:.95}svg .dt{stroke:var(--mu);stroke-width:1}.tabs{display:flex;gap:6px;margin:6px 0 10px}.tabs button{margin:0;border-radius:10px}#where{margin-top:6px}
+summary{cursor:pointer;font-weight:600}
+</style></head><body><div class="wrap">
+<h1>Sağ ve Sol Kalp Kateterizasyonu Simülasyonu</h1>
+<p class="sub">Kateter pozisyonunu ve klinik senaryoyu seçin; basınç dalgalarını EKG ile birlikte izleyin.</p>
+<div class="tabs"><button data-t="k" class="on">Klasik</button><button data-t="c">Canlı</button></div>
+<div class="bar">
+<label>Senaryo <select id="sc"></select></label>
+<label>Kalp hızı <input type="range" id="hr" min="50" max="120" value="70"> <b id="hrv">70</b>/dk</label>
+<span>Tansiyon <b id="bp">–</b> mmHg</span>
+<label><input type="checkbox" id="rs" checked> Solunum</label>
+<label><input type="checkbox" id="mkc" checked> Ölçüm noktaları</label>
+</div>
+<div id="livectl" class="card" hidden>
+<div class="grp"><small>Kateter yolu (kalp üzerinde sürükleyin, kaydırıcıyı kullanın veya otomatik ilerletin)</small><button data-r="R" class="on">Sağ kalp: SVC → RA → RV → PA → wedge</button><button data-r="L">Sol kalp: Ao → LV (retrograd)</button><button data-r="T">Transseptal: RA → LA</button></div>
+<div class="bar"><input type="range" id="us" min="0" max="1000" value="0" style="flex:1;min-width:180px"><button id="auto">▶ Otomatik ilerlet</button></div>
+<div id="where"></div></div>
+<div id="btns"></div>
+<div class="grid">
+<div class="card"><canvas id="cv"></canvas><div id="live"></div></div>
+<div class="card"><div id="hv"></div><svg id="old" viewBox="0 0 220 240" aria-label="Kalp şeması">
+<rect class="ch" x="30" y="95" width="55" height="55" rx="14"/><text x="48" y="126">RA</text>
+<rect class="ch" x="40" y="155" width="60" height="68" rx="14"/><text x="58" y="192">RV</text>
+<rect class="ch" x="135" y="95" width="55" height="45" rx="14"/><text x="152" y="122">LA</text>
+<rect class="ch" x="108" y="145" width="72" height="78" rx="14"/><text x="136" y="188">LV</text>
+<path class="pth" id="pR" d="M52,12 C52,50 56,90 57,122 C60,150 66,170 70,187 C85,150 90,110 95,75 L130,58"/>
+<path class="pth" id="pL" d="M205,15 L175,70 L150,110 L145,182"/>
+<path class="pth" d="M130,58 L162,118" style="opacity:.35"/>
+<path class="pth" d="M57,122 L176,112" style="opacity:.35"/>
+<circle class="dt" id="d-RA" cx="57" cy="122" r="7"/>
+<circle class="dt" id="d-RV" cx="70" cy="187" r="7"/>
+<circle class="dt" id="d-PA" cx="95" cy="75" r="7"/>
+<circle class="dt" id="d-PCWP" cx="130" cy="58" r="7"/>
+<circle class="dt" id="d-LA" cx="176" cy="112" r="7"/>
+<circle class="dt" id="d-Ao" cx="175" cy="70" r="7"/>
+<circle class="dt" id="d-LV" cx="145" cy="182" r="7"/>
+<text x="102" y="78">PA</text><text x="138" y="52">wedge</text><text x="182" y="66">Ao</text>
+</svg></div></div>
+<div class="card" id="sum"></div>
+<div class="card" id="info"></div>
+<details class="card"><summary>Genel prosedür</summary>
+<p><b>Sağ kalp:</b> İnternal juguler, femoral veya brakiyal ven (ultrason eşliğinde) → balonlu (Swan-Ganz) kateter RA → RV → PA → wedge sırasıyla ilerletilir. Her pozisyonda basınç ve gerekirse satürasyon alınır; kardiyak output termodilüsyon veya Fick ile bulunur, PVR = (mPAP − PAWP) / KO hesaplanır.</p>
+<p><b>Sol kalp:</b> Radyal (veya femoral) arter → retrograd olarak çıkan aorta → aort kapağı geçilerek LV (aort stenozunda kılavuz telle). LVEDP, pull-back gradienti ve ventrikülografi alınır; koroner anjiyografi ile birleştirilebilir. Alternatif: transseptal yolla LA’nın doğrudan ölçümü.</p></details>
+<p class="foot">Dalga biçimleri fizyolojik verilere dayanan modelle üretilmiş şematik simülasyondur; hasta kaydı değildir. Değerler eğitim amaçlıdır.</p>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const NORM={
+RA:[[0,4],[.1,8],[.17,5],[.22,5.5],[.3,2],[.45,4],[.58,6],[.68,2],[.85,3]],
+RV:[[0,3],[.1,6],[.18,5],[.24,12],[.3,25],[.4,23],[.5,15],[.58,3],[.7,1],[.85,3]],
+PA:[[0,10],[.2,10],[.28,20],[.34,25],[.42,20],[.52,15],[.56,13],[.58,14],[.7,11],[.85,10]],
+PCWP:[[0,6],[.05,6],[.2,9],[.3,6],[.45,6],[.62,10],[.75,6],[.9,5]],
+Ao:[[0,80],[.2,80],[.28,110],[.34,120],[.45,105],[.53,98],[.55,95],[.57,98],[.7,90],[.85,82]],
+LV:[[0,6],[.1,9],[.2,10],[.25,50],[.3,110],[.36,120],[.45,100],[.52,60],[.58,15],[.65,3],[.75,5],[.9,6]]};
+const SC={
+normal:{n:"Normal hemodinami",d:{},note:"Normal hemodinami: RA ortalama 2–6, PA 15–30/4–12, PAWP 6–12, LVEDP 5–12 mmHg."},
+as:{n:"Aort stenozu",d:{
+LV:[[0,12],[.1,15],[.2,17],[.25,60],[.3,130],[.37,180],[.45,170],[.52,100],[.58,20],[.65,8],[.75,10],[.9,11]],
+Ao:[[0,70],[.2,70],[.3,85],[.38,115],[.45,118],[.52,100],[.55,92],[.57,95],[.7,82],[.85,74]],
+PCWP:[[0,10],[.2,14],[.3,10],[.45,10],[.62,15],[.75,9],[.9,9]]},
+note:"Aort stenozu: LV sistolik basıncı çok yüksek, Ao yükselimi yavaş ve geç (parvus et tardus), LVEDP artmış (LVH). Gradienti görmek için “LV + Aorta” modunu seçin."},
+ms:{n:"Mitral stenoz",d:{
+PCWP:[[0,17],[.05,18],[.15,24],[.2,21],[.3,17],[.45,16],[.6,21],[.7,18],[.85,17]],
+LV:[[0,5],[.1,7],[.2,8],[.25,45],[.3,100],[.36,112],[.45,95],[.52,55],[.58,10],[.65,2],[.75,4],[.9,5]],
+PA:[[0,22],[.2,22],[.28,38],[.34,45],[.42,35],[.52,28],[.56,25],[.58,26],[.7,23],[.85,22]],
+RV:[[0,6],[.1,9],[.18,8],[.24,18],[.3,42],[.4,38],[.5,25],[.58,6],[.7,3],[.85,5]],
+RA:[[0,6],[.1,12],[.17,8],[.22,8],[.3,4],[.45,6],[.58,8],[.68,3],[.85,5]]},
+note:"Mitral stenoz: PCWP ve PA yüksek (pasif pulmoner venöz hipertansiyon), LV diyastol basıncı normal-düşük; fark diyastolik transmitral gradienttir. “PCWP + LV” modunu seçin."},
+mr:{n:"Ağır mitral yetersizliği",d:{
+PCWP:[[0,12],[.05,12],[.2,15],[.3,9],[.4,11],[.5,20],[.6,36],[.66,30],[.75,14],[.9,12]],
+PA:[[0,20],[.2,20],[.28,35],[.34,45],[.42,36],[.52,28],[.56,24],[.58,25],[.7,22],[.85,21]]},
+note:"Ağır MY: PCWP’de T dalgasından sonra dev v dalgası görülür; ortalama PCWP ve PA yükselir. v dalgasını mutlaka ortalamaya dahil edin."},
+ph:{n:"Prekapiller pulmoner hipertansiyon",d:{
+PA:[[0,28],[.2,28],[.28,55],[.34,72],[.42,58],[.52,42],[.56,36],[.58,38],[.7,31],[.85,29]],
+RV:[[0,5],[.1,10],[.18,9],[.24,25],[.3,60],[.36,74],[.45,62],[.52,35],[.58,8],[.7,5],[.85,5]],
+RA:[[0,9],[.1,14],[.17,10],[.22,10],[.3,6],[.45,8],[.58,10],[.68,6],[.85,8]]},
+note:"Prekapiller PH: PA ve RV sistolik yüksek, PAWP normal (≤15), RA artmış. (mPAP − PAWP)/KO ile PVR >2 WU bulunur."},
+kons:{n:"Konstriktif perikardit",d:{
+RA:[[0,15],[.1,19],[.17,16],[.22,16],[.3,12],[.45,15],[.58,19],[.68,11],[.85,14]],
+RV:[[0,17],[.1,19],[.18,18],[.24,25],[.3,38],[.4,34],[.5,22],[.58,6],[.65,17],[.72,18],[.85,17]],
+LV:[[0,17],[.1,19],[.2,19],[.25,55],[.3,105],[.36,115],[.45,98],[.52,55],[.58,7],[.64,16],[.72,18],[.9,18]],
+PA:[[0,17],[.2,17],[.28,30],[.34,38],[.42,30],[.52,24],[.56,21],[.58,22],[.7,18],[.85,17]],
+PCWP:[[0,16],[.05,16],[.2,19],[.3,15],[.45,15],[.62,19],[.75,15],[.9,15]]},r:{LV:-.12,RV:.2},
+note:"Konstriksiyon: RA’da belirgin x ve y inişi (M/W şekli); RV ve LV’de dip-plato (kare kök) işareti; diyastol sonu basınçlar eşitlenir (LVEDP − RVEDP ≤5 mmHg); RV sistolik 50’nin altında. Solunumda ventriküler diskordans: inspiryumda RV sistolik yükselirken LV düşer (RKMP’den ayırt ettirir)."},
+tam:{n:"Kardiyak tamponad",d:{
+RA:[[0,14],[.1,17],[.17,15],[.22,15],[.3,10],[.45,13],[.58,15],[.68,14.5],[.85,14]],
+RV:[[0,14],[.1,16],[.18,15],[.24,18],[.3,28],[.4,26],[.5,18],[.58,14],[.7,13.5],[.85,14]],
+PA:[[0,14],[.2,14],[.28,22],[.34,28],[.42,22],[.52,18],[.56,16],[.58,17],[.7,15],[.85,14.5]],
+PCWP:[[0,14],[.05,14],[.2,16],[.3,13],[.45,13.5],[.62,15],[.75,14],[.9,14]],
+LV:[[0,13],[.1,14],[.2,14.5],[.25,40],[.3,85],[.36,95],[.45,80],[.52,50],[.58,17],[.65,13],[.75,13.5],[.9,13]],
+Ao:[[0,65],[.2,65],[.28,85],[.34,95],[.45,84],[.53,76],[.55,72],[.57,74],[.7,70],[.85,66]]},r:{Ao:-.35,LV:-.12},
+note:"Tamponad: RA basıncı yüksek, x inişi korunmuş ama y inişi yok; RA ≈ RVEDP ≈ PCWP (yaklaşık 14 mmHg, diyastolik eşitlenme); inspiryumda Ao/LV sistolik düşüşü 10 mmHg’yi aşar (pulsus paradoksus). Solunum kutusunu açık tutun."},
+tr:{n:"Ağır triküspit yetersizliği",d:{
+RA:[[0,10],[.1,12],[.17,12],[.22,16],[.3,14],[.4,18],[.5,22],[.58,24],[.68,12],[.85,10]],
+RV:[[0,6],[.1,10],[.18,10],[.24,20],[.3,35],[.36,38],[.45,32],[.52,22],[.58,10],[.7,5],[.85,6]],
+PA:[[0,14],[.2,14],[.28,28],[.34,36],[.42,28],[.52,20],[.56,17],[.58,18],[.7,15],[.85,14]]},
+note:"Ağır TY: RA’da x inişi kaybolur, c ve v birleşerek dev bir sistolik dalga oluşturur (ventrikülizasyon); RA trasası RV basıncına benzer. Termodilüsyonla KO ölçümü güvenilmez olabilir."},
+hocm:{n:"HOKMP (istirahat)",d:{
+LV:[[0,10],[.1,14],[.2,16],[.25,55],[.3,100],[.36,115],[.42,150],[.46,160],[.5,130],[.56,40],[.62,8],[.72,8],[.9,10]],
+Ao:[[0,75],[.2,75],[.27,100],[.31,125],[.36,118],[.42,110],[.46,120],[.52,108],[.55,92],[.57,96],[.7,85],[.85,78]],
+PCWP:[[0,10],[.2,13],[.3,9],[.45,10],[.62,17],[.75,9],[.9,9]]},
+note:"HOKMP: LV sistolik tepe geç ve yüksek, Ao’da ani yükselme-çentik-kubbe (spike-and-dome) görünümü; LV–Ao gradienti dinamik. Sol ventrikül çıkış yolu obstrüksiyonu: tepe gradient ≥30 mmHg. “LV + Aorta” modunda gradienti görün."},
+hocmp:{n:"HOKMP (provokasyon)",d:{
+LV:[[0,10],[.1,14],[.2,16],[.25,55],[.3,95],[.36,120],[.42,185],[.46,215],[.5,170],[.56,40],[.62,8],[.72,8],[.9,10]],
+Ao:[[0,72],[.2,72],[.27,95],[.31,108],[.36,95],[.42,88],[.46,95],[.52,90],[.55,80],[.57,83],[.7,76],[.85,73]],
+PCWP:[[0,12],[.2,16],[.3,11],[.45,12],[.62,22],[.75,11],[.9,11]]},
+note:"Provokasyon (Valsalva, amil nitrit veya VES sonrası vuruş): gradient belirgin artar, Ao nabız basıncı daralır (Brockenbrough–Braunwald–Morrow işareti). Tepe gradient ≥50 mmHg septal redüksiyon düşünülen eşiktir."}};
+Object.assign(SC,{
+rkmp:{n:"Restriktif kardiyomiyopati",d:{
+RA:[[0,12],[.1,16],[.17,13],[.22,13],[.3,9],[.45,12],[.58,16],[.68,9],[.85,11]],
+RV:[[0,13],[.1,15],[.18,14],[.24,24],[.3,48],[.38,55],[.45,45],[.52,30],[.58,9],[.65,14],[.75,15],[.85,14]],
+LV:[[0,23],[.1,26],[.2,25],[.25,55],[.3,105],[.36,115],[.45,98],[.52,55],[.58,12],[.64,22],[.72,24],[.9,23]],
+PA:[[0,28],[.2,28],[.28,45],[.34,55],[.42,45],[.52,36],[.56,32],[.58,33],[.7,29],[.85,28]],
+PCWP:[[0,22],[.05,22],[.2,26],[.3,21],[.45,21],[.62,26],[.75,21],[.9,21]]},
+note:"RKMP: dip-plato var (konstriksiyona benzer) ancak LVEDP, RVEDP’den belirgin yüksektir (>5 mmHg), PA sistolik genellikle 50 mmHg üzeridir, RVEDP/RV sistolik oranı 1/3’ün altındadır ve solunumda ventriküler diskordans yoktur. Konstriksiyon ile karşılaştırın."},
+ay:{n:"Ağır aort yetersizliği",d:{
+Ao:[[0,48],[.2,42],[.27,100],[.31,160],[.36,170],[.45,150],[.53,110],[.55,102],[.57,104],[.7,75],[.85,58]],
+LV:[[0,18],[.1,24],[.2,28],[.25,60],[.3,120],[.36,170],[.45,150],[.52,95],[.58,22],[.62,10],[.7,16],[.8,20],[.9,22]],
+PCWP:[[0,16],[.05,16],[.2,19],[.3,15],[.45,15],[.62,18],[.75,15],[.9,15]]},
+note:"Ağır AY: Ao nabız basıncı geniş (≈170/42), diyastolik Ao basıncı düşük, LVEDP yüksek; fark daralır. Ao’da belirgin çentik yoktur. “LV + Aorta” modunda diyastolik yaklaşmayı izleyin."},
+asd:{n:"ASD (soldan sağa şant)",s:{RA:84,RV:85,PA:85},d:{
+RA:[[0,6],[.1,10],[.17,7],[.22,7],[.3,4],[.45,6],[.58,9],[.68,3],[.85,5]],
+RV:[[0,4],[.1,7],[.18,6],[.24,13],[.3,32],[.4,30],[.5,17],[.58,4],[.7,2],[.85,4]],
+PA:[[0,12],[.2,12],[.28,28],[.34,35],[.42,27],[.52,19],[.56,16],[.58,17],[.7,13],[.85,12]]},
+note:"ASD: oksimetri basamağı RA düzeyindedir (SVC %70 → RA %84); PA satürasyonu yüksektir, Qp/Qs ≈2. Sağ kalp hacim yüklenir. RV hacim yüklenmesi ve Qp/Qs >1,5 kapatma için önemli ölçütlerdir. RA ile LA trasalarını karşılaştırın."},
+vsd:{n:"VSD (soldan sağa şant)",s:{RV:85,PA:85},d:{
+RV:[[0,5],[.1,8],[.18,7],[.24,18],[.3,42],[.4,48],[.5,30],[.58,6],[.7,3],[.85,5]],
+PA:[[0,18],[.2,18],[.28,38],[.34,48],[.42,38],[.52,26],[.56,22],[.58,24],[.7,19],[.85,18]],
+PCWP:[[0,11],[.05,11],[.2,14],[.3,10],[.45,10],[.62,14],[.75,10],[.9,10]]},
+note:"VSD: oksimetri basamağı RV düzeyindedir (RA %72 → RV %85); PA basıncı ve PCWP artar, Qp/Qs ≈2. Basınç yükü arttıkça Eisenmenger riski doğar."}});
+const COL={LA:"#d0489b",RA:"#8a5cd6",RV:"#2b7bd6",PA:"#16a085",PCWP:"#e08a00",Ao:"#2b6fd6",LV:"#d6382b"};
+const MODES={RA:["RA"],LA:["LA"],RV:["RV"],PA:["PA"],PW:["PCWP"],AO:["Ao"],LV:["LV"],O1:["LV","Ao"],O2:["PCWP","LV"],O3:["LA","LV"]};
+const LBL={RA:"RA",LA:"Sol atriyum (transseptal)",
+RV:"RV",PA:"Pulmoner arter",PW:"PCWP (wedge)",AO:"Aorta",LV:"LV",O1:"LV + Aorta",O2:"PCWP + LV",O3:"LA + LV"};
+const INFO={
+RA:{t:"Sağ atriyum (RA)",pos:"Venöz girişten SVC’ye, oradan RA’ya ilerletilir; ilk trasa burada alınır.",nm:"Ortalama 2–6 mmHg",
+pts:["a dalgası: atriyal kontraksiyon, EKG’de P’yi izler; AF’de kaybolur.","c: triküspit kapanması (küçük); x inişi: atriyal gevşeme.","v dalgası: sistol sonunda venöz dolum, T’ye denk gelir; y inişi: triküspit açılması.","TY: dev c-v dalgası; TS: büyük a; tamponad: y inişi kaybı; konstriksiyon: belirgin x ve y (M/W şekli)."],
+pit:"Sıfır seviyesi orta aksiller hatta olmalı; basıncı ekspiryum sonunda okuyun."},
+RV:{t:"Sağ ventrikül (RV)",pos:"Balon şişikken triküspit kapağından geçilir; ventriküler ekstrasistol sık görülür.",nm:"Sistolik 15–30, EDP 2–8 mmHg",
+pts:["Hızlı sistolik yükselme; sistolik tepe, çıkış darlığı yoksa PA sistoliğine eşittir.","Diyastolde düşük basınç: erken dolum, ardından a dalgası (RVEDP).","RV’den PA’ya geçişte diyastolik basınç aniden yükselir (step-up) ve dikrotik çentik belirir."],
+pit:"Sol dal bloğunda kateter tam blok yapabilir. Konstriksiyon/RKMP’de dip-plato (kare kök) işareti aranır."},
+PA:{t:"Pulmoner arter (PA)",pos:"Pulmoner kapak geçilir; balonlu kateter ana PA’dan dal artere ilerletilir. Mikst venöz satürasyon buradan alınır.",nm:"15–30 / 4–12 (ort 9–18) mmHg; PH: mPAP >20 mmHg",
+pts:["Dikrotik çentik = pulmoner kapağın kapanması.","mPAP, PAWP ve KO ile PVR hesaplanır: (mPAP − PAWP) / KO.","Prekapiller PH: PAWP ≤15 ve PVR >2 WU; postkapiller PH: PAWP >15."],
+pit:"KO için termodilüsyon (RA’dan salin) veya Fick kullanılır; ağır TY’de termodilüsyon güvenilmez olabilir."},
+PW:{t:"Pulmoner kapiller wedge (PCWP)",pos:"Balon yaklaşık 1–1,5 mL ile şişirilerek distal PA dalına oturtulur; trasa atriyal tipe döner.",nm:"Ortalama 6–12 mmHg (≤15)",
+pts:["LA basıncının sönümlü ve 70–100 ms gecikmiş yansıması: a dalgası QRS’ten sonra, v dalgası T’den sonra görülür.","Mitral hastalık yoksa PAWP ortalaması LVEDP’yi iyi yansıtır.","MY: dev v dalgası; MS: ortalama yüksek, y inişi yavaş."],
+pit:"Overwedge (aşırı şişirme) basıncı yapay yükseltir; doğrulama için trasa şekli veya wedge satürasyonu (≥%95) kullanılır. Ekspiryum sonunda ölçün."},
+AO:{t:"Aorta",pos:"Radyal/femoral arter girişi ile retrograd olarak çıkan aorta ilerletilir.",nm:"Sistolik 100–140, diyastolik 60–90 mmHg",
+pts:["Hızlı sistolik yükselme; dikrotik çentik = aort kapağının kapanması.","Geniş nabız basıncı: AY; dar ve geç yükselim (parvus et tardus): AD.","Aort diyastolik basıncı LVEDP’den çok yüksektir; AY’de bu fark azalır."],
+pit:"Çentiğin hemen altındaki diyastolik basınç, LV ile birlikte okunduğunda anlam kazanır."},
+LA:{t:"Sol atriyum (LA)",pos:"Femoral venden transseptal girişle (foramen ovale veya septal ponksiyon) LA’ya ulaşılır; PFO varsa kateter doğrudan geçebilir.",nm:"Ortalama 4–12 mmHg (PCWP ile benzer)",
+pts:["LA dalgaları PCWP ile aynıdır ama gecikmesiz ve sönümsüzdür: a dalgası P’den hemen sonra, v dalgası T dalgası sonunda görülür.","PCWP ile karşılaştırın: LA’daki v dalgası daha erken ve daha belirgindir; PCWP bu trasanın 70–100 ms gecikmiş, sönümlenmiş yansımasıdır.","Mitral stenozda LA–LV gradienti en doğru yöntemdir; PCWP gecikme düzeltmesi gerekmez."],
+pit:"Transseptal ponksiyon tamponad, aort ponksiyonu ve emboli riski taşır; yalnızca PCWP güvenilmezse (mekanik mitral protez, belirsiz tanı) tercih edilir."},
+LV:{t:"Sol ventrikül (LV)",pos:"Aort kapağı retrograd geçilir (AD’de kılavuz telle); ventriküler ekstrasistol ve emboli riski vardır.",nm:"Sistolik 100–140, LVEDP 5–12 mmHg",
+pts:["İzovolümetrik kasılma → ejeksiyon (LV Ao’yu aşınca kapak açılır) → izovolümetrik gevşeme → hızlı dolum.","LVEDP, QRS başlangıcında (a dalgası sonrası) ölçülür; 16–18 mmHg üzeri artmış dolum basıncıdır."],
+pit:"Ekstrasistol sonrası vuruşlar ölçüme alınmaz; LVEDP için eş zamanlı EKG kullanın."},
+O1:{t:"Pull-back: LV → Aorta",pos:"LV ve Ao trasaları üst üste getirilir; gölgeli alan sistolik transvalvüler gradienttir.",nm:"Normalde gradient yok (5 mmHg’nin altı)",
+pts:["Pik-to-pik gradient = LV sistolik tepe − Ao sistolik tepe.","Ortalama gradient = ejeksiyon boyunca LV−Ao farkının ortalaması.","Hakki: AVA ≈ KO (L/dk) / √ortalama gradient. Ağır AD: ortalama gradient ≥40 mmHg, AVA 1,0 cm² altı."],
+pit:"Eş zamanlı kayıt idealdir; sıralı geri çekmede hız ve kontraktilite değişir, ekstrasistol sonrası vuruş hatalıdır."},
+O3:{t:"LA + LV: doğrudan mitral gradient",pos:"Transseptal LA ve LV eş zamanlı kaydedilir; PCWP gecikmesi olmadığı için mitral gradient en doğru bu yöntemle ölçülür.",nm:"Normalde diyastolik gradient 0–2 mmHg",
+pts:["Gölgeli alan: LA basıncının LV’nin üstünde kaldığı diyastolik transmitral gradient.","PCWP + LV moduyla karşılaştırın: PCWP’nin gecikmesi ve sönümü gradienti abartabilir; LA’da v dalgası daha erken ve belirgindir.","Hakki: MVA ≈ KO / √ortalama gradient; klinik olarak anlamlı MS: MVA ≤1,5 cm²."],
+pit:"Transseptal giriş riskleri (tamponad, aort ponksiyonu, emboli) nedeniyle seçilmiş olgularda kullanılır; LA ve LV kayıtları eş zamanlı olmalıdır."},
+O2:{t:"PCWP + LV: mitral gradient",pos:"Wedge ve LV eş zamanlı kaydedilir; diyastolde PCWP > LV ise mitral kapakta engel vardır.",nm:"Normalde diyastolik gradient 0–2 mmHg",
+pts:["Gölgeli alan: diyastolik transmitral gradient.","Hakki: MVA ≈ KO (L/dk) / √ortalama gradient.","Klinik olarak anlamlı MS: MVA ≤1,5 cm²."],
+pit:"Wedge gecikmesi (70–100 ms) gradienti abartır; trasayı zamanda kaydırarak düzeltin veya transseptal LA basıncı ölçün."}};
+/* PCHIP tablosu */
+function mk(p){const X=[],Y=[];for(let k=-1;k<=1;k++)for(const q of p){X.push(q[0]+k);Y.push(q[1])}
+const n=X.length,d=[],m=[];for(let i=0;i<n-1;i++)d[i]=(Y[i+1]-Y[i])/(X[i+1]-X[i]);
+m[0]=d[0];m[n-1]=d[n-2];for(let i=1;i<n-1;i++)m[i]=d[i-1]*d[i]<=0?0:2*d[i-1]*d[i]/(d[i-1]+d[i]);
+const T=new Float32Array(720);let j=0;
+for(let s=0;s<720;s++){const x=s/720;while(X[j+1]<=x)j++;const h=X[j+1]-X[j],t=(x-X[j])/h,t2=t*t,t3=t2*t;
+T[s]=(2*t3-3*t2+1)*Y[j]+(t3-2*t2+t)*h*m[j]+(-2*t3+3*t2)*Y[j+1]+(t3-t2)*h*m[j+1]}
+return T}
+let TB={},mode="RA",scn="normal",hr=70,ymax=40,beat=0,last=0,W=600,RESP=true,MKS=true,tm=0,BASE={},MKR={},WIN=6;
+const val=(k,p)=>{const u=p*720,i=Math.floor(u),f=u-i,T=TB[k];return T[i%720]*(1-f)+T[(i+1)%720]*f};
+const S=k=>Array.from({length:360},(_,i)=>val(k,i/360));
+const am=(a,l,h,f)=>{let b=l;for(let i=l;i<=h;i++)if(f?a[i]<a[b]:a[i]>a[b])b=i;return b/360};
+function MK(k){const a=S(k);
+if(k=="RA")return[[am(a,18,90),"a",0],[am(a,90,150,1),"x",1],[am(a,162,270),"v",0],[am(a,225,300,1),"y",1]];
+if(k=="PCWP"||k=="LA")return[[am(a,18,90),"a",0],[am(a,162,270),"v",0]];
+if(k=="RV"||k=="LV")return[[.19,"EDP",1],[am(a,72,216),"sist",0]];
+return[[am(a,72,216),"sist",0],[am(a,180,216,1),"",0],[am(a,0,359,1),"dia",1]]}
+const CO={as:4.5,ms:3.8,mr:4.2,ph:3.5,kons:3.6,tam:3,tr:4,rkmp:3.5,ay:6,asd:5,vsd:5};
+const ROWS={normal:'co,rap,spap,mpap,pawp,lvedp,pvr,svr',as:'co,gp2p,gmean,ava,lvedp,ao,pawp',ms:'co,pawp,mpap,mg,mva,pvr,spap',mr:'co,pawp,vw,spap,mpap,lvedp,pvr',ph:'co,rap,rvs,spap,mpap,pawp,tpg,pvr',kons:'rap,rvs,lvedp,pawp,eq,rvr,dedp,spap',tam:'co,rap,rvs,lvedp,pawp,eq,ao',tr:'co,rap,rvs,spap,mpap,pvr',hocm:'lvot,lvedp,ao,pawp,co',hocmp:'lvot,lvedp,ao,pawp,co',rkmp:'rap,rvs,lvedp,pawp,spap,eq,dedp,rvr',ay:'ao,pp,lvedp,pawp,co',asd:'qpqs,co,rap,spap,mpap,pawp,pvr',vsd:'qpqs,co,rvs,spap,mpap,pawp,pvr'};
+Object.assign(CO,{hfpef:4.5});ROWS.hfpef='co,rap,spap,mpap,pawp,lvedp,ao,pvr';
+Object.assign(SC,{hfpef:{n:'HFpEF (korunmuş EF)',d:{
+LV:[[0,18],[.1,21],[.2,24],[.25,65],[.3,130],[.36,150],[.45,135],[.52,80],[.58,25],[.65,12],[.72,16],[.8,19],[.9,21]],
+Ao:[[0,75],[.2,75],[.28,120],[.34,150],[.45,132],[.53,112],[.55,106],[.57,109],[.7,92],[.85,80]],
+PCWP:[[0,19],[.05,19],[.2,25],[.3,19],[.45,19],[.62,26],[.75,19],[.9,18]],
+PA:[[0,18],[.2,18],[.28,36],[.34,45],[.42,36],[.52,28],[.56,25],[.58,26],[.7,20],[.85,19]],
+RV:[[0,6],[.1,10],[.18,9],[.24,18],[.3,38],[.4,45],[.5,28],[.58,7],[.7,5],[.85,6]],
+RA:[[0,9],[.1,13],[.17,10],[.22,10],[.3,6],[.45,9],[.58,12],[.68,6],[.85,8]]},
+note:'HFpEF: sistolik işlev korunmuş (EF ≥%50), ancak LV sert ve geç gevşiyor: LVEDP ≥16 mmHg ve PAWP >15 mmHg, PCWP’de belirgin a ve v dalgaları, izole postkapiller PH ve hipertansif Ao. İstirahatte PAWP normal olabilir; egzersizde PAWP ≥25 mmHg tanıyı destekler.'}});
+function sum(){const f=(v,d)=>v.toFixed(d).replace('.',','),sc=SC[scn],co=CO[scn]||5,s=Object.assign({SVC:70,IVC:76,PA:71},sc.s||{}),qq=sc.s?(98-(3*s.SVC+s.IVC)/4)/(98-s.PA):1;
+const PA=S('PA'),AO=S('Ao'),PW=S('PCWP'),LV=S('LV'),RV=S('RV'),rap=avg(S('RA')),mp=avg(PA),pw=avg(PW),le=LV[68],re=RV[68],rs=mx(RV),map=avg(AO),pvr=(mp-pw)/(co*qq),
+gm=avg(LV.map((v,i)=>v-AO[i]).filter((v,i)=>i>=72&&i<=216&&v>0)),gp=mx(LV)-mx(AO),
+mg=avg(PW.map((v,i)=>v-LV[i]).filter((v,i)=>(i<72||i>216)&&v>0)),eqv=[rap,re,le,pw],rg=mx(eqv)-mn(eqv),vv=mx(PW.slice(162,270)),pp=mx(AO)-mn(AO),ava=co/Math.sqrt(gm),mva=co/Math.sqrt(Math.max(mg,1));
+const T={co:['KO (varsayım)',f(co,1)+' L/dk',co<4],qpqs:['Qp/Qs',f(qq,1),qq>=1.5],rap:['RA ortalama',f(rap,0)+' mmHg',rap>8],rvs:['RV sist/EDP',R(rs)+'/'+R(re)+' mmHg',re>8],spap:['sPAP',R(mx(PA))+' mmHg',mx(PA)>35],mpap:['mPAP',f(mp,0)+' mmHg',mp>20],pawp:['PAWP ortalama',f(pw,0)+' mmHg',pw>15],vw:['PCWP v dalgası',R(vv)+' mmHg',vv-pw>10],lvedp:['LVEDP',R(le)+' mmHg',le>16],ao:['Ao sist/dia (ort.)',R(mx(AO))+'/'+R(mn(AO))+' ('+R(map)+')',false],pp:['Nabız basıncı',R(pp)+' mmHg',pp>60],tpg:['TPG',R(mp-pw)+' mmHg',mp-pw>12],pvr:['PVR',f(pvr,1)+' WU',pvr>2],svr:['SVR',f((map-rap)/co,1)+' WU',false],gp2p:['Pik-to-pik gradient',R(gp)+' mmHg',gp>20],gmean:['Ort. gradient (LV–Ao)',R(gm)+' mmHg',gm>20],ava:['AVA (Hakki)',f(ava,1)+' cm²',ava<1],mg:['Ort. diyastolik gradient (PCWP–LV)',f(mg,0)+' mmHg',mg>5],mva:['MVA (Hakki)',f(mva,1)+' cm²',mva<=1.5],lvot:['LVOT tepe gradient',R(gp)+' mmHg',gp>=30],eq:['Diyastol sonu fark (RA, RVEDP, LVEDP, PAWP)',R(rg)+' mmHg',rg<=5],rvr:['RVEDP / RV sist',f(re/rs,2),re/rs>1/3],dedp:['LVEDP − RVEDP',R(le-re)+' mmHg',le-re>5]};
+const rw=ROWS[scn].split(',');let n='';
+if(rw.includes('mpap'))n=mp<=20?'mPAP ≤20 mmHg: pulmoner hipertansiyon yok.':pw<=15?(pvr>2?'Prekapiller pulmoner hipertansiyon (PAWP ≤15, PVR >2 WU).':'mPAP >20 ama PVR ≤2 WU: hiperkinetik akım (şant) ile uyumlu.'):(pvr>2?'Kombine pre- ve postkapiller PH (PAWP >15, PVR >2 WU).':'İzole postkapiller PH (PAWP >15, PVR ≤2 WU).');
+if(rw.includes('eq')&&rg<=5)n+=' Diyastol sonu basınçlar eşitlenmiş (fark ≤5 mmHg).';
+return `<h3 style='margin:0 0 8px;font-size:16px'>Hemodinamik özet: ${sc.n}</h3><div class='sg'>${rw.map(k=>`<div class='${T[k][2]?'al':''}'><small>${T[k][0]}</small><b>${T[k][1]}</b></div>`).join('')}</div><p class='foot'>${n}</p><p class='foot'>Kırmızı: referans aralığı dışı. Değerler ekspiryum sonu taban trasasından hesaplanır; KO senaryo için varsayımdır (gerçekte termodilüsyon veya Fick). Şantta PVR, Qp ile hesaplanır.</p>`}
+function sat(){const s=Object.assign({SVC:70,IVC:76,RA:72,RV:71,PA:71,PCWP:98,LA:98,LV:98,Ao:98},SC[scn].s||{});
+let h="<div>SpO₂ (oksimetri): "+MODES[mode].map(k=>k+" <b>%"+s[k]+"</b>").join(" · ")+"</div>";
+if(SC[scn].s){const mv=(3*s.SVC+s.IVC)/4;h+="<div>Qp/Qs ≈ <b>"+((98-mv)/(98-s.PA)).toFixed(1)+"</b> (RA %"+s.RA+" · RV %"+s.RV+" · PA %"+s.PA+"; SVC %"+s.SVC+")</div>"}return h}
+function vr(k,p,t){if(k=='X'){const q=LIVE;return q.w<=.001?vr(q.a,p,t):q.w>=.999?vr(q.b,p,t):(1-q.w)*vr(q.a,p,t)+q.w*vr(q.b,p,t)}let v=val(k,p);if(!RESP)return v;const i=Math.sin(6.2832*t/4),d=(SC[scn].r||{})[k],b=BASE[k];if(d)v=b+(v-b)*(1+d*i);return v-(k=="Ao"?2:3)*i}
+const avg=a=>a.reduce((s,v)=>s+v,0)/(a.length||1),mx=a=>Math.max(...a),mn=a=>Math.min(...a),R=v=>Math.round(v);
+const ecg=p=>{const g=(m,s,a)=>a*Math.exp(-Math.pow((p-m)/s,2));return g(.1,.04,.15)+g(.18,.013,-.12)+g(.2,.017,1.1)+g(.222,.015,-.25)+g(.43,.06,.3)};
+function stat(k){const a=S(k);
+if(k=="RA"||k=="PCWP"||k=="LA")return `<span style="color:${COL[k]}">●</span> ${k}: ortalama <b>${R(avg(a))}</b> · a <b>${R(mx(a.slice(18,90)))}</b> · v <b>${R(mx(a.slice(162,270)))}</b> mmHg`;
+if(k=="RV"||k=="LV")return `<span style="color:${COL[k]}">●</span> ${k}: <b>${R(mx(a))}/${R(a[68])}</b> mmHg (sistolik / EDP)`;
+return `<span style="color:${COL[k]}">●</span> ${k}: <b>${R(mx(a))}/${R(mn(a))}</b> mmHg (ortalama ${R(avg(a))})`}
+function grad(){if(mode=="O1"){const L=S("LV"),A=S("Ao"),d=L.map((v,i)=>v-A[i]).filter((v,i)=>i>=72&&i<=216&&v>0);
+return `Pik-to-pik gradient: <b>${R(mx(L)-mx(A))}</b> mmHg · ortalama gradient: <b>${R(avg(d))}</b> mmHg (yaklaşık)`}
+if((mode=="O2"||mode=="O3")){const P=S(MODES[mode][0]),L=S("LV"),d=P.map((v,i)=>v-L[i]).filter((v,i)=>(i<72||i>216)&&v>0);
+return `Ortalama diyastolik gradient: <b>${R(avg(d))}</b> mmHg (yaklaşık)`}return ""}
+function render(){
+TB={};for(const k in NORM)TB[k]=mk(SC[scn].d[k]||NORM[k]);
+{const P=TB.PCWP,L=new Float32Array(720),mP=avg(Array.from(P));for(let s=0;s<720;s++)L[s]=mP+(P[(s+65)%720]-mP)*1.25;TB.LA=L}
+for(const k in TB){BASE[k]=mn(S(k));MKR[k]=MK(k);MAXT[k]=mx(S(k))}
+const ks=MODES[mode];let m=0;ks.forEach(k=>m=Math.max(m,mx(S(k))));if(!LIVEON)ymax=Math.ceil(m*1.15/10)*10;
+document.querySelectorAll("#btns button").forEach(b=>b.classList.toggle("on",b.dataset.m==mode));
+document.querySelectorAll(".dt").forEach(d=>d.classList.toggle("on",ks.some(k=>d.id=="d-"+k)));
+const pm={RA:'R',RV:'R',PA:'R',PW:'R',AO:'L',LV:'L',LA:'T',O1:'L',O2:'RL',O3:'TL'}[mode];['R','L','T'].forEach(c=>{const e=$('#p'+c);if(e)e.classList.toggle('on',pm.includes(c))});
+const A=S('Ao');$('#bp').textContent=R(mx(A))+'/'+R(mn(A))+' ('+R(avg(A))+')';
+$("#live").innerHTML=ks.map(stat).join("")+(grad()?"<div>"+grad()+"</div>":"")+sat()+'<div style="color:var(--mu)">Tablodaki değerler ekspiryum sonu (solunum etkisiz) taban değerleridir; grafikteki noktalar solunumla değişir.</div>';
+$("#sum").innerHTML=sum();const I=INFO[mode];
+$("#info").innerHTML=`<h2>${I.t}</h2><div class="nm">Normal: <b>${I.nm}</b></div><p><span class="tag">Kateter</span>${I.pos}</p><ul>${I.pts.map(x=>"<li>"+x+"</li>").join("")}</ul><div class="pit"><b>Dikkat:</b> ${I.pit}</div><p><span class="tag">Senaryo</span>${SC[scn].note}</p>`}
+/* Arayüz */
+$("#sc").innerHTML=Object.keys(SC).map(k=>`<option value="${k}">${SC[k].n}</option>`).join("");
+$("#btns").innerHTML=[["Sağ kalp (venöz)",["RA","RV","PA","PW"]],["Sol kalp (arteriyel retrograd veya transseptal)",["AO","LV","LA"]],["Gradient / pull-back",["O1","O2","O3"]]]
+.map(g=>`<div class="grp"><small>${g[0]}</small>${g[1].map(k=>`<button data-m="${k}">${LBL[k]}</button>`).join("")}</div>`).join("");
+$("#btns").onclick=e=>{if(e.target.dataset.m){mode=e.target.dataset.m;render()}};
+$("#sc").onchange=e=>{scn=e.target.value;render()};
+$("#hr").oninput=e=>{hr=+e.target.value;$("#hrv").textContent=hr};
+$("#rs").onchange=e=>{RESP=e.target.checked};$("#mkc").onchange=e=>{MKS=e.target.checked};
+/* Çizim */
+const cv=$("#cv"),cx=cv.getContext("2d");
+function fit(){const r=devicePixelRatio||1;W=cv.clientWidth;cv.width=W*r;cv.height=300*r;cx.setTransform(r,0,0,r,0,0)}
+addEventListener("resize",fit);fit();
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function loop(ts){const dt=last?(ts-last)/1000:0;last=ts;beat+=dt*hr/60;
+tm+=dt;if(LIVEON)liveStep(dt);if(HB){const f=beat%1,s=f>.2&&f<.55?Math.sin(Math.PI*(f-.2)/.35):0;HB.style.transform='scale('+(1-.035*s)+')'}const T=60/hr,ph=x=>(((beat-(1-x/W)*WIN/T)%1)+1)%1,tt=x=>tm-(1-x/W)*WIN,yv=v=>276-(v/ymax)*176;
+cx.clearRect(0,0,W,300);cx.font="11px system-ui";cx.lineWidth=1;cx.strokeStyle=css("--grid");cx.fillStyle=css("--mu");
+const st=ymax<=40?10:ymax<=100?20:50;
+for(let v=0;v<=ymax;v+=st){const y=yv(v);cx.beginPath();cx.moveTo(30,y);cx.lineTo(W,y);cx.stroke();cx.fillText(v,2,y+4)}
+cx.fillText("EKG",2,12);cx.fillText("mmHg",2,96);
+if(RESP){cx.fillText("Solunum",2,74);cx.strokeStyle="#8896a8";cx.lineWidth=1.2;cx.beginPath();for(let x=50;x<=W;x+=3){const y=76-Math.sin(6.2832*tt(x)/4)*9;x==50?cx.moveTo(x,y):cx.lineTo(x,y)}cx.stroke()}
+cx.strokeStyle="#2fa84f";cx.lineWidth=1.6;cx.beginPath();
+for(let x=30;x<=W;x+=1){const y=48-ecg(ph(x))*26;x==30?cx.moveTo(x,y):cx.lineTo(x,y)}cx.stroke();
+const ks=LIVEON?['X']:MODES[mode];
+if(ks.length==2){cx.fillStyle=mode=="O1"?"rgba(214,56,43,.22)":"rgba(224,138,0,.28)";
+const first=ks[0],second=ks[1];
+for(let x=30;x<=W;x+=2){const p=ph(x),a=vr(first,p,tt(x)),b=vr(second,p,tt(x));if(a>b){const ya=yv(a),yb=yv(b);cx.fillRect(x,ya,2,yb-ya)}}}
+ks.forEach(k=>{cx.strokeStyle=COL[k];cx.lineWidth=2.2;cx.beginPath();
+for(let x=30;x<=W;x+=2){const y=yv(vr(k,ph(x),tt(x)));x==30?cx.moveTo(x,y):cx.lineTo(x,y)}cx.stroke()});
+if(MKS){cx.font="10px system-ui";const nl=W>480;
+ks.forEach(k=>MKR[k].forEach(([f,l,dn])=>{
+if(mode=="O1"&&l!="sist")return;if((mode=="O2"||mode=="O3")&&l!=(k=="LV"?"EDP":"v"))return;
+for(let n=Math.floor(beat-WIN/T)-1;n<=Math.floor(beat)+1;n++){
+const x=W*(1-(beat-(n+f))*T/WIN);if(x<34||x>W-4)continue;
+const v=vr(k,f,tm-(1-x/W)*WIN),y=yv(v);
+cx.fillStyle=COL[k];cx.strokeStyle=css("--card");cx.lineWidth=1.5;cx.beginPath();cx.arc(x,y,3.5,0,6.283);cx.fill();cx.stroke();
+if(nl&&l){cx.fillStyle=css("--tx");cx.textAlign="center";cx.fillText(l+" "+R(v),x,dn?y+14:y-8)}}}));cx.textAlign="left"}
+requestAnimationFrame(loop)}
+$('#old').remove();
+$('#hv').innerHTML=`<svg viewBox='0 0 300 340' aria-label='Kalp'><defs><radialGradient id='gB' cx='50%' cy='40%' r='75%'><stop offset='0' stop-color='#9cc4ff' stop-opacity='.12'/><stop offset='1' stop-color='#2b6fd6' stop-opacity='.55'/></radialGradient><radialGradient id='gR' cx='50%' cy='40%' r='75%'><stop offset='0' stop-color='#ffb3a8' stop-opacity='.12'/><stop offset='1' stop-color='#d6382b' stop-opacity='.55'/></radialGradient></defs><g id='hb' style='transform-origin:155px 240px'>
+<ellipse cx='155' cy='238' rx='120' ry='108' fill='rgba(214,120,120,.07)'/>
+<g fill='none'><path d='M96,6V150M112,252V334' stroke='rgba(60,120,220,.3)' stroke-width='26'/><path d='M172,160V70C172,30 238,30 238,80V334' stroke='rgba(224,70,60,.3)' stroke-width='28'/><path d='M140,175V96C120,72 85,76 52,90' stroke='rgba(60,120,220,.3)' stroke-width='24'/><path d='M140,100C165,78 195,84 214,106' stroke='rgba(60,120,220,.3)' stroke-width='16'/><path d='M268,138L236,152M270,172L238,168' stroke='rgba(224,70,60,.3)' stroke-width='9'/></g>
+<g stroke-width='1.5'><path d='M62,150C56,112 96,106 124,124C146,138 152,168 148,196C145,218 122,224 98,220C72,214 66,184 62,150Z' fill='url(#gB)' stroke='rgba(70,130,230,.8)'/><path d='M104,218C108,270 140,305 176,322C172,282 166,240 162,202C140,206 120,209 104,218Z' fill='url(#gB)' stroke='rgba(70,130,230,.8)'/><path d='M184,142C198,118 250,116 264,148C272,176 250,192 214,190C190,187 176,162 184,142Z' fill='url(#gR)' stroke='rgba(230,80,70,.8)'/><path d='M166,198C200,180 254,190 254,236C254,286 216,318 176,322C178,290 172,236 166,198Z' fill='url(#gR)' stroke='rgba(230,80,70,.8)'/></g>
+<path d='M152,205C162,240 170,285 177,322' fill='none' stroke='rgba(255,255,255,.3)' stroke-width='3'/>
+<g fill='none' stroke-width='1.6' style='stroke:var(--tx);stroke-opacity:.45'><ellipse cx='128' cy='214' rx='20' ry='5'/><ellipse cx='140' cy='172' rx='12' ry='4'/><ellipse cx='205' cy='194' rx='22' ry='5'/><ellipse cx='172' cy='176' rx='12' ry='4'/></g>
+<g fill='rgba(255,255,255,.18)'><ellipse cx='146' cy='272' rx='4' ry='9'/><ellipse cx='208' cy='282' rx='5' ry='10'/><ellipse cx='228' cy='262' rx='4' ry='9'/></g>
+<g fill='none' stroke='rgba(230,80,70,.6)' stroke-width='1.6'><path d='M172,184C182,225 184,275 178,314'/><path d='M104,166C98,196 110,214 126,222'/></g>
+<path class='cp' style='opacity:.2' d='M56,92C90,150 150,138 236,152'/>
+<path id='pR' class='cp' d='M97,8V150L95,165C102,195 118,214 128,224L138,262C146,235 145,200 140,170V100C120,76 85,80 56,92'/>
+<path id='pL' class='cp' d='M238,334V80C238,40 172,40 172,72V176C180,205 200,230 214,250'/>
+<path id='pT' class='cp' d='M95,165C125,172 180,166 236,152'/>
+<circle class='dt' id='d-RA' cx='95' cy='165' r='8'/><circle class='dt' id='d-RV' cx='138' cy='262' r='8'/><circle class='dt' id='d-PA' cx='140' cy='110' r='8'/><circle class='dt' id='d-PCWP' cx='56' cy='92' r='8'/><circle class='dt' id='d-Ao' cx='172' cy='110' r='8'/><circle class='dt' id='d-LA' cx='236' cy='152' r='8'/><circle class='dt' id='d-LV' cx='214' cy='250' r='8'/>
+<text x='62' y='200'>RA</text><text x='116' y='290'>RV</text><text x='150' y='112'>PA</text><text x='30' y='76'>wedge</text><text x='181' y='112'>Ao</text><text x='206' y='176'>LA</text><text x='196' y='292'>LV</text><text x='112' y='22'>SVC</text><text x='128' y='326'>IVC</text>
+</g></svg>`;
+const HB=$('#hb');
+const MAXT={},LIVE={a:'RA',b:'RA',w:0},TM={RA:'RA',RV:'RV',PA:'PA',PCWP:'PW',Ao:'AO',LV:'LV',LA:'LA'};
+let LIVEON=false,route='R',u=0,auto=false,dir=1,lastDom='';
+const sv=$('#hv svg'),tip=document.createElementNS('http://www.w3.org/2000/svg','circle');
+tip.setAttribute('r','6');tip.style.cssText='fill:var(--ac);stroke:#fff;stroke-width:2;display:none';HB.appendChild(tip);
+const RT={R:{p:$('#pR'),seg:['RA','RV','PA','PCWP'],bt:[[128,224],[140,176],[80,86]],nm:['SVC / sağ atriyum','Sağ ventrikül','Pulmoner arter','Wedge (PCWP)'],tr:['Triküspit kapağı geçiliyor','Pulmoner kapak geçiliyor','Balon şişirilip wedge’e oturtuluyor']},
+L:{p:$('#pL'),seg:['Ao','LV'],bt:[[172,180]],nm:['Aorta (retrograd)','Sol ventrikül'],tr:['Aort kapağı geçiliyor']},
+T:{p:$('#pT'),seg:['RA','LA'],bt:[[152,168]],nm:['Sağ atriyum','Sol atriyum'],tr:['İnteratriyal septum (transseptal ponksiyon)']}};
+for(const q of Object.values(RT)){const n=300,len=q.p.getTotalLength();q.len=len;q.pts=[];for(let i=0;i<=n;i++){const t=q.p.getPointAtLength(i/n*len);q.pts.push([t.x,t.y])}
+q.b=q.bt.map(([x,y])=>{let bi=0,bd=1e9;q.pts.forEach((t,i)=>{const d=(t[0]-x)**2+(t[1]-y)**2;if(d<bd){bd=d;bi=i}});return bi/n*len})}
+function setU(v){const L=RT[route].len;u=Math.max(0,Math.min(L,v));$('#us').value=u/L*1000}
+function setAuto(v){auto=v;$('#auto').textContent=v?'⏸ Durdur':'▶ Otomatik ilerlet'}
+function liveStep(dt){const r=RT[route],L=r.len;
+if(auto){u+=dir*dt*L/14;if(u>=L){u=L;dir=-1}if(u<=0){u=0;dir=1}$('#us').value=u/L*1000}
+const d=10;let i=0;while(i<r.b.length&&u>r.b[i])i++;let a=r.seg[i],b=a,w=0,tr='';
+for(let j=0;j<r.b.length;j++)if(Math.abs(u-r.b[j])<d){a=r.seg[j];b=r.seg[j+1];w=(u-r.b[j]+d)/(2*d);w=w*w*(3-2*w);tr=r.tr[j];break}
+LIVE.a=a;LIVE.b=b;LIVE.w=w;const dom=w<.5?a:b;
+if(dom!==lastDom){lastDom=dom;mode=TM[dom];render()}
+MKR.X=MKR[dom];COL.X=COL[dom];
+const tg=Math.ceil(((1-w)*MAXT[a]+w*MAXT[b])*1.15/10)*10;ymax+=(tg-ymax)*Math.min(1,dt*6);
+const pt=r.p.getPointAtLength(u);tip.setAttribute('cx',pt.x);tip.setAttribute('cy',pt.y);
+for(const c in RT){const q=RT[c],on=c==route;q.p.classList.toggle('on',on);q.p.style.strokeDasharray=on?u+' 99999':''}
+$('#where').innerHTML='<b>'+(tr?tr+'…':r.nm[i])+'</b>'}
+let drag=false;
+function pick(e){const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(sv.getScreenCTM().inverse());let bi=0,bd=1e9;RT[route].pts.forEach((t,i)=>{const d=(t[0]-p.x)**2+(t[1]-p.y)**2;if(d<bd){bd=d;bi=i}});setU(bi/300*RT[route].len)}
+sv.addEventListener('pointerdown',e=>{if(LIVEON){drag=true;setAuto(false);sv.setPointerCapture(e.pointerId);pick(e)}});
+sv.addEventListener('pointermove',e=>{if(drag)pick(e)});
+sv.addEventListener('pointerup',()=>{drag=false});
+$('#us').oninput=e=>{setAuto(false);setU(+e.target.value/1000*RT[route].len)};
+$('#auto').onclick=()=>setAuto(!auto);
+document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{route=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.classList.toggle('on',x==b));setAuto(false);dir=1;setU(0);lastDom=''});
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{LIVEON=b.dataset.t=='c';document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x==b));$('#btns').hidden=LIVEON;$('#livectl').hidden=!LIVEON;tip.style.display=LIVEON?'':'none';sv.style.touchAction=LIVEON?'none':'';
+if(LIVEON){lastDom='';setU(0)}else{setAuto(false);for(const c in RT)RT[c].p.style.strokeDasharray='';render()}});
+render();requestAnimationFrame(loop);
+</script></body></html>
+"""
+
+
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.title(APP_TITLE)
@@ -1742,6 +2093,7 @@ with st.sidebar:
         "Menü",
         [
             "🧠 Soru Bankası",
+            "🩺 Kateterizasyon Simülasyonu",
             "🧮 Mitral Yetmezlik Hesaplayıcı",
             "🫀 Diyastolik Disfonksiyon Hesaplayıcı",
             "🏥 NEÜ Klinik Çalışmalar",
@@ -2324,6 +2676,13 @@ if menu == "🧠 Soru Bankası":
 
         if kaynak and not media_kind:
             st.caption(f"📚 Kaynak: {kaynak}")
+
+
+# =========================================================
+# ===================== EKRAN KS: KATETERİZASYON SİMÜLASYONU =====
+# =========================================================
+elif menu == "🩺 Kateterizasyon Simülasyonu":
+    components.html(_CATH_SIM_HTML, height=1500, scrolling=True)
 
 
 # =========================================================
