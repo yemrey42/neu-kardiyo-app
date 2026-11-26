@@ -2085,6 +2085,603 @@ render();requestAnimationFrame(loop);
 """
 
 
+# ===================== KATETERİZASYON HEMODİNAMİ HESAPLAYICI (HTML) =====================
+_CATH_CALC_HTML = r"""<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kateterizasyon Hemodinami Hesaplayıcı</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--tx:#1b2430;--mu:#5d6b7c;--bd:#dde2e8;--sh:#eef1f5;--ac:#c0392b;--ok:#1f9d6b;--wa:#d99a00;--ba:#d6363e;--in:#2f6fd1;--chip:rgba(255,255,255,.86)}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18202a;--tx:#e6ebf1;--mu:#9aa7b6;--bd:#2a3542;--sh:#212b37;--chip:rgba(24,32,42,.86);color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:14px}
+h1{font-size:21px;margin:2px 0}.sub{color:var(--mu);margin:0 0 12px;font-size:14px}
+h2{font-size:16px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select,input{font:inherit;color:var(--tx)}
+button{padding:6px 12px;border-radius:18px;border:1px solid var(--bd);background:var(--card);cursor:pointer}
+button.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+select{padding:5px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--card)}
+.pt{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px 10px;margin-top:10px}
+.pt label{display:flex;flex-direction:column;font-size:12px;color:var(--mu)}
+.pt input,.pt select{margin-top:2px;padding:5px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--card);width:100%}
+.pt .calc{font-size:12px;color:var(--mu);align-self:end;padding-bottom:6px}
+.pt .calc b{color:var(--tx)}
+/* sahne */
+#stageWrap{position:relative;width:100%;overflow:hidden}
+#stage{position:absolute;left:0;top:0;width:980px;height:790px;transform-origin:0 0}
+#heart{position:absolute;inset:0;width:980px;height:790px}
+.chip{position:absolute;background:var(--chip);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--bd);border-left:5px solid var(--bd);border-radius:12px;padding:6px 8px 7px;box-shadow:0 4px 14px rgba(0,0,0,.12);transition:border-color .3s,box-shadow .3s}
+.chip.ok{border-left-color:var(--ok)}.chip.warn{border-left-color:var(--wa)}.chip.bad{border-left-color:var(--ba);box-shadow:0 0 0 2px rgba(214,54,62,.25),0 4px 14px rgba(0,0,0,.12)}
+.chip:focus-within{box-shadow:0 0 0 3px rgba(47,111,209,.35),0 6px 18px rgba(0,0,0,.18)}
+.ct{font-weight:700;font-size:13px;display:flex;align-items:baseline;gap:6px;margin-bottom:3px;white-space:nowrap}
+.ct small{font-weight:400;color:var(--mu);font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.fs{display:flex;flex-wrap:wrap;gap:5px}
+.f{display:flex;flex-direction:column;font-size:10.5px;color:var(--mu);line-height:1.2}
+.f input{width:46px;padding:3px 4px;margin-top:1px;border:1px solid var(--bd);border-radius:6px;background:var(--card);text-align:center;font-size:13px;font-variant-numeric:tabular-nums}
+.f input.sat{border-color:#c9a3a8}
+.f input::placeholder{color:var(--mu);opacity:.75}
+.out{font-size:11.5px;margin-top:3px;color:var(--tx);font-variant-numeric:tabular-nums}
+.out b{font-size:13px}
+#chipGrid{display:none;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px}
+.compact #chipGrid{display:grid}
+.compact #chipGrid .chip{position:static;width:auto!important}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mu);margin-top:6px;align-items:center}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.satbar{width:120px;height:10px;border-radius:5px;background:linear-gradient(90deg,#3c4fa8,#7b5aa6 55%,#d8323b);display:inline-block;vertical-align:-1px}
+/* sonuçlar */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tile{background:var(--sh);border-radius:10px;padding:7px 10px;border-top:3px solid transparent}
+.tile small{display:block;color:var(--mu);font-size:11.5px}
+.tile b{font-size:20px;font-variant-numeric:tabular-nums}.tile span{font-size:12px;color:var(--mu)}
+.tile em{display:block;font-style:normal;font-size:10.5px;color:var(--mu)}
+.tile.ok{border-top-color:var(--ok)}.tile.warn{border-top-color:var(--wa)}.tile.bad{border-top-color:var(--ba)}.tile.bad b{color:var(--ba)}
+.tile.na{opacity:.55}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.g2{grid-template-columns:1fr}}
+.viz svg{width:100%;height:auto;display:block}
+.viz text{font-family:inherit}
+.headline{border-radius:14px;padding:14px 16px;margin-bottom:12px;color:#fff;background:linear-gradient(120deg,#33475b,#4b6584)}
+.headline.bad{background:linear-gradient(120deg,#9b1c24,#d6363e)}.headline.warn{background:linear-gradient(120deg,#9a6a00,#d99a00)}.headline.ok{background:linear-gradient(120deg,#0f6b48,#1f9d6b)}
+.headline small{opacity:.85;font-size:12px;display:block}.headline b{font-size:22px;line-height:1.2;display:block;margin:2px 0}
+.headline .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.headline .chips span{background:rgba(255,255,255,.18);border-radius:12px;padding:2px 9px;font-size:12.5px}
+.fd{list-style:none;padding:0;margin:0}
+.fd li{display:flex;gap:10px;padding:8px 4px;border-bottom:1px solid var(--bd)}
+.fd li:last-child{border-bottom:0}
+.fd .ic{flex:0 0 22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
+.fd .ok .ic{background:var(--ok)}.fd .warn .ic{background:var(--wa)}.fd .bad .ic{background:var(--ba)}.fd .info .ic{background:var(--in)}
+.fd b{display:block;font-size:14px}.fd span{font-size:13px;color:var(--mu)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--bd);padding:5px 6px;text-align:left}
+th{color:var(--mu);font-weight:600}
+.rk{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;color:#fff}
+.rk.l{background:var(--ok)}.rk.i{background:var(--wa)}.rk.h{background:var(--ba)}
+details{margin-top:4px}summary{cursor:pointer;font-weight:600}
+textarea{width:100%;min-height:180px;font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--bd);border-radius:8px;background:var(--sh);color:var(--tx);padding:8px}
+.foot{color:var(--mu);font-size:12px}
+.note{font-size:12px;color:var(--mu)}
+/* svg sınıfları */
+.chm{stroke-width:3;transition:fill .5s,stroke .4s}
+.chm.ok{stroke:var(--ok)}.chm.warn{stroke:var(--wa)}.chm.bad{stroke:var(--ba)}.chm.na{stroke:rgba(120,130,145,.55)}
+.chm.bad{filter:url(#glow)}
+.lbl{font-weight:800;font-size:46px;fill:#fff;opacity:.16;pointer-events:none}
+.vlbl{font-weight:700;font-size:13px;fill:var(--mu)}
+#beat{transform-box:view-box;transform-origin:450px 470px;animation:beat 0.857s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}12%{transform:scale(1.012)}30%{transform:scale(.993)}}
+@media (prefers-reduced-motion:reduce){#beat{animation:none}}
+.shunt{display:none}.shunt.on{display:inline}
+@media print{.noprint{display:none}#stageWrap{break-inside:avoid}}
+</style></head><body><div class="wrap">
+
+<h1>Kalp Kateterizasyonu Hemodinami Hesaplayıcı</h1>
+<p class="sub">Basınç ve oksimetri değerlerini kalbin üzerindeki ilgili boşluğa girin. Debi (Fick/TD), direnç, şant, kapak alanı ve PH sınıflaması anında hesaplanır, kalp üzerinde renklendirilir ve yorumlanır.</p>
+
+<div class="card noprint">
+  <div class="bar">
+    <label>Örnek vaka <select id="preset">
+      <option value="">— seçin —</option>
+      <option value="normal">Normal hemodinami</option>
+      <option value="pah">Prekapiller PH (PAH)</option>
+      <option value="cpc">Sol kalp hastalığı – CpcPH</option>
+      <option value="ipc">Sol kalp hastalığı – IpcPH</option>
+      <option value="asd">Sekundum ASD (sol→sağ şant)</option>
+      <option value="vsd">VSD (ventriküler düzey şant)</option>
+      <option value="as">Ciddi aort darlığı</option>
+      <option value="ms">Ciddi mitral darlık</option>
+      <option value="shock">Kardiyojenik şok (AMI)</option>
+      <option value="cp">Konstriktif perikardit</option>
+    </select></label>
+    <button id="clear">Temizle</button>
+    <button id="copy" class="pri">📋 Raporu kopyala</button>
+    <button id="print">🖨️ Yazdır</button>
+  </div>
+  <div class="pt">
+    <label>Boy (cm)<input id="h" inputmode="decimal"></label>
+    <label>Kilo (kg)<input id="w" inputmode="decimal"></label>
+    <label>Yaş<input id="age" inputmode="decimal"></label>
+    <label>Cinsiyet<select id="sex"><option value="M">Erkek</option><option value="F">Kadın</option></select></label>
+    <label>Kalp hızı (/dk)<input id="hr" inputmode="decimal"></label>
+    <label>Hb (g/dL)<input id="hb" inputmode="decimal"></label>
+    <label>VO₂ yöntemi<select id="vo2m"><option value="std">Varsayılan 125 mL/dk/m²</option><option value="lf">LaFarge (yaş, cins, KH)</option><option value="meas">Ölçülen</option></select></label>
+    <label>Ölçülen VO₂ (mL/dk)<input id="vo2" inputmode="decimal" placeholder="ops."></label>
+    <label>TD debisi (L/dk)<input id="tdco" inputmode="decimal" placeholder="ops."></label>
+    <label>Hesapta debi<select id="cosrc"><option value="fick">Fick</option><option value="td">Termodilüsyon</option></select></label>
+    <label>SEP (sn/atım)<input id="sep" inputmode="decimal" placeholder="AS için"></label>
+    <label>DFP (sn/atım)<input id="dfp" inputmode="decimal" placeholder="MS için"></label>
+    <label>Protokol / not<input id="note" placeholder="ops."></label>
+    <div class="calc">VKA <b id="o_bsa">—</b> m²<br>VO₂ <b id="o_vo2">—</b> mL/dk</div>
+  </div>
+</div>
+
+<div class="card" id="heartCard">
+<div id="stageWrap"><div id="stage">
+<svg id="heart" viewBox="0 0 980 790" aria-label="Kalp şeması üzerinde hemodinami girişi">
+<defs>
+  <radialGradient id="shade" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>
+  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="soft" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity=".22"/></filter>
+  <marker id="arw" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#fff"/></marker>
+  <marker id="arwS" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ffd24a"/></marker>
+  <path id="fR1" d="M200,30 L200,250 C205,320 250,360 290,420 C320,480 300,560 350,560 C395,560 405,500 405,440 L405,175 C405,140 392,128 360,128 L222,128"/>
+  <path id="fR2" d="M134,745 L134,390 C134,345 170,335 240,330 C300,335 320,400 300,460 C285,520 330,590 380,560 C402,540 405,490 405,440 L405,175 C405,142 420,132 452,132 L688,132"/>
+  <path id="fL1" d="M880,240 L735,240 C650,245 610,300 610,390 C610,480 600,580 545,560 C510,545 503,490 503,440 L503,140 C503,62 560,52 640,52 C730,52 795,72 795,165 L795,745"/>
+  <path id="fL2" d="M880,330 L735,330 C670,335 640,360 630,410 C620,500 610,600 540,580 C505,560 503,500 503,440 L503,140 C503,62 560,52 640,52 C730,52 795,72 795,165 L795,745"/>
+  <path id="fASD" d="M600,352 C520,346 470,346 300,352"/>
+  <path id="fASDr" d="M300,300 C470,308 520,308 600,300"/>
+  <path id="fVSD" d="M610,612 C520,606 400,606 340,612"/>
+  <path id="fPDA" d="M620,62 L620,128"/>
+</defs>
+<g id="beat" filter="url(#soft)">
+  <!-- inen aorta (arka plan) -->
+  <path d="M795,160 L795,745" stroke="#7a1f27" stroke-width="56" stroke-linecap="round" fill="none"/>
+  <path id="v_aoD" d="M795,160 L795,745" stroke="#c83a3f" stroke-width="48" stroke-linecap="round" fill="none"/>
+  <!-- PA dalları ve gövde -->
+  <path d="M405,420 L405,175 C405,140 392,128 360,128 L222,128 M405,175 C405,142 420,132 452,132 L688,132" stroke="#2b2f55" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path id="v_pa" d="M405,420 L405,175 C405,140 392,128 360,128 L222,128 M405,175 C405,142 420,132 452,132 L688,132" stroke="#6a5aa8" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- PDA bağlantısı -->
+  <path class="shunt" id="pdaTube" d="M620,72 L620,126" stroke="#ffd24a" stroke-width="16" stroke-linecap="round" fill="none" opacity=".9"/>
+  <!-- boşluklar -->
+  <path id="c_ra" class="chm na" d="M195,192 C150,195 140,232 142,282 C144,342 150,396 205,398 L398,398 L400,232 C400,206 382,192 356,192 Z"/>
+  <path d="M195,192 C150,195 140,232 142,282 C144,342 150,396 205,398 L398,398 L400,232 C400,206 382,192 356,192 Z" fill="url(#shade)" pointer-events="none"/>
+  <path id="c_la" class="chm na" d="M470,194 L700,194 C726,194 736,214 736,240 L736,352 C736,382 716,398 690,398 L470,398 Z"/>
+  <path d="M470,194 L700,194 C726,194 736,214 736,240 L736,352 C736,382 716,398 690,398 L470,398 Z" fill="url(#shade)" pointer-events="none"/>
+  <path id="c_rv" class="chm na" d="M170,410 L444,410 L446,702 C410,716 300,668 222,592 C176,548 160,482 170,410 Z"/>
+  <path d="M170,410 L444,410 L446,702 C410,716 300,668 222,592 C176,548 160,482 170,410 Z" fill="url(#shade)" pointer-events="none"/>
+  <path id="c_lv" class="chm na" d="M458,410 L740,410 C754,472 750,566 700,634 C640,704 540,738 458,736 Z"/>
+  <path d="M458,410 L740,410 C754,472 750,566 700,634 C640,704 540,738 458,736 Z" fill="url(#shade)" pointer-events="none"/>
+  <!-- pulmoner venler -->
+  <path d="M880,240 L728,240 M880,330 L728,330" stroke="#7a1f27" stroke-width="36" stroke-linecap="round" fill="none"/>
+  <path id="v_pv" d="M880,240 L728,240 M880,330 L728,330" stroke="#d8323b" stroke-width="29" stroke-linecap="round" fill="none"/>
+  <!-- vena kavalar -->
+  <path d="M200,26 L200,205" stroke="#232744" stroke-width="50" stroke-linecap="round" fill="none"/>
+  <path id="v_svc" d="M200,26 L200,205" stroke="#55509a" stroke-width="42" stroke-linecap="round" fill="none"/>
+  <path d="M134,745 L134,390 C134,352 150,340 172,338" stroke="#232744" stroke-width="50" stroke-linecap="round" fill="none"/>
+  <path id="v_ivc" d="M134,745 L134,390 C134,352 150,340 172,338" stroke="#55509a" stroke-width="42" stroke-linecap="round" fill="none"/>
+  <!-- çıkan aorta + arkus (önde) -->
+  <path d="M503,420 L503,140 C503,62 560,52 640,52 C730,52 795,72 795,165" stroke="#7a1f27" stroke-width="56" stroke-linecap="round" fill="none"/>
+  <path id="v_ao" d="M503,420 L503,140 C503,62 560,52 640,52 C730,52 795,72 795,165" stroke="#c83a3f" stroke-width="48" stroke-linecap="round" fill="none"/>
+  <!-- kapaklar -->
+  <g stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".85" fill="none">
+    <path d="M205,404 Q262,420 300,404 Q340,420 392,404"/>
+    <path d="M480,404 Q560,422 600,404 Q650,422 728,404"/>
+    <path d="M385,416 Q405,428 425,416"/>
+    <path d="M481,416 Q503,430 525,416"/>
+  </g>
+  <!-- şant okları -->
+  <g id="shG" fill="none" stroke-linecap="round">
+    <path class="shunt" id="asdArrow" d="M548,352 L330,352" stroke="#ffd24a" stroke-width="7" stroke-dasharray="10 8" marker-end="url(#arwS)"/>
+    <path class="shunt" id="vsdArrow" d="M580,612 L360,612" stroke="#ffd24a" stroke-width="7" stroke-dasharray="10 8" marker-end="url(#arwS)"/>
+  </g>
+  <!-- etiketler -->
+  <text class="lbl" x="232" y="385">RA</text><text class="lbl" x="250" y="660">RV</text>
+  <text class="lbl" x="620" y="385">LA</text><text class="lbl" x="580" y="690">LV</text>
+  <text class="vlbl" x="214" y="222" transform="rotate(-90 214 222)">SVC</text>
+  <text class="vlbl" x="120" y="700">IVC</text>
+  <text class="vlbl" x="236" y="168">RPA</text><text class="vlbl" x="640" y="168">LPA</text>
+  <text class="vlbl" x="808" y="720">Desc. Ao</text>
+  <text class="vlbl" x="828" y="372">Pulm. venler</text>
+    <g id="particles"></g>
+  <g id="shLbl" class="shunt"><rect x="380" y="310" width="158" height="26" rx="13" fill="#ffd24a"/><text id="shTxt" x="440" y="276" text-anchor="middle" font-size="14" font-weight="700" fill="#3a2a00">Şant</text></g>
+</g>
+</svg>
+
+<!-- giriş çipleri (kalp üzerinde) -->
+<div class="chip" data-c="svc" style="left:12px;top:38px;width:160px"><div class="ct"><span>SVC</span><small>süp. vena kava</small></div><div class="fs"><label class="f">SO₂ %<input id="svc_s" class="sat" inputmode="decimal"></label></div></div>
+<div class="chip" data-c="ivc" style="left:4px;top:590px;width:108px"><div class="ct"><span>IVC</span></div><div class="fs"><label class="f">SO₂ %<input id="ivc_s" class="sat" inputmode="decimal"></label></div></div>
+<div class="chip" data-c="ra" style="left:158px;top:206px;width:222px"><div class="ct"><span>RA</span><small>sağ atriyum · mmHg</small></div><div class="fs"><label class="f">a<input id="ra_a" inputmode="decimal"></label><label class="f">v<input id="ra_v" inputmode="decimal"></label><label class="f">ort<input id="ra_m" inputmode="decimal"></label><label class="f">SO₂ %<input id="ra_s" class="sat" inputmode="decimal"></label></div><div class="out" id="out_ra"></div></div>
+<div class="chip" data-c="rv" style="left:188px;top:438px;width:196px"><div class="ct"><span>RV</span><small>sağ ventrikül</small></div><div class="fs"><label class="f">sist<input id="rv_sys" inputmode="decimal"></label><label class="f">EDP<input id="rv_edp" inputmode="decimal"></label><label class="f">SO₂ %<input id="rv_s" class="sat" inputmode="decimal"></label></div><div class="out" id="out_rv"></div></div>
+<div class="chip" data-c="pa" style="left:232px;top:6px;width:236px"><div class="ct"><span>PA</span><small>pulmoner arter · mmHg</small></div><div class="fs"><label class="f">sist<input id="pa_sys" inputmode="decimal"></label><label class="f">diyast<input id="pa_dia" inputmode="decimal"></label><label class="f">ort<input id="pa_m" inputmode="decimal"></label><label class="f">SO₂ %<input id="pa_s" class="sat" inputmode="decimal"></label></div></div>
+<div class="chip" data-c="la" style="left:540px;top:212px;width:184px"><div class="ct"><span>PCWP / LA</span><small>mmHg</small></div><div class="fs"><label class="f">a<input id="pw_a" inputmode="decimal"></label><label class="f">v<input id="pw_v" inputmode="decimal"></label><label class="f">ort<input id="pw_m" inputmode="decimal"></label></div><div class="out" id="out_la"></div></div>
+<div class="chip" data-c="lv" style="left:536px;top:456px;width:170px"><div class="ct"><span>LV</span><small>sol ventrikül</small></div><div class="fs"><label class="f">sist<input id="lv_sys" inputmode="decimal"></label><label class="f">EDP<input id="lv_edp" inputmode="decimal"></label></div><div class="out" id="out_lv"></div></div>
+<div class="chip" data-c="ao" style="left:832px;top:40px;width:142px"><div class="ct"><span>Aorta</span></div><div class="fs"><label class="f">sist<input id="ao_sys" inputmode="decimal"></label><label class="f">diyast<input id="ao_dia" inputmode="decimal"></label><label class="f">ort<input id="ao_m" inputmode="decimal"></label><label class="f">SO₂ %<input id="ao_s" class="sat" inputmode="decimal"></label></div><div class="out" id="out_ao"></div></div>
+<div class="chip" data-c="pv" style="left:828px;top:262px;width:146px"><div class="ct"><span>PV</span><small>pulm. ven</small></div><div class="fs"><label class="f">SO₂ %<input id="pv_s" class="sat" inputmode="decimal" placeholder="vars."></label></div></div>
+<div class="chip" data-c="av" style="left:436px;top:372px;width:140px"><div class="ct"><span>Aort kapak</span></div><div class="fs"><label class="f">ort. grad<input id="av_mg" inputmode="decimal"></label></div><div class="out" id="out_av"></div></div>
+<div class="chip" data-c="mv" style="left:592px;top:372px;width:140px"><div class="ct"><span>Mitral kapak</span></div><div class="fs"><label class="f">ort. grad<input id="mv_mg" inputmode="decimal"></label></div><div class="out" id="out_mv"></div></div>
+</div></div>
+<div id="chipGrid"></div>
+<div class="legend"><span><span class="satbar"></span> SO₂ %40 → %100 (boşluk rengi)</span><span><i style="background:var(--ok)"></i>normal</span><span><i style="background:var(--wa)"></i>sınırda/artmış</span><span><i style="background:var(--ba)"></i>belirgin anormal</span><span><i style="background:#ffd24a"></i>şant</span><span>Boş bırakılan ortalama PA/Ao basıncı (S+2D)/3 ile tahmin edilir.</span></div>
+</div>
+
+<div id="headline" class="headline"><small>Hemodinamik profil</small><b id="hl_t">Değer girin veya örnek vaka seçin</b><div class="chips" id="hl_c"></div></div>
+
+<div class="card"><h2>Hesaplanan değerler</h2><div class="tiles" id="tiles"></div></div>
+
+<div class="g2">
+  <div class="card viz"><h2>Forrester / hemodinamik profil</h2><svg id="forr" viewBox="0 0 340 260"></svg><div class="note">X: PCWP (mmHg), Y: kardiyak indeks (L/dk/m²). Eşikler: PCWP 18, CI 2.2.</div></div>
+  <div class="card viz"><h2>Pulmoner hipertansiyon sınıflaması</h2><svg id="phtree" viewBox="0 0 440 260"></svg><div class="note">ESC/ERS 2022 hemodinamik tanımları.</div></div>
+</div>
+
+<div class="card viz"><h2>Oksimetri koşusu (saturasyon basamağı)</h2><svg id="oxy" viewBox="0 0 700 230"></svg><div class="note" id="oxyNote">Tek örnek eşikleri: atriyal ≥%11 (SVC→RA), ventriküler ≥%10 (RA→RV), büyük arter ≥%5 (RV→PA).</div></div>
+
+<div class="card"><h2>Yorum</h2><ul class="fd" id="find"></ul></div>
+
+<div class="card" id="riskCard" style="display:none"><h2>PAH risk değerlendirmesi – hemodinamik parametreler (ESC/ERS 2022)</h2>
+<table><thead><tr><th>Parametre</th><th>Değer</th><th>Düşük</th><th>Orta</th><th>Yüksek</th><th>Sınıf</th></tr></thead><tbody id="riskBody"></tbody></table>
+<div class="note">Tam risk değerlendirmesi WHO-FC, 6DYT, BNP/NT-proBNP ve görüntüleme ile birlikte yapılmalıdır.</div></div>
+
+<div class="card noprint"><details><summary>Metin raporu</summary><textarea id="report" readonly></textarea></details>
+<details><summary>Formüller ve normal değerler</summary>
+<table>
+<tr><th>Parametre</th><th>Formül</th><th>Normal</th></tr>
+<tr><td>VKA</td><td>√(boy × kilo / 3600) (Mosteller)</td><td>—</td></tr>
+<tr><td>VO₂</td><td>125 mL/dk/m² × VKA · LaFarge: E 138,1 − 11,49·ln(yaş) + 0,378·KH; K 138,1 − 17,04·ln(yaş) + 0,378·KH</td><td>—</td></tr>
+<tr><td>Fick debi (Qs)</td><td>VO₂ / [1,36 × Hb × 10 × (SaO₂ − SvO₂)]</td><td>4–8 L/dk · CI 2,5–4,0</td></tr>
+<tr><td>Qp</td><td>VO₂ / [1,36 × Hb × 10 × (SpvO₂ − SpaO₂)]</td><td>Qp/Qs ≈ 1,0</td></tr>
+<tr><td>Karışık venöz</td><td>Basamak yoksa PA; atriyal şantta Flamm (3·SVC + IVC)/4; ventriküler şantta RA; büyük arter düzeyinde RV</td><td>SvO₂ %65–80</td></tr>
+<tr><td>PVR</td><td>(mPAP − PCWP) / Qp</td><td>≤2 WU</td></tr>
+<tr><td>SVR</td><td>(OAB − RAP) / Qs × 80</td><td>800–1200 dyn·s·cm⁻⁵</td></tr>
+<tr><td>TPG / DPG</td><td>mPAP − PCWP / dPAP − PCWP</td><td>≤12 / &lt;7 mmHg</td></tr>
+<tr><td>PA kompliyansı</td><td>SV / (sPAP − dPAP)</td><td>&gt;2,3 mL/mmHg</td></tr>
+<tr><td>PAPi</td><td>(sPAP − dPAP) / RAP</td><td>&gt;0,9 (AMİ), &gt;1,85 (KY)</td></tr>
+<tr><td>CPO</td><td>OAB × CO / 451</td><td>≥0,6 W</td></tr>
+<tr><td>Gorlin AVA</td><td>CO(mL/dk) / (KH × SEP × 44,3 × √ort. gradyan)</td><td>Ciddi &lt;1,0 cm² (AVAi &lt;0,6)</td></tr>
+<tr><td>Gorlin MVA</td><td>CO(mL/dk) / (KH × DFP × 37,7 × √ort. gradyan)</td><td>Anlamlı ≤1,5 cm²</td></tr>
+<tr><td>Hakki</td><td>CO(L/dk) / √gradyan (AS: tepe-tepe; MS: ortalama)</td><td>SEP/DFP yoksa yaklaşık</td></tr>
+</table></details>
+<p class="foot">Karar destek ve eğitim amaçlıdır. Sonuçlar ölçüm kalitesi (sıfırlama, wedge doğrulaması, solunum sonu okuma, eş zamanlı örnekleme) ve klinik bağlamla birlikte yorumlanmalıdır. Kaynaklar: ESC/ERS 2022 PH, ESC/EACTS 2025 kapak hastalığı, ESC 2020 erişkin doğumsal kalp hastalığı kılavuzları.</p></div>
+
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const IDS=['h','w','age','sex','hr','hb','vo2m','vo2','tdco','cosrc','sep','dfp','note','svc_s','ivc_s','ra_a','ra_v','ra_m','ra_s','rv_sys','rv_edp','rv_s','pa_sys','pa_dia','pa_m','pa_s','pw_a','pw_v','pw_m','pv_s','lv_sys','lv_edp','ao_sys','ao_dia','ao_m','ao_s','av_mg','mv_mg'];
+function n(id){const e=$(id);if(!e)return null;const s=String(e.value).trim().replace(',','.');if(s==='')return null;const x=parseFloat(s);return isFinite(x)?x:null}
+const has=(...a)=>a.every(x=>x!==null&&x!==undefined&&isFinite(x));
+function f(x,d=1){return has(x)?x.toFixed(d).replace('.',','):'—'}
+// saturasyon → renk
+function satColor(s){if(!has(s))return null;const t=Math.max(0,Math.min(1,(s-40)/60));const st=[[60,79,168],[123,90,166],[216,50,59]];const k=t<.55?0:1;const u=k?(t-.55)/.45:t/.55;const a=st[k],b=st[k+1];return`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*u)).join(',')})`}
+function dark(c,k=.55){const m=c.match(/\d+/g).map(Number);return`rgb(${m.map(v=>Math.round(v*k)).join(',')})`}
+
+const PRESETS={
+normal:{h:172,w:72,age:45,sex:'M',hr:70,hb:14,svc_s:74,ivc_s:79,ra_a:6,ra_v:5,ra_m:4,ra_s:75,rv_sys:25,rv_edp:4,rv_s:75,pa_sys:24,pa_dia:10,pa_m:15,pa_s:75,pw_a:10,pw_v:12,pw_m:9,lv_sys:118,lv_edp:9,ao_sys:118,ao_dia:72,ao_m:86,ao_s:97},
+pah:{h:165,w:62,age:38,sex:'F',hr:92,hb:13,svc_s:58,ivc_s:62,ra_a:17,ra_v:15,ra_m:14,ra_s:59,rv_sys:86,rv_edp:14,rv_s:59,pa_sys:85,pa_dia:35,pa_m:52,pa_s:58,pw_a:9,pw_v:10,pw_m:9,lv_sys:104,lv_edp:9,ao_sys:105,ao_dia:68,ao_m:80,ao_s:95},
+cpc:{h:160,w:84,age:71,sex:'F',hr:78,hb:12.5,svc_s:62,ivc_s:66,ra_a:14,ra_v:13,ra_m:12,ra_s:63,rv_sys:66,rv_edp:12,rv_s:63,pa_sys:65,pa_dia:30,pa_m:42,pa_s:63,pw_a:22,pw_v:30,pw_m:24,lv_sys:142,lv_edp:24,ao_sys:140,ao_dia:78,ao_m:99,ao_s:95},
+ipc:{h:175,w:88,age:66,sex:'M',hr:74,hb:13.5,svc_s:66,ivc_s:70,ra_a:11,ra_v:10,ra_m:9,ra_s:67,rv_sys:42,rv_edp:9,rv_s:67,pa_sys:42,pa_dia:22,pa_m:29,pa_s:67,pw_a:20,pw_v:26,pw_m:22,lv_sys:130,lv_edp:21,ao_sys:130,ao_dia:75,ao_m:93,ao_s:96},
+asd:{h:168,w:64,age:34,sex:'F',hr:76,hb:13.4,svc_s:70,ivc_s:74,ra_a:8,ra_v:7,ra_m:6,ra_s:84,rv_sys:38,rv_edp:6,rv_s:85,pa_sys:36,pa_dia:14,pa_m:22,pa_s:85,pw_a:9,pw_v:10,pw_m:8,lv_sys:115,lv_edp:8,ao_sys:115,ao_dia:70,ao_m:85,ao_s:97,pv_s:98},
+vsd:{h:170,w:66,age:24,sex:'M',hr:80,hb:14.5,svc_s:72,ivc_s:76,ra_a:7,ra_v:6,ra_m:5,ra_s:73,rv_sys:48,rv_edp:7,rv_s:85,pa_sys:46,pa_dia:18,pa_m:28,pa_s:86,pw_a:11,pw_v:13,pw_m:10,lv_sys:118,lv_edp:10,ao_sys:118,ao_dia:68,ao_m:84,ao_s:97,pv_s:98},
+as:{h:162,w:72,age:77,sex:'F',hr:72,hb:12.8,sep:0.33,svc_s:65,ivc_s:69,ra_a:10,ra_v:9,ra_m:8,ra_s:66,rv_sys:46,rv_edp:8,rv_s:66,pa_sys:42,pa_dia:19,pa_m:28,pa_s:66,pw_a:24,pw_v:22,pw_m:20,lv_sys:192,lv_edp:22,ao_sys:122,ao_dia:68,ao_m:88,ao_s:96,av_mg:50},
+ms:{h:160,w:58,age:44,sex:'F',hr:78,hb:12.6,dfp:0.44,svc_s:61,ivc_s:65,ra_a:12,ra_v:14,ra_m:11,ra_s:62,rv_sys:62,rv_edp:10,rv_s:62,pa_sys:60,pa_dia:30,pa_m:41,pa_s:62,pw_a:'',pw_v:34,pw_m:25,lv_sys:108,lv_edp:6,ao_sys:108,ao_dia:68,ao_m:82,ao_s:95,mv_mg:11},
+shock:{h:174,w:82,age:62,sex:'M',hr:112,hb:12,svc_s:44,ivc_s:49,ra_a:17,ra_v:18,ra_m:16,ra_s:45,rv_sys:42,rv_edp:16,rv_s:45,pa_sys:42,pa_dia:26,pa_m:32,pa_s:45,pw_a:26,pw_v:38,pw_m:28,lv_sys:84,lv_edp:28,ao_sys:82,ao_dia:55,ao_m:64,ao_s:95},
+cp:{h:176,w:74,age:58,sex:'M',hr:88,hb:13.6,svc_s:63,ivc_s:67,ra_a:19,ra_v:18,ra_m:18,ra_s:64,rv_sys:36,rv_edp:18,rv_s:64,pa_sys:36,pa_dia:19,pa_m:25,pa_s:64,pw_a:20,pw_v:21,pw_m:19,lv_sys:104,lv_edp:20,ao_sys:105,ao_dia:68,ao_m:80,ao_s:96}
+};
+
+// ---------- sahne ölçekleme ----------
+const wrapEl=$('stageWrap'),stage=$('stage'),chips=[...document.querySelectorAll('.chip')],grid=$('chipGrid');
+let compact=null;
+function fit(){const W=wrapEl.clientWidth;const s=W/980;const c=W<640;
+ if(c!==compact){compact=c;document.body.classList.toggle('compact',c);chips.forEach(ch=>(c?grid:stage).appendChild(ch))}
+ stage.style.transform=`scale(${s})`;wrapEl.style.height=(790*s)+'px'}
+new ResizeObserver(fit).observe(wrapEl);fit();
+
+// ---------- parçacık akışı ----------
+const NS='http://www.w3.org/2000/svg',PG=$('particles');
+const FLOWS=[{id:'fR1',n:7,side:'R'},{id:'fR2',n:9,side:'R'},{id:'fL1',n:9,side:'L'},{id:'fL2',n:8,side:'L'},{id:'fASD',n:5,side:'S',sh:'asd'},{id:'fVSD',n:5,side:'S',sh:'vsd'},{id:'fPDA',n:3,side:'S',sh:'pda'}];
+FLOWS.forEach(F=>{F.p=$(F.id);F.len=F.p.getTotalLength();F.dots=[];for(let i=0;i<F.n;i++){const c=document.createElementNS(NS,'circle');c.setAttribute('r',F.side==='S'?5:4.2);c.setAttribute('stroke','#fff');c.setAttribute('stroke-width','1.2');c.setAttribute('opacity','.9');PG.appendChild(c);F.dots.push({el:c,u:i/F.n})}});
+let HR=70,colR='#6a5aa8',colL='#d8323b',shState={asd:false,vsd:false,pda:false,rev:false},lastT=null;
+function loop(t){if(lastT===null)lastT=t;const dt=Math.min(.05,(t-lastT)/1000);lastT=t;
+ const sp=.14*(HR/70);
+ FLOWS.forEach(F=>{const on=F.side!=='S'||shState[F.sh];F.dots.forEach(d=>{if(!on){d.el.setAttribute('opacity',0);return}
+   d.u=(d.u+dt*sp*(F.side==='S'?1.6:1)*(700/Math.max(F.len,300)))%1;
+   const p=F.p.getPointAtLength((F.side==='S'&&shState.rev&&F.sh!=='pda'?1-d.u:d.u)*F.len);d.el.setAttribute('cx',p.x);d.el.setAttribute('cy',p.y);
+   const fade=Math.min(1,d.u*12,(1-d.u)*12);d.el.setAttribute('opacity',(.92*fade).toFixed(2));
+   d.el.setAttribute('fill',F.side==='R'?colR:F.side==='L'?colL:(shState.rev?colR:colL))})});
+ requestAnimationFrame(loop)}
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches)requestAnimationFrame(loop);
+
+// ---------- yardımcılar ----------
+function setCls(el,c){el.classList.remove('ok','warn','bad','na');el.classList.add(c)}
+function lvl(x,warnHi,badHi){if(!has(x))return'na';return x>badHi?'bad':x>warnHi?'warn':'ok'}
+
+// ---------- ana hesap ----------
+function calc(){
+ const g={};IDS.forEach(k=>{if(!['sex','vo2m','cosrc','note'].includes(k))g[k]=n(k)});
+ const sex=$('sex').value,vo2m=$('vo2m').value,cosrc=$('cosrc').value;
+ const R={};
+ R.bsa=has(g.h,g.w)?Math.sqrt(g.h*g.w/3600):null;
+ if(vo2m==='meas')R.vo2=g.vo2;
+ else if(vo2m==='lf')R.vo2=has(g.age,g.hr,R.bsa)?((sex==='M'?138.1-11.49*Math.log(g.age):138.1-17.04*Math.log(g.age))+0.378*g.hr)*R.bsa:null;
+ else R.vo2=has(R.bsa)?125*R.bsa:null;
+ const cap=has(g.hb)?13.6*g.hb:null;
+ // ortalamalar
+ R.paM=g.pa_m??(has(g.pa_sys,g.pa_dia)?(g.pa_sys+2*g.pa_dia)/3:null);R.paMauto=g.pa_m===null&&has(R.paM);
+ R.aoM=g.ao_m??(has(g.ao_sys,g.ao_dia)?(g.ao_sys+2*g.ao_dia)/3:null);R.aoMauto=g.ao_m===null&&has(R.aoM);
+ $('pa_m').placeholder=R.paMauto?'≈'+Math.round(R.paM):'';$('ao_m').placeholder=R.aoMauto?'≈'+Math.round(R.aoM):'';
+ // saturasyonlar
+ const sa=g.ao_s;R.pvAssumed=g.pv_s===null&&has(sa);R.pv=g.pv_s??(has(sa)?(sa>=95?sa:98):null);
+ $('pv_s').placeholder=R.pvAssumed?'≈'+R.pv:'vars.';
+ R.flamm=has(g.svc_s,g.ivc_s)?(3*g.svc_s+g.ivc_s)/4:null;
+ R.step=null;R.stepVal=null;
+ if(has(g.ra_s,g.svc_s)&&g.ra_s-g.svc_s>=11){R.step='atriyal';R.stepVal=g.ra_s-g.svc_s}
+ else if(has(g.rv_s,g.ra_s)&&g.rv_s-g.ra_s>=10){R.step='ventriküler';R.stepVal=g.rv_s-g.ra_s}
+ else if(has(g.pa_s,g.rv_s)&&g.pa_s-g.rv_s>=5){R.step='büyük arter';R.stepVal=g.pa_s-g.rv_s}
+ R.mv=R.step==='atriyal'?(R.flamm??g.svc_s):R.step==='ventriküler'?g.ra_s:R.step==='büyük arter'?g.rv_s:(g.pa_s??R.flamm);
+ R.mvSrc=R.step==='atriyal'?(R.flamm!==null?'Flamm (3·SVC+IVC)/4':'SVC'):R.step==='ventriküler'?'RA':R.step==='büyük arter'?'RV':(g.pa_s!==null?'PA':'Flamm');
+ R.qs=has(R.vo2,cap,sa,R.mv)&&sa>R.mv?R.vo2/(cap*(sa-R.mv)/100):null;
+ R.qp=has(R.vo2,cap,R.pv,g.pa_s)&&R.pv>g.pa_s?R.vo2/(cap*(R.pv-g.pa_s)/100):null;
+ R.qpqs=has(R.qp,R.qs)?R.qp/R.qs:null;
+ R.shunt=R.step!==null||(has(R.qpqs)&&(R.qpqs>=1.2||R.qpqs<0.85));
+ R.co=(cosrc==='td'&&has(g.tdco))?g.tdco:(R.qs??g.tdco);R.coSrc=(cosrc==='td'&&has(g.tdco))||(!has(R.qs)&&has(g.tdco))?'TD':'Fick';
+ R.ci=has(R.co,R.bsa)?R.co/R.bsa:null;
+ R.sv=has(R.co,g.hr)?R.co*1000/g.hr:null;R.svi=has(R.sv,R.bsa)?R.sv/R.bsa:null;
+ R.tpg=has(R.paM,g.pw_m)?R.paM-g.pw_m:null;R.dpg=has(g.pa_dia,g.pw_m)?g.pa_dia-g.pw_m:null;
+ R.qpUse=R.shunt&&has(R.qp)?R.qp:R.co;R.qsUse=R.shunt&&has(R.qs)?R.qs:R.co;
+ R.pvr=has(R.tpg,R.qpUse)&&R.qpUse>0?R.tpg/R.qpUse:null;R.pvri=has(R.pvr,R.bsa)?R.pvr*R.bsa:null;
+ R.svr=has(R.aoM,g.ra_m,R.qsUse)&&R.qsUse>0?(R.aoM-g.ra_m)/R.qsUse:null;R.svrD=has(R.svr)?R.svr*80:null;
+ R.rprs=has(R.pvr,R.svr)&&R.svr>0?R.pvr/R.svr:null;
+ R.pp=has(g.pa_sys,g.pa_dia)?g.pa_sys-g.pa_dia:null;R.pac=has(R.sv,R.pp)&&R.pp>0?R.sv/R.pp:null;
+ R.papi=has(R.pp,g.ra_m)&&g.ra_m>0?R.pp/g.ra_m:null;R.rapw=has(g.ra_m,g.pw_m)&&g.pw_m>0?g.ra_m/g.pw_m:null;
+ R.cpo=has(R.aoM,R.co)?R.aoM*R.co/451:null;
+ R.avpp=has(g.lv_sys,g.ao_sys)?g.lv_sys-g.ao_sys:null;
+ R.ava=null;R.avaM='';
+ if(has(R.co,g.hr,g.sep,g.av_mg)&&g.av_mg>0){R.ava=R.co*1000/(g.hr*g.sep*44.3*Math.sqrt(g.av_mg));R.avaM='Gorlin'}
+ else if(has(R.co,R.avpp)&&R.avpp>=10){R.ava=R.co/Math.sqrt(R.avpp);R.avaM='Hakki'}
+ else if(has(R.co,g.av_mg)&&g.av_mg>0){R.ava=R.co/Math.sqrt(g.av_mg);R.avaM='Hakki (ort.)'}
+ R.avai=has(R.ava,R.bsa)?R.ava/R.bsa:null;
+ R.mva=null;R.mvaM='';
+ if(has(R.co,g.hr,g.dfp,g.mv_mg)&&g.mv_mg>0){R.mva=R.co*1000/(g.hr*g.dfp*37.7*Math.sqrt(g.mv_mg));R.mvaM='Gorlin'}
+ else if(has(R.co,g.mv_mg)&&g.mv_mg>0){R.mva=R.co/Math.sqrt(g.mv_mg);R.mvaM='Hakki'}
+ R.rvpa=has(g.rv_sys,g.pa_sys)?g.rv_sys-g.pa_sys:null;
+ R.svo2=R.step===null?g.pa_s:R.mv;
+ // PH sınıfı
+ R.ph=null;
+ if(has(R.paM)){if(R.paM<=20)R.ph='yok';else if(!has(g.pw_m))R.ph='?';else if(g.pw_m<=15)R.ph=has(R.pvr)?(R.pvr>2?'pre':'unc'):'pre?';else R.ph=has(R.pvr)?(R.pvr>2?'cpc':'ipc'):'post?'}
+ HR=has(g.hr)?g.hr:70;$('beat').style.animationDuration=(60/HR).toFixed(3)+'s';
+ paint(g,R);tiles(g,R);forrester(g,R);phTree(g,R);oxy(g,R);const F=findings(g,R);risk(g,R);report(g,R,F);
+}
+
+// ---------- kalp boyama ----------
+function paint(g,R){
+ const def={svc:68,ivc:72,ra:70,rv:70,pa:70,la:97,lv:97,ao:97,pv:98};
+ const sat={svc:g.svc_s,ivc:g.ivc_s,ra:g.ra_s,rv:g.rv_s,pa:g.pa_s,pv:R.pv,la:R.pv,lv:g.ao_s,ao:g.ao_s};
+ const col=k=>satColor(sat[k]??def[k]);
+ [['c_ra','ra'],['c_rv','rv'],['c_la','la'],['c_lv','lv']].forEach(([id,k])=>{$(id).style.fill=col(k)});
+ [['v_svc','svc'],['v_ivc','ivc'],['v_pa','pa'],['v_pv','pv'],['v_ao','ao'],['v_aoD','ao']].forEach(([id,k])=>{$(id).style.stroke=col(k)});
+ colR=col('pa');colL=col('ao');
+ // basınç durumu
+ const st={};
+ st.ra=has(g.ra_m)?(g.ra_m>14?'bad':g.ra_m>=8?'warn':'ok'):'na';
+ st.rv=has(g.rv_sys)||has(g.rv_edp)?(Math.max(lvl(g.rv_sys,30,50)==='bad'?2:lvl(g.rv_sys,30,50)==='warn'?1:0,lvl(g.rv_edp,8,14)==='bad'?2:lvl(g.rv_edp,8,14)==='warn'?1:0)):'na';
+ if(st.rv!=='na')st.rv=['ok','warn','bad'][st.rv];
+ st.pa=has(R.paM)?(R.paM>35?'bad':R.paM>20?'warn':'ok'):'na';
+ st.la=has(g.pw_m)?(g.pw_m>20?'bad':g.pw_m>15?'warn':'ok'):'na';
+ const lvA=has(g.lv_edp)?(g.lv_edp>18?2:g.lv_edp>12?1:0):-1,lvB=has(R.avpp)?(R.avpp>=40?2:R.avpp>=10?1:0):-1;
+ st.lv=Math.max(lvA,lvB)<0?'na':['ok','warn','bad'][Math.max(lvA,lvB)];
+ st.ao=has(R.aoM)?(R.aoM<65?'bad':(has(g.ao_sys)&&g.ao_sys>=140)?'warn':'ok'):'na';
+ const sSat=x=>has(x)?(x<60?'bad':x<65?'warn':'ok'):'na';
+ st.svc=sSat(g.svc_s);st.ivc=sSat(g.ivc_s);st.pv=has(R.pv)?(R.pv<95?'warn':'ok'):'na';
+ st.av=has(R.ava)?(R.ava<1?'bad':R.ava<=1.5?'warn':'ok'):'na';st.mv=has(R.mva)?(R.mva<=1.5?'bad':R.mva<=2?'warn':'ok'):'na';
+ ['ra','rv','la','lv'].forEach(k=>setCls($('c_'+k),st[k]));
+ chips.forEach(ch=>{const k=ch.dataset.c;ch.classList.remove('ok','warn','bad');if(st[k]&&st[k]!=='na')ch.classList.add(st[k])});
+ // çip altı çıktılar
+ $('out_ra').innerHTML=has(R.papi)?`PAPi <b>${f(R.papi,2)}</b> · RAP/PCWP <b>${f(R.rapw,2)}</b>`:'';
+ $('out_rv').innerHTML=has(R.rvpa)?`RV–PA sist. farkı <b>${f(R.rvpa,0)}</b> mmHg`:'';
+ $('out_la').innerHTML=has(R.tpg)?`TPG <b>${f(R.tpg,0)}</b> · PVR <b>${f(R.pvr,1)}</b> WU`:'';
+ $('out_lv').innerHTML=has(R.avpp)?`LV–Ao tepe-tepe <b>${f(R.avpp,0)}</b> mmHg`:'';
+ $('out_ao').innerHTML=has(R.cpo)?`CPO <b>${f(R.cpo,2)}</b> W`:'';
+ $('out_av').innerHTML=has(R.ava)?`AVA <b>${f(R.ava,2)}</b> cm² <span class="note">${R.avaM}</span>`:'';
+ $('out_mv').innerHTML=has(R.mva)?`MVA <b>${f(R.mva,2)}</b> cm² <span class="note">${R.mvaM}</span>`:'';
+ // şant görseli
+ const sig=has(R.qpqs)&&R.qpqs>=1.2,rev=has(R.qpqs)&&R.qpqs<0.85;
+ shState={asd:(R.step==='atriyal'&&sig)||(rev&&!R.step),vsd:R.step==='ventriküler'&&sig,pda:R.step==='büyük arter'&&sig,rev:rev};
+ $('asdArrow').classList.toggle('on',shState.asd);$('vsdArrow').classList.toggle('on',shState.vsd);$('pdaTube').classList.toggle('on',shState.pda);
+ $('asdArrow').setAttribute('d',rev?'M330,352 L548,352':'M548,352 L330,352');
+ const lbl=$('shLbl');lbl.classList.toggle('on',shState.asd||shState.vsd||shState.pda);
+ if(shState.asd||shState.vsd||shState.pda){const y=shState.vsd?568:shState.pda?178:310;lbl.querySelector('rect').setAttribute('y',y);$('shTxt').setAttribute('y',y+18);
+  lbl.querySelector('rect').setAttribute('x',shState.pda?540:shState.vsd?390:380);$('shTxt').setAttribute('x',shState.pda?625:shState.vsd?469:465);
+  $('shTxt').textContent=(rev?'Sağ→sol ':'Sol→sağ ')+'Qp/Qs '+f(R.qpqs,2)}
+}
+
+// ---------- karolar ----------
+function tiles(g,R){
+ const T=[
+ ['Kardiyak debi ('+R.coSrc+')',R.co,'L/dk',2,'4–8',x=>x<4?'warn':x>8?'warn':'ok'],
+ ['Kardiyak indeks',R.ci,'L/dk/m²',2,'2,5–4,0',x=>x<2.2?'bad':x<2.5?'warn':x>4.2?'warn':'ok'],
+ ['Atım hacmi / SVİ',R.svi,'mL/m²',0,'33–47',x=>x<31?'bad':x<35?'warn':'ok',has(R.sv)?`SV ${f(R.sv,0)} mL`:''],
+ ['Ortalama PAB',R.paM,'mmHg',0,'≤20',x=>x>35?'bad':x>20?'warn':'ok',R.paMauto?'(S+2D)/3 ile':''],
+ ['PCWP',g.pw_m,'mmHg',0,'≤15',x=>x>20?'bad':x>15?'warn':'ok'],
+ ['TPG',R.tpg,'mmHg',0,'≤12',x=>x>12?'warn':'ok'],
+ ['DPG',R.dpg,'mmHg',0,'<7',x=>x>=7?'warn':'ok'],
+ ['PVR',R.pvr,'WU',2,'≤2',x=>x>5?'bad':x>2?'warn':'ok',has(R.pvr)?`${f(R.pvr*80,0)} dyn · PVRİ ${f(R.pvri,1)}`:''],
+ ['SVR',R.svrD,'dyn·s·cm⁻⁵',0,'800–1200',x=>x>1600||x<600?'bad':x>1200||x<800?'warn':'ok',has(R.svr)?`${f(R.svr,1)} WU`:''],
+ ['Qp/Qs',R.qpqs,'',2,'≈1,0',x=>x>=1.5||x<0.85?'bad':x>=1.2?'warn':'ok',has(R.qp)?`Qp ${f(R.qp,2)} · Qs ${f(R.qs,2)} L/dk`:''],
+ ['Rp/Rs',R.rprs,'',2,'<0,25',x=>x>=0.5?'bad':x>=0.25?'warn':'ok'],
+ ['Kardiyak güç (CPO)',R.cpo,'W',2,'≥0,6',x=>x<0.6?'bad':x<0.8?'warn':'ok'],
+ ['PAPi',R.papi,'',2,'>0,9 (>1,85 KY)',x=>x<0.9?'bad':x<1.85?'warn':'ok'],
+ ['RAP/PCWP',R.rapw,'',2,'<0,63',x=>x>0.63?'warn':'ok'],
+ ['PA kompliyansı',R.pac,'mL/mmHg',2,'>2,3',x=>x<2.3?'warn':'ok'],
+ ['Karışık venöz SO₂',R.svo2,'%',0,'65–80',x=>x<60?'bad':x<65?'warn':'ok',R.step?R.mvSrc:''],
+ ['Arteriyel SO₂',g.ao_s,'%',0,'≥95',x=>x<90?'bad':x<95?'warn':'ok'],
+ ['AVA ('+(R.avaM||'—')+')',R.ava,'cm²',2,'ciddi <1,0',x=>x<1?'bad':x<=1.5?'warn':'ok',has(R.avai)?`AVAi ${f(R.avai,2)} cm²/m²`:''],
+ ['MVA ('+(R.mvaM||'—')+')',R.mva,'cm²',2,'anlamlı ≤1,5',x=>x<=1.5?'bad':x<=2?'warn':'ok'],
+ ];
+ $('tiles').innerHTML=T.map(([t,x,u,d,nr,fn,ex])=>{const c=has(x)?fn(x):'na';return`<div class="tile ${c}"><small>${t}</small><b>${f(x,d)}</b> <span>${u}</span><em>${ex?ex+' · ':''}N: ${nr}</em></div>`}).join('');
+ $('o_bsa').textContent=f(R.bsa,2);$('o_vo2').textContent=f(R.vo2,0);
+}
+
+// ---------- Forrester ----------
+function forrester(g,R){
+ const X=p=>40+p/40*285,Y=c=>225-c/5*210;const x18=X(18),y22=Y(2.2);
+ let s=`<rect x="40" y="15" width="${x18-40}" height="${y22-15}" fill="#1f9d6b" opacity=".12"/><rect x="${x18}" y="15" width="${325-x18}" height="${y22-15}" fill="#d99a00" opacity=".13"/>
+ <rect x="40" y="${y22}" width="${x18-40}" height="${225-y22}" fill="#2f6fd1" opacity=".12"/><rect x="${x18}" y="${y22}" width="${325-x18}" height="${225-y22}" fill="#d6363e" opacity=".14"/>
+ <g font-size="11.5" font-weight="700" fill="currentColor" opacity=".75"><text x="48" y="32">I · Sıcak–kuru</text><text x="${x18+8}" y="32">II · Sıcak–ıslak</text><text x="48" y="216">III · Soğuk–kuru</text><text x="${x18+8}" y="216">IV · Soğuk–ıslak</text></g>
+ <line x1="${x18}" y1="15" x2="${x18}" y2="225" stroke="currentColor" stroke-dasharray="4 3" opacity=".5"/><line x1="40" y1="${y22}" x2="325" y2="${y22}" stroke="currentColor" stroke-dasharray="4 3" opacity=".5"/>
+ <line x1="40" y1="225" x2="325" y2="225" stroke="currentColor" opacity=".5"/><line x1="40" y1="15" x2="40" y2="225" stroke="currentColor" opacity=".5"/>`;
+ for(let p=0;p<=40;p+=10)s+=`<text x="${X(p)}" y="240" font-size="10" text-anchor="middle" fill="currentColor" opacity=".7">${p}</text>`;
+ for(let c=0;c<=5;c++)s+=`<text x="33" y="${Y(c)+4}" font-size="10" text-anchor="end" fill="currentColor" opacity=".7">${c}</text>`;
+ s+=`<text x="182" y="256" font-size="11" text-anchor="middle" fill="currentColor" opacity=".8">PCWP (mmHg)</text><text x="12" y="120" font-size="11" text-anchor="middle" fill="currentColor" opacity=".8" transform="rotate(-90 12 120)">CI (L/dk/m²)</text>`;
+ if(has(g.pw_m,R.ci)){const px=X(Math.min(40,Math.max(0,g.pw_m))),py=Y(Math.min(5,Math.max(0,R.ci)));
+  s+=`<circle cx="${px}" cy="${py}" r="9" fill="none" stroke="#c0392b" stroke-width="2"><animate attributeName="r" values="7;16;7" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0;1" dur="1.8s" repeatCount="indefinite"/></circle><circle cx="${px}" cy="${py}" r="6.5" fill="#c0392b" stroke="#fff" stroke-width="2"/>`}
+ $('forr').innerHTML=`<g style="color:var(--tx)">${s}</g>`;
+}
+
+// ---------- PH ağacı ----------
+function phTree(g,R){
+ const on=R.ph,A='#c0392b';
+ const node=(x,y,w,t,act,leaf)=>`<rect x="${x-w/2}" y="${y-16}" width="${w}" height="32" rx="${leaf?16:8}" fill="${act?A:'var(--sh)'}" stroke="${act?A:'var(--bd)'}"/><text x="${x}" y="${y+4.5}" text-anchor="middle" font-size="12" font-weight="${act?700:500}" fill="${act?'#fff':'var(--tx)'}">${t}</text>`;
+ const edge=(x1,y1,x2,y2,t,act)=>`<path d="M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}" fill="none" stroke="${act?A:'var(--bd)'}" stroke-width="${act?3:1.5}"/><text x="${(x1+x2)/2+(x2>x1?8:-8)}" y="${(y1+y2)/2}" font-size="10.5" text-anchor="${x2>x1?'start':'end'}" fill="var(--mu)">${t}</text>`;
+ const ph=on&&on!=='yok',pre=['pre','unc','pre?'].includes(on),post=['cpc','ipc','post?'].includes(on);
+ let s='';
+ s+=edge(220,40,70,105,'≤20',on==='yok')+edge(220,40,290,105,'>20',ph);
+ s+=edge(290,105,160,170,'≤15',pre)+edge(290,105,360,170,'>15',post);
+ s+=edge(160,170,90,232,'>2 WU',on==='pre')+edge(160,170,215,232,'≤2 WU',on==='unc');
+ s+=edge(360,170,300,232,'≤2 WU',on==='ipc')+edge(360,170,395,232,'>2 WU',on==='cpc');
+ s+=node(220,24,150,'mPAP >20 mmHg?',!!on)+node(70,105,96,'PH yok',on==='yok',1)+node(290,105,120,'PCWP >15?',ph);
+ s+=node(160,170,96,'PVR >2?',pre)+node(360,170,96,'PVR >2?',post);
+ s+=node(90,238,112,'Prekapiller',on==='pre',1)+node(215,238,110,'Sınıflanamayan',on==='unc',1)+node(300,238,70,'IpcPH',on==='ipc',1)+node(395,238,72,'CpcPH',on==='cpc',1);
+ $('phtree').innerHTML=s;
+}
+
+// ---------- oksimetri ----------
+function oxy(g,R){
+ const items=[['SVC',g.svc_s],['IVC',g.ivc_s],['RA',g.ra_s],['RV',g.rv_s],['PA',g.pa_s],['PV',R.pv,R.pvAssumed],['Ao',g.ao_s]];
+ const bw=70,gap=22,x0=48,Y=s=>200-(s-30)/70*170;let s='';
+ for(let v=40;v<=100;v+=20)s+=`<line x1="40" x2="690" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--bd)"/><text x="34" y="${Y(v)+4}" font-size="10" text-anchor="end" fill="var(--mu)">${v}</text>`;
+ const stepIdx=R.step==='atriyal'?2:R.step==='ventriküler'?3:R.step==='büyük arter'?4:-1;
+ items.forEach(([k,v,ass],i)=>{const x=x0+i*(bw+gap);
+  if(has(v)){const c=satColor(v);s+=`<rect x="${x}" y="${Y(v)}" width="${bw}" height="${200-Y(v)}" rx="8" fill="${c}" ${ass?'opacity=".55" stroke-dasharray="4 3" stroke="var(--mu)"':''}/><text x="${x+bw/2}" y="${Y(v)-6}" font-size="13" font-weight="700" text-anchor="middle" fill="var(--tx)">${f(v,0)}%</text>`}
+  else s+=`<rect x="${x}" y="40" width="${bw}" height="160" rx="8" fill="none" stroke="var(--bd)" stroke-dasharray="4 4"/>`;
+  s+=`<text x="${x+bw/2}" y="218" font-size="12" text-anchor="middle" fill="var(--mu)">${k}${ass?' (vars.)':''}</text>`;
+  if(i===stepIdx){s+=`<rect x="${x-6}" y="20" width="${bw+12}" height="186" rx="11" fill="none" stroke="#ffb400" stroke-width="3"/><text x="${x+bw/2}" y="16" font-size="12" font-weight="700" text-anchor="middle" fill="#d08a00">▲ +${f(R.stepVal,0)}%</text>`}
+ });
+ if(has(R.flamm)){const y=Y(R.flamm);s+=`<line x1="${x0}" x2="${x0+2*bw+gap}" y1="${y}" y2="${y}" stroke="var(--tx)" stroke-dasharray="5 4" opacity=".6"/><text x="${x0+2*bw+gap-6}" y="${y+15}" font-size="10.5" text-anchor="end" fill="#fff" font-weight="700">Flamm ${f(R.flamm,0)}%</text>`}
+ $('oxy').innerHTML=s;
+ $('oxyNote').innerHTML=(R.step?`<b>Basamak: ${R.step} düzey (+${f(R.stepVal,0)}%).</b> Karışık venöz: ${R.mvSrc} = ${f(R.mv,0)}%. `:'Anlamlı basamak yok. ')+'Tek örnek eşikleri: atriyal ≥%11 (SVC→RA), ventriküler ≥%10 (RA→RV), büyük arter ≥%5 (RV→PA).'+(R.pvAssumed?` PV ölçülmedi: ${R.pv>=95&&R.pv===g.ao_s?'SaO₂ ≥%95 olduğundan PV = SaO₂ kabul edildi':'SaO₂ <%95 olduğundan PV %98 kabul edildi (sağ→sol şant olasılığı)'}.`:'');
+}
+
+// ---------- yorum ----------
+function findings(g,R){
+ const F=[];const add=(l,t,d,p=0)=>F.push({l,t,d,p});
+ // PH
+ const pvrT=has(R.pvr)?`PVR ${f(R.pvr,1)} WU`:'';
+ if(R.ph==='yok')add('ok','Pulmoner hipertansiyon yok',`mPAP ${f(R.paM,0)} mmHg (≤20).`);
+ else if(R.ph==='?')add('warn','PH mevcut (mPAP >20) – sınıflama için PCWP gerekli',`mPAP ${f(R.paM,0)} mmHg.`);
+ else if(R.ph==='pre')add('bad','Prekapiller pulmoner hipertansiyon',`mPAP ${f(R.paM,0)} mmHg, PCWP ${f(g.pw_m,0)} mmHg (≤15), ${pvrT} (>2). Grup 1 (PAH), 3, 4 ve 5 ayırıcı tanısı; vazoreaktivite testi IPAH/HPAH/ilaç ilişkili PAH'ta değerlendirilmeli.`+(g.pw_m>=13?' PCWP 13–15 aralığında: HFpEF risk profili varsa sıvı yüklemesi/egzersiz ile postkapiller komponent dışlanmalı.':''),8);
+ else if(R.ph==='unc')add('warn','Sınıflandırılamayan PH',`mPAP ${f(R.paM,0)} >20 fakat PCWP ≤15 ve ${pvrT} (≤2). Yüksek pulmoner akım (şant, anemi, hipertiroidi) veya erken hastalık; egzersiz hemodinamisi düşünülebilir.`,4);
+ else if(R.ph==='pre?')add('warn','PH; PCWP ≤15 – PVR için debi gerekli','Fick için Hb, VO₂/VKA ve saturasyonları ya da TD debisini girin.');
+ else if(R.ph==='ipc')add('warn','İzole postkapiller PH (IpcPH)',`PCWP ${f(g.pw_m,0)} >15, ${pvrT} (≤2). Sol kalp hastalığına bağlı PH; volüm durumu/sol kalp tedavisi optimize edilmeli.`,6);
+ else if(R.ph==='cpc')add('bad','Kombine pre- ve postkapiller PH (CpcPH)',`PCWP ${f(g.pw_m,0)} >15, ${pvrT} (>2).`+(R.pvr>5?' PVR >5 WU: ciddi prekapiller komponent – kötü prognoz; ileri merkez değerlendirmesi önerilir.':''),8);
+ else if(R.ph==='post?')add('warn','Postkapiller PH (PVR hesaplanamadı)','IpcPH/CpcPH ayrımı için debi gerekli.');
+ if(has(R.dpg)&&R.ph&&R.ph!=='yok'&&R.dpg>=7)add('info',`DPG ${f(R.dpg,0)} mmHg (≥7)`,'Prekapiller komponenti destekler (yardımcı parametre; sınıflama PVR ile yapılır).');
+ if(has(R.pac)&&R.ph&&R.ph!=='yok'&&R.pac<2.3)add('warn',`PA kompliyansı düşük (${f(R.pac,2)} mL/mmHg)`,'<2,3 mL/mmHg PH’de kötü prognozla ilişkilidir.');
+ // debi ve şok
+ if(has(R.ci)){if(R.ci<2.2)add('bad',`Düşük kardiyak indeks (${f(R.ci,2)} L/dk/m²)`,`Debi kaynağı: ${R.coSrc}.`);
+  else if(R.ci<2.5)add('warn',`Sınırda kardiyak indeks (${f(R.ci,2)})`,'');
+  else if(R.ci>4.2&&!R.shunt)add('info',`Yüksek debi (CI ${f(R.ci,2)})`,'Anemi, sepsis, AV fistül, tirotoksikoz, beriberi gibi yüksek debili durumlar düşünülebilir.')}
+ if(has(R.ci,g.pw_m)){const w=g.pw_m>18,c=R.ci<2.2;add(c&&w?'bad':c||w?'warn':'ok',`Forrester ${c?(w?'IV · Soğuk–ıslak':'III · Soğuk–kuru'):(w?'II · Sıcak–ıslak':'I · Sıcak–kuru')}`,c&&w?'Konjesyon + hipoperfüzyon: inotrop/vazopresör ve mekanik destek ihtiyacı açısından değerlendirin.':c?'Hipoperfüzyon, konjesyon yok: volüm yanıtı değerlendirilebilir.':w?'Konjesyon, perfüzyon korunmuş: diüretik/vazodilatör.':'Kompanse hemodinami.')}
+ const hypo=(has(g.ao_sys)&&g.ao_sys<90)||(has(R.aoM)&&R.aoM<65);
+ if(hypo&&has(R.ci)&&R.ci<2.2&&has(g.pw_m)&&g.pw_m>15)add('bad','Kardiyojenik şok ile uyumlu hemodinami',`SAB ${f(g.ao_sys,0)}, OAB ${f(R.aoM,0)} mmHg, CI ${f(R.ci,2)}, PCWP ${f(g.pw_m,0)}. SCAI evrelemesi laktat ve klinikle birlikte yapılmalı.`,10);
+ else if(hypo)add('bad','Hipotansiyon',`OAB ${f(R.aoM,0)} mmHg.`);
+ if(has(R.cpo)&&R.cpo<0.6)add('bad',`Kardiyak güç düşük (CPO ${f(R.cpo,2)} W)`,'Kardiyojenik şokta <0,6 W mortalitenin güçlü belirleyicisidir.');
+ // RV
+ if(has(g.ra_m)&&g.ra_m>14)add('bad',`RAP belirgin yüksek (${f(g.ra_m,0)} mmHg)`,'Sağ kalp yetmezliği/volüm yükü; PAH risk tablosunda yüksek risk kriteri.');
+ else if(has(g.ra_m)&&g.ra_m>=8)add('warn',`RAP artmış (${f(g.ra_m,0)} mmHg)`,'');
+ if(has(R.papi)&&R.papi<0.9)add('bad',`PAPi düşük (${f(R.papi,2)})`,'AMİ ilişkili şokta <0,9 ciddi RV disfonksiyonu ve RV destek ihtiyacı ile ilişkili.');
+ else if(has(R.papi)&&R.papi<1.85)add('warn',`PAPi ${f(R.papi,2)}`,'İleri KY/LVAD adaylarında <1,85 RV yetmezliği riskini gösterir.');
+ if(has(R.rapw)&&R.rapw>0.63)add('warn',`RAP/PCWP ${f(R.rapw,2)} (>0,63)`,'Sol kalbe göre orantısız sağ kalp dolum basıncı – RV yetmezliği lehine.');
+ // LV / atriyum dalgaları
+ if(has(g.lv_edp)&&g.lv_edp>18)add('bad',`LVEDP belirgin yüksek (${f(g.lv_edp,0)} mmHg)`,'');else if(has(g.lv_edp)&&g.lv_edp>12)add('warn',`LVEDP artmış (${f(g.lv_edp,0)} mmHg)`,'Normal ≤12 mmHg.');
+ if(has(g.pw_v,g.pw_m)&&g.pw_v-g.pw_m>=10)add('warn',`Belirgin PCWP v dalgası (v ${f(g.pw_v,0)}, ort ${f(g.pw_m,0)})`,'Ciddi MY veya non-kompliyan LA düşündürür; v dalgası belirginse PCWP a dalgası sonunda/diyastol sonunda okunmalıdır.');
+ if(has(g.ra_v,g.ra_m)&&g.ra_v-g.ra_m>=5&&g.ra_v>=1.5*g.ra_m)add('warn','Belirgin RA v dalgası','Triküspit yetmezliği lehine.');
+ if(has(g.ra_a,g.ra_v)&&g.ra_a-g.ra_v>=5)add('info','Belirgin RA a dalgası','RV kompliyans azalması, triküspit darlık veya AV dissosiyasyon (cannon a) düşünülebilir.');
+ // kapaklar
+ if(has(R.ava)){const lf=has(R.svi)&&R.svi<=35;
+  if(R.ava<1)add('bad',`Ciddi aort darlığı (AVA ${f(R.ava,2)} cm²${has(R.avai)?', AVAi '+f(R.avai,2):''})`,`${R.avaM}. `+(has(g.av_mg)?(g.av_mg>=40?`Ortalama gradyan ${f(g.av_mg,0)} ≥40 mmHg: yüksek gradyanlı ciddi AS.`:lf?`Ortalama gradyan <40 ve SVİ ≤35 mL/m²: düşük akım–düşük gradyan AS; EF düşükse dobutamin stres, korunmuşsa kalsiyum skoru ile doğrulayın.`:`Ortalama gradyan <40, akım normal: ölçüm hatası/uyumsuz ciddiyet açısından tekrar değerlendirin.`):'Ortalama gradyanı girin.'),9);
+  else if(R.ava<=1.5)add('warn',`Orta aort darlığı (AVA ${f(R.ava,2)} cm²)`,R.avaM);
+  else add('ok',`AVA ${f(R.ava,2)} cm²`,'Hemodinamik olarak anlamlı AS yok.')}
+ else if(has(R.avpp)&&R.avpp>=10)add('warn',`LV–Ao sistolik gradyan ${f(R.avpp,0)} mmHg`,'AVA için debi gerekli. Subvalvüler/HOKMP ayrımı için geri çekme eğrisi değerlendirilmeli.');
+ if(has(R.mva)){if(R.mva<=1)add('bad',`Çok ciddi mitral darlık (MVA ${f(R.mva,2)} cm²)`,`${R.mvaM}. Uygun anatomide PMBV/cerrahi değerlendirmesi.`,9);
+  else if(R.mva<=1.5)add('bad',`Klinik olarak anlamlı (ciddi) mitral darlık (MVA ${f(R.mva,2)} cm²)`,`${R.mvaM}. Belirgin MY varsa Gorlin MVA’yı olduğundan küçük hesaplar.`,9);
+  else if(R.mva<=2)add('warn',`Orta mitral darlık (MVA ${f(R.mva,2)} cm²)`,R.mvaM);else add('ok',`MVA ${f(R.mva,2)} cm²`,'')}
+ if(has(R.rvpa)&&R.rvpa>10)add('warn',`RV–PA sistolik gradyan ${f(R.rvpa,0)} mmHg`,'Pulmoner kapak/RVOT darlığı açısından geri çekme eğrisi ile değerlendirin.');
+ // konstriksiyon
+ if(has(g.lv_edp,g.rv_edp,g.rv_sys)){const eq=Math.abs(g.lv_edp-g.rv_edp)<=5,rt=g.rv_edp/g.rv_sys>1/3,lo=g.rv_sys<55;
+  if(eq&&rt&&lo&&g.rv_edp>=12)add('warn','Konstriktif fizyoloji ile uyumlu basınçlar',`LVEDP–RVEDP farkı ${f(Math.abs(g.lv_edp-g.rv_edp),0)} (≤5), RVEDP/RVSP ${f(g.rv_edp/g.rv_sys,2)} (>1/3), RVSP ${f(g.rv_sys,0)} (<55). Restriktif KMP’den ayrım için en güvenilir bulgu solunumla ventriküler etkileşim (sistolik alan indeksi >1,1); dip-plato ve Kussmaul bulgusunu da değerlendirin.`,7)}
+ // şant ve oksijenasyon
+ if(R.step)add('info',`Oksimetrik basamak: ${R.step} düzey (+${f(R.stepVal,0)}%)`,R.step==='atriyal'?'ASD, PAPVD, sinüs venozus, LV–RA şantı veya rüptüre sinüs Valsalva.':R.step==='ventriküler'?'VSD, PDA + PY, primum ASD + yarık.':'PDA, aortopulmoner pencere, anormal koroner köken.');
+ if(has(R.qpqs)){if(R.qpqs>=1.5)add('bad',`Hemodinamik olarak anlamlı sol→sağ şant (Qp/Qs ${f(R.qpqs,2)})`,`Qp ${f(R.qp,2)}, Qs ${f(R.qs,2)} L/dk.`,8);
+  else if(R.qpqs>=1.2)add('warn',`Küçük–orta sol→sağ şant (Qp/Qs ${f(R.qpqs,2)})`,'');
+  else if(R.qpqs<0.85)add('bad',`Net sağ→sol şant (Qp/Qs ${f(R.qpqs,2)})`,'Eisenmenger fizyolojisi veya sağ→sol şantlı lezyonlar açısından değerlendirin.',8)
+  if(R.qpqs>=1.2&&has(R.pvr)&&R.step!=='büyük arter'){if(R.pvr<3)add('ok',`Şant kapatılabilirliği: PVR ${f(R.pvr,1)} WU (<3)`,'RV volüm yükü varsa semptomdan bağımsız kapatma önerilir (ESC 2020 ACHD).');
+   else if(R.pvr<5)add('warn',`Şant kapatılabilirliği: PVR ${f(R.pvr,1)} WU (3–5)`,'Anlamlı sol→sağ şant (Qp/Qs >1,5) varsa kapatma düşünülmeli; deneyimli merkezde bireysel karar.');
+   else add('bad',`Şant kapatılabilirliği: PVR ${f(R.pvr,1)} WU (≥5)`,'Kapatma ancak hedefe yönelik PAH tedavisi sonrası PVR <5 WU ve Qp/Qs >1,5 ise (fenestre) düşünülebilir; Eisenmenger’de kontrendike.')}}
+ if(has(g.ao_s)&&g.ao_s<90)add('bad',`Arteriyel desatürasyon (SaO₂ %${f(g.ao_s,0)})`,'Sağ→sol şant, akciğer hastalığı veya hipoventilasyon.');else if(has(g.ao_s)&&g.ao_s<95)add('warn',`Hafif arteriyel desatürasyon (SaO₂ %${f(g.ao_s,0)})`,'');
+ if(has(R.svo2)&&!R.step){if(R.svo2<60)add('bad',`Düşük karışık venöz SO₂ (%${f(R.svo2,0)})`,'Doku O₂ ekstraksiyonu artmış – düşük debi/anemi/hipoksemi.');else if(R.svo2<65)add('warn',`Sınırda karışık venöz SO₂ (%${f(R.svo2,0)})`,'');else if(R.svo2>80)add('info',`Yüksek karışık venöz SO₂ (%${f(R.svo2,0)})`,'Sol→sağ şant, yüksek debi veya sepsis; örnekleme yerini kontrol edin.')}
+ if(has(R.svrD)){if(R.svrD>1200)add('warn',`SVR artmış (${f(R.svrD,0)} dyn·s·cm⁻⁵)`,'Vazokonstriksiyon – düşük debili durumlarda kompansatuvar; afterload azaltımı düşünülebilir.');else if(R.svrD<800)add('warn',`SVR azalmış (${f(R.svrD,0)} dyn·s·cm⁻⁵)`,'Vazodilatasyon – sepsis, anafilaksi, AV fistül, siroz.')}
+ if(R.coSrc==='TD'&&R.shunt)add('info','Termodilüsyon ve şant','İntrakardiyak şant veya ciddi TY varlığında TD debisi güvenilir değildir; Fick tercih edilmeli.');
+ if(R.coSrc==='Fick'&&$('vo2m').value!=='meas'&&has(R.co))add('info','Varsayılan VO₂ kullanıldı','Tahmini Fick; özellikle yaşlı, obez veya kritik hastalarda %25’e varan hata olabilir. Mümkünse ölçülen VO₂ veya TD ile doğrulayın.');
+ const ord={bad:0,warn:1,info:2,ok:3};F.sort((a,b)=>ord[a.l]-ord[b.l]);
+ const ic={bad:'!',warn:'!',info:'i',ok:'✓'};
+ $('find').innerHTML=F.length?F.map(x=>`<li class="${x.l}"><div class="ic">${ic[x.l]}</div><div><b>${x.t}</b><span>${x.d}</span></div></li>`).join(''):'<li class="info"><div class="ic">i</div><div><b>Henüz yorum yok</b><span>Basınç ve saturasyon değerlerini girin.</span></div></li>';
+ // başlık
+ const hl=$('headline');let t='Değer girin veya örnek vaka seçin',c='';
+ const cand=F.filter(x=>x.l==='bad'||x.l==='warn');const top=cand.filter(x=>x.p>0).sort((a,b)=>b.p-a.p)[0]||cand.find(x=>x.l==='bad')||cand[0];
+ if(F.length){if(top){t=top.t;c=top.l}else{t='Normal hemodinami';c='ok'}}
+ hl.className='headline '+c;$('hl_t').textContent=t;
+ const chipsT=[['CI',R.ci,2,'L/dk/m²'],['mPAP',R.paM,0,'mmHg'],['PCWP',g.pw_m,0,'mmHg'],['PVR',R.pvr,1,'WU'],['Qp/Qs',R.qpqs,2,''],['CPO',R.cpo,2,'W']].filter(x=>has(x[1]));
+ $('hl_c').innerHTML=chipsT.map(x=>`<span>${x[0]} ${f(x[1],x[2])} ${x[3]}</span>`).join('')+F.filter(x=>x!==top&&(x.l==='bad')).slice(0,3).map(x=>`<span>⚠ ${x.t}</span>`).join('');
+ return F;
+}
+
+// ---------- PAH risk ----------
+function risk(g,R){
+ const show=R.ph==='pre';$('riskCard').style.display=show?'':'none';if(!show)return;
+ const rows=[['RAP (mmHg)',g.ra_m,0,'<8','8–14','>14',x=>x<8?'l':x<=14?'i':'h'],['CI (L/dk/m²)',R.ci,2,'≥2,5','2,0–2,4','<2,0',x=>x>=2.5?'l':x>=2?'i':'h'],['SVİ (mL/m²)',R.svi,0,'>38','31–38','<31',x=>x>38?'l':x>=31?'i':'h'],['SvO₂ (%)',R.svo2,0,'>65','60–65','<60',x=>x>65?'l':x>=60?'i':'h']];
+ const nm={l:'Düşük',i:'Orta',h:'Yüksek'};
+ $('riskBody').innerHTML=rows.map(([t,x,d,a,b,c,fn])=>`<tr><td>${t}</td><td><b>${f(x,d)}</b></td><td>${a}</td><td>${b}</td><td>${c}</td><td>${has(x)?`<span class="rk ${fn(x)}">${nm[fn(x)]}</span>`:'—'}</td></tr>`).join('');
+}
+
+// ---------- rapor ----------
+function report(g,R,F){
+ const L=[];const p=(a,b)=>L.push(a.padEnd(26,' ')+b);
+ L.push('KALP KATETERİZASYONU – HEMODİNAMİ RAPORU');if($('note').value)L.push('Not: '+$('note').value);L.push('Tarih: '+new Date().toLocaleDateString('tr-TR'));L.push('');
+ p('Boy/Kilo/VKA',`${f(g.h,0)} cm / ${f(g.w,0)} kg / ${f(R.bsa,2)} m²`);p('KH / Hb',`${f(g.hr,0)} /dk / ${f(g.hb,1)} g/dL`);p('VO₂',`${f(R.vo2,0)} mL/dk (${$('vo2m').selectedOptions[0].text})`);L.push('');
+ L.push('BASINÇLAR (mmHg)');
+ p('RA a/v/ort',`${f(g.ra_a,0)}/${f(g.ra_v,0)}/${f(g.ra_m,0)}`);p('RV sist/EDP',`${f(g.rv_sys,0)}/${f(g.rv_edp,0)}`);p('PA sist/diyast/ort',`${f(g.pa_sys,0)}/${f(g.pa_dia,0)}/${f(R.paM,0)}${R.paMauto?' (hesap)':''}`);
+ p('PCWP a/v/ort',`${f(g.pw_a,0)}/${f(g.pw_v,0)}/${f(g.pw_m,0)}`);p('LV sist/EDP',`${f(g.lv_sys,0)}/${f(g.lv_edp,0)}`);p('Ao sist/diyast/ort',`${f(g.ao_sys,0)}/${f(g.ao_dia,0)}/${f(R.aoM,0)}${R.aoMauto?' (hesap)':''}`);
+ if(has(g.av_mg))p('Aort kapak ort. gradyan',f(g.av_mg,0));if(has(g.mv_mg))p('Mitral kapak ort. gradyan',f(g.mv_mg,0));L.push('');
+ L.push('OKSİMETRİ (%)');p('SVC/IVC/RA/RV/PA',[g.svc_s,g.ivc_s,g.ra_s,g.rv_s,g.pa_s].map(x=>f(x,0)).join('/'));p('PV/Ao',`${f(R.pv,0)}${R.pvAssumed?' (vars.)':''}/${f(g.ao_s,0)}`);L.push('');
+ L.push('HESAPLANAN');p('Debi / CI',`${f(R.co,2)} L/dk (${R.coSrc}) / ${f(R.ci,2)} L/dk/m²`);p('SV / SVİ',`${f(R.sv,0)} mL / ${f(R.svi,0)} mL/m²`);p('TPG / DPG',`${f(R.tpg,0)} / ${f(R.dpg,0)} mmHg`);
+ p('PVR / PVRİ',`${f(R.pvr,2)} WU / ${f(R.pvri,1)} WU·m²`);p('SVR',`${f(R.svrD,0)} dyn·s·cm⁻⁵ (${f(R.svr,1)} WU)`);p('Qp / Qs / Qp:Qs',`${f(R.qp,2)} / ${f(R.qs,2)} / ${f(R.qpqs,2)}`);
+ p('CPO / PAPi / RAP:PCWP',`${f(R.cpo,2)} W / ${f(R.papi,2)} / ${f(R.rapw,2)}`);p('PA kompliyansı',`${f(R.pac,2)} mL/mmHg`);
+ if(has(R.ava))p('AVA',`${f(R.ava,2)} cm² (${R.avaM})${has(R.avai)?' · AVAi '+f(R.avai,2):''}`);if(has(R.mva))p('MVA',`${f(R.mva,2)} cm² (${R.mvaM})`);
+ L.push('');L.push('YORUM');F.forEach(x=>L.push('• '+x.t+(x.d?' – '+x.d:'')));
+ $('report').value=L.join('\n');
+}
+
+// ---------- olaylar ----------
+document.querySelectorAll('input,select').forEach(e=>{if(e.id!=='preset'){e.addEventListener('input',calc);e.addEventListener('change',calc)}});
+$('preset').addEventListener('change',e=>{const P=PRESETS[e.target.value];if(!P)return;IDS.forEach(k=>{const el=$(k);if(!el||k==='note')return;if(el.tagName==='SELECT'){if(k==='sex')el.value=P.sex||'M';else if(k==='vo2m')el.value='std';else if(k==='cosrc')el.value='fick'}else el.value=(P[k]??'')});calc()});
+$('clear').onclick=()=>{IDS.forEach(k=>{const el=$(k);if(el&&el.tagName!=='SELECT')el.value=''});$('preset').value='';calc()};
+$('copy').onclick=async()=>{const t=$('report').value;let ok=false;try{await navigator.clipboard.writeText(t);ok=true}catch(e){const ta=$('report');ta.parentElement.open=true;ta.select();try{ok=document.execCommand('copy')}catch(_){}}
+ $('copy').textContent=ok?'✓ Kopyalandı':'Metni seçip kopyalayın';setTimeout(()=>$('copy').textContent='📋 Raporu kopyala',1800)};
+$('print').onclick=()=>window.print();
+chips.forEach(ch=>{const k=ch.dataset.c,el=$('c_'+k);if(!el)return;ch.addEventListener('focusin',()=>el.style.strokeWidth=7);ch.addEventListener('focusout',()=>el.style.strokeWidth='')});
+calc();
+</script></body></html>
+"""
+
+
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.title(APP_TITLE)
@@ -2094,6 +2691,7 @@ with st.sidebar:
         [
             "🧠 Soru Bankası",
             "🩺 Kateterizasyon Simülasyonu",
+            "📈 Kateter Hemodinami Hesaplayıcı",
             "🧮 Mitral Yetmezlik Hesaplayıcı",
             "🫀 Diyastolik Disfonksiyon Hesaplayıcı",
             "🏥 NEÜ Klinik Çalışmalar",
@@ -2683,6 +3281,13 @@ if menu == "🧠 Soru Bankası":
 # =========================================================
 elif menu == "🩺 Kateterizasyon Simülasyonu":
     components.html(_CATH_SIM_HTML, height=1500, scrolling=True)
+
+
+# =========================================================
+# ===================== EKRAN KH: KATETER HEMODİNAMİ HESAPLAYICI =====
+# =========================================================
+elif menu == "📈 Kateter Hemodinami Hesaplayıcı":
+    components.html(_CATH_CALC_HTML, height=3600, scrolling=True)
 
 
 # =========================================================
