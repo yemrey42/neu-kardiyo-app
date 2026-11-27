@@ -16,21 +16,43 @@ Veritabanı/Giriş: Supabase (EU – Frankfurt).
 | Eğitim | `/egitim` | Streamlit'teki simülasyon/hesaplayıcı listesi, taşınacak |
 | Soru bankası | `/soru-bankasi` | Çalışan örnek test (Streamlit soru şemasıyla uyumlu) |
 | Klinik çalışmalar | `/calismalar` | 5 çalışma + bilgilendirme sayfası |
-| Veri girişi | `/calismalar/[slug]/veri-girisi` | Pasif form önizlemesi, erişim kuralları |
+| Veri girişi | `/calismalar/[slug]/veri-girisi` | Çalışıyor: şifreli giriş, Google Sheets'e yazar |
 | Ekip girişi | `/giris` | Supabase bağlanınca aktif olacak |
 | KVKK | `/kvkk` | Taslak metin (hukuk onayı gerekli) |
 
 İçerikler şimdilik `lib/content.ts` içinde; veritabanı şeması `supabase/schema.sql`.
+
+## Klinik çalışma veri girişi (Google Sheets)
+
+Şimdilik veriler veritabanına değil, **Google Sheets**'e yazılır (Streamlit ile aynı mantık).
+Yeni çalışmalar ileride Supabase'e alınabilir.
+
+- 5 çalışmanın formları Streamlit'teki formlardan çıkarıldı (`lib/studyForms.data.ts`);
+  sütun adları Streamlit ile aynıdır. BMI, BSA, LAVI, PASP, TAPSE/PASP gibi değerler
+  sunucuda aynı formüllerle hesaplanır (`lib/studyForms.ts`).
+- Her çalışma aynı tablonun içinde **ayrı bir sekmeye** yazılır (`WEB - H-Type HT`, `WEB - AFMR` ...;
+  bkz. `lib/studyConfig.ts`). Sekme yoksa ilk kayıtta oluşur. Streamlit'in sekmelerine dokunulmaz.
+- `KayıtID` = katılımcı kodu + ziyaret + tarih. Aynı KayıtID tekrar kaydedilirse satır güncellenir.
+- Her satıra `Etik Kurul No` ve `Kayıt Zamanı` eklenir.
+- Giriş: tek ortak şifre (`DATA_ENTRY_PASSWORD`), 8 saatlik imzalı çerez. Kişiye özel hesaplar
+  Supabase ile gelecek.
+- Bir çalışmanın etik kurul onay numarası `lib/content.ts` içinde girilmeden formu açılmaz.
+
+**Vercel ortam değişkenleri:** `GOOGLE_SERVICE_ACCOUNT_JSON` (Streamlit secrets'taki servis
+hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`, `DATA_ENTRY_PASSWORD`,
+`SESSION_SECRET` (uzun rastgele metin). Servis hesabının e-postası tabloya **Düzenleyici**
+olarak paylaşılmış olmalı (Streamlit için zaten paylaşılmış durumda).
 
 ## Etik / KVKK ilkeleri (veri girişi)
 
 - Ad, TC kimlik no, telefon, dosya/protokol numarası tutulmaz; hasta yalnızca
   çalışmaya özel takma kodla (ör. `HT-001`) tanımlanır. Eşleştirme listesi sitede değil,
   sorumlu araştırmacıda kalır.
-- Etik kurul onay numarası girilmemiş çalışmaya veri eklenemez (RLS ile zorunlu).
-- Yalnızca çalışmaya eklenmiş araştırmacılar okur/yazar; silme yalnızca admin.
-- Her ekleme/düzenleme/silme `audit_log` tablosuna yazılır.
-- Veriler AB (Frankfurt) bölgesinde tutulur.
+- Serbest metin alanlarında telefon/TC gibi uzun rakam dizileri reddedilir.
+- Etik kurul onay numarası girilmemiş çalışmaya veri eklenemez.
+- Sitede kayıt listeleme/görüntüleme yok; veriler yalnızca tabloya yetkili kişilerce erişilir.
+- İleride Supabase'e geçilen çalışmalarda `supabase/schema.sql` (rol bazlı erişim, `audit_log`,
+  AB-Frankfurt) kullanılacak.
 
 ## Yerelde çalıştırma
 
