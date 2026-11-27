@@ -1,52 +1,59 @@
 import Link from "next/link";
-import { news } from "@/lib/content";
+import { news, studies, educationTools } from "@/lib/content";
+import { JOURNALS } from "@/lib/pubmed";
 import { formatDate } from "@/lib/format";
+import { Hero } from "@/components/home/Hero";
+import { ModuleStory } from "@/components/home/ModuleStory";
+import { Reveal } from "@/components/home/Reveal";
 
-const modules = [
-  { href: "/haberler", title: "Klinik Haberleri", desc: "Duyurular, toplantılar ve klinikten gelişmeler." },
-  { href: "/literatur", title: "Güncel Literatür", desc: "Önemli yayınların kısa özetleri ve kılavuz güncellemeleri." },
-  { href: "/egitim", title: "Eğitim", desc: "Simülasyonlar, hesaplayıcılar ve eğitim materyalleri." },
-  { href: "/soru-bankasi", title: "Soru Bankası", desc: "Kategorilere ayrılmış kardiyoloji soruları ve açıklamaları." },
-  { href: "/calismalar", title: "Klinik Çalışmalar", desc: "Yürüyen çalışmalar ve yetkili ekip için anonim veri girişi." },
+const facts = [
+  { value: String(JOURNALS.length), label: "dergi her gün otomatik takip ediliyor" },
+  { value: String(studies.length), label: "yürüyen klinik çalışma" },
+  { value: String(educationTools.length), label: "simülasyon ve hesaplayıcı" },
 ];
 
 export default function Home() {
   return (
-    <div className="space-y-14">
-      <section className="rounded-2xl bg-gradient-to-br from-brand to-brand-dark px-8 py-14 text-white">
-        <h1 className="text-4xl font-bold">NEÜ Kardiyoloji Kliniği</h1>
-        <p className="mt-4 max-w-2xl text-lg text-red-50">
-          Klinik içi haberler, güncel literatür, eğitim içerikleri ve kliniğimizde yürütülen çalışmalar tek yerde.
-        </p>
-      </section>
+    <div>
+      <Hero />
 
-      <section>
-        <h2 className="mb-4 text-xl font-semibold">Modüller</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {modules.map((m) => (
-            <Link
-              key={m.href}
-              href={m.href}
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand"
-            >
-              <h3 className="font-semibold text-slate-900">{m.title}</h3>
-              <p className="mt-1 text-sm text-slate-600">{m.desc}</p>
-            </Link>
+      <section className="py-24 text-center">
+        <Reveal>
+          <h2 className="mx-auto max-w-3xl text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+            Kliniğimizin bilgisi, ekibimiz ve öğrencilerimiz için tek adreste.
+          </h2>
+        </Reveal>
+        <div className="mt-14 grid gap-8 sm:grid-cols-3">
+          {facts.map((f, i) => (
+            <Reveal key={f.label} delay={i * 0.12}>
+              <p className="text-6xl font-bold text-brand">{f.value}</p>
+              <p className="mt-2 text-slate-600">{f.label}</p>
+            </Reveal>
           ))}
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-4 text-xl font-semibold">Son Haberler</h2>
-        <ul className="space-y-3">
-          {news.slice(0, 3).map((n) => (
-            <li key={n.slug}>
-              <Link href={`/haberler/${n.slug}`} className="hover:text-brand">
-                <span className="text-sm text-slate-500">{formatDate(n.date)}</span> · {n.title}
+      <ModuleStory />
+
+      <section className="py-24">
+        <Reveal>
+          <div className="mb-8 flex items-end justify-between">
+            <h2 className="text-3xl font-bold tracking-tight">Klinikten haberler</h2>
+            <Link href="/haberler" className="text-sm font-semibold text-brand hover:underline">Tümü →</Link>
+          </div>
+        </Reveal>
+        <div className="grid gap-6 md:grid-cols-2">
+          {news.slice(0, 4).map((n, i) => (
+            <Reveal key={n.slug} delay={i * 0.1}>
+              <Link href={`/haberler/${n.slug}`}
+                className="block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+                <p className="text-sm text-slate-500">{formatDate(n.date)}</p>
+                <h3 className="mt-2 text-xl font-semibold">{n.title}</h3>
+                <p className="mt-2 text-slate-600">{n.summary}</p>
               </Link>
-            </li>
+            </Reveal>
           ))}
-        </ul>
+        </div>
       </section>
     </div>
   );
