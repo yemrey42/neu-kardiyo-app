@@ -2,17 +2,26 @@ import "server-only";
 import { JWT } from "google-auth-library";
 
 // Google Sheets'e servis hesabı ile yazar (Streamlit'teki gspread mantığının aynısı).
-// Gerekli ortam değişkenleri:
-//   GOOGLE_SERVICE_ACCOUNT_JSON : servis hesabı JSON anahtarının tamamı (tek satır)
-//   GOOGLE_SHEET_ID            : hedef tablo kimliği
+// Gerekli ortam değişkenleri (Streamlit secrets'taki gcp_service_account bölümünden):
+//   GOOGLE_CLIENT_EMAIL : client_email değeri
+//   GOOGLE_PRIVATE_KEY  : private_key değeri (-----BEGIN PRIVATE KEY----- ... dahil)
+// Alternatif: GOOGLE_SERVICE_ACCOUNT_JSON (JSON'un tamamı). GOOGLE_SHEET_ID verilmezse Streamlit'in tablosu.
 
 const API = "https://sheets.googleapis.com/v4/spreadsheets";
 
+// Streamlit uygulamasının kullandığı tablo (web_app.py içindeki SHEET_ID)
+const DEFAULT_SHEET_ID = "1_Jd27n2lvYRl-oKmMOVySd5rGvXLrflDCQJeD_Yz6Y4";
+
 function config() {
+  const sheetId = process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-  if (!raw || !sheetId) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON ve GOOGLE_SHEET_ID tanımlı değil.");
-  const creds = JSON.parse(raw) as { client_email: string; private_key: string };
+  // Ya JSON'un tamamı ya da Streamlit secrets'taki iki alan ayrı ayrı verilebilir.
+  const creds = raw
+    ? (JSON.parse(raw) as { client_email: string; private_key: string })
+    : { client_email: process.env.GOOGLE_CLIENT_EMAIL ?? "", private_key: process.env.GOOGLE_PRIVATE_KEY ?? "" };
+  if (!creds.client_email || !creds.private_key) {
+    throw new Error("Google servis hesabı tanımlı değil (GOOGLE_CLIENT_EMAIL ve GOOGLE_PRIVATE_KEY).");
+  }
   return { creds, sheetId };
 }
 

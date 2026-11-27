@@ -46,8 +46,9 @@ Yeni çalışmalar ileride Supabase'e alınabilir.
   tutulur, çalışma verisi tutulmaz. Her satıra kaydeden kişinin e-postası (`Kaydeden`) yazılır.
 - Etik kurul onay numarası opsiyonel: `lib/content.ts` içinde girilirse gösterilir ve her satıra yazılır.
 
-**Vercel ortam değişkenleri:** `GOOGLE_SERVICE_ACCOUNT_JSON` (Streamlit secrets'taki servis
-hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`. (Supabase değerleri kodda tanımlı.) Servis hesabının e-postası tabloya **Düzenleyici**
+**Vercel ortam değişkenleri:** `GOOGLE_CLIENT_EMAIL` ve `GOOGLE_PRIVATE_KEY` (Streamlit
+secrets'taki `[gcp_service_account]` bölümünden `client_email` ve `private_key`). Tablo kimliği
+ve Supabase değerleri kodda tanımlı. Servis hesabının e-postası tabloya **Düzenleyici**
 olarak paylaşılmış olmalı (Streamlit için zaten paylaşılmış durumda).
 
 ### Kullanıcı hesapları (Supabase)
