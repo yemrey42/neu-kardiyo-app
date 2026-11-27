@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 //  - Ad, soyad, TC kimlik no, telefon, dosya/protokol numarası GİRİLMEZ.
 //  - Hasta yalnızca çalışmaya özel takma kodla (ör. HT-001) tanımlanır;
 //    kod-hasta eşleştirme listesi sitede değil, sorumlu araştırmacıda tutulur.
-//  - Etik kurul onay numarası girilmemiş çalışmada veri girişi kapalıdır.
+//  - Etik kurul onay numarası opsiyoneldir; girilirse her satıra yazılır.
 export default async function DataEntry({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const study = studies.find((s) => s.slug === slug);
@@ -23,7 +23,6 @@ export default async function DataEntry({ params }: { params: Promise<{ slug: st
   const cfg = studySheetConfig[slug];
   if (!study || !spec || !cfg) notFound();
 
-  const ethicsOk = Boolean(study.ethicsApprovalNo);
   const loggedIn = await hasSession();
 
   return (
@@ -42,11 +41,11 @@ export default async function DataEntry({ params }: { params: Promise<{ slug: st
         <ul className="list-disc space-y-1 pl-5">
           <li>Yalnızca anonim veri: ad, TC kimlik no, telefon, dosya numarası <b>girilmez</b>.</li>
           <li>Hasta, çalışmaya özel kodla tanımlanır ({cfg.codePrefix}-001 gibi). Eşleştirme listesi sorumlu araştırmacıdadır.</li>
-          <li>Etik kurul onay no: {study.ethicsApprovalNo ?? <b>girilmedi, veri girişi kapalı</b>}</li>
+          {study.ethicsApprovalNo && <li>Etik kurul onay no: {study.ethicsApprovalNo}</li>}
         </ul>
       </div>
 
-      {!ethicsOk ? null : !loggedIn ? (
+      {!loggedIn ? (
         <LoginForm slug={slug} />
       ) : (
         <StudyForm slug={slug} spec={spec} sections={groupBySection(spec)} codePrefix={cfg.codePrefix} />

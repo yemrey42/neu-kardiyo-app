@@ -23,7 +23,7 @@ export default function StudiesPage() {
             <h2 className="mt-1 font-semibold">{s.title}</h2>
             <p className="mt-1 text-sm text-slate-600">{s.summary}</p>
             <p className="mt-3 text-xs text-slate-500">
-              Durum: {s.status} · Etik kurul: {s.ethicsApprovalNo ?? "onay no girilmedi"}
+              Durum: {s.status}{s.ethicsApprovalNo ? ` · Etik kurul: ${s.ethicsApprovalNo}` : ""}
             </p>
           </Link>
         ))}

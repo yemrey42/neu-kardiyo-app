@@ -16,7 +16,7 @@ export default function KvkkPage() {
       <p>
         Site ziyaretçilerinden zorunlu çerezler dışında kişisel veri toplanmaz. Ekip üyelerinin kurumsal e-posta
         adresi yalnızca giriş için işlenir. Klinik çalışma modülünde hastalara ait kimliği belirleyici hiçbir bilgi
-        tutulmaz; veriler çalışmaya özel takma kodlarla, etik kurul onayı kapsamında kaydedilir.
+        tutulmaz; veriler çalışmaya özel takma kodlarla kaydedilir.
       </p>
       <h2 className="text-lg font-semibold">Saklama yeri</h2>
       <p>Veriler Avrupa Birliği (Frankfurt) bölgesindeki sunucularda şifreli olarak saklanır.</p>

@@ -36,7 +36,6 @@ export async function saveRecord(slug: string, _prev: SaveState, formData: FormD
   const spec = getFormSpec(slug);
   const cfg = studySheetConfig[slug];
   if (!study || !spec || !cfg) return { ok: false, message: "Çalışma bulunamadı." };
-  if (!study.ethicsApprovalNo) return { ok: false, message: "Etik kurul onay numarası girilmeden veri kaydedilemez." };
 
   const code = String(formData.get("__code") ?? "").trim().toUpperCase();
   const codeRe = new RegExp(`^${cfg.codePrefix}-\\d{3,5}$`);
@@ -76,7 +75,7 @@ export async function saveRecord(slug: string, _prev: SaveState, formData: FormD
     Tarih: date,
     ...row,
     ...computeDerived(slug, row),
-    "Etik Kurul No": study.ethicsApprovalNo,
+    "Etik Kurul No": study.ethicsApprovalNo ?? "",
     "Kayıt Zamanı": new Date().toISOString(),
   };
 

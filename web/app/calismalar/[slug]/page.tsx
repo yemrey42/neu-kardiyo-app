@@ -20,7 +20,7 @@ export default async function StudyDetail({ params }: { params: Promise<{ slug: 
       <dl className="grid grid-cols-2 gap-4 rounded-xl border border-slate-200 bg-white p-5 text-sm">
         <dt className="text-slate-500">Alan</dt><dd>{study.area}</dd>
         <dt className="text-slate-500">Durum</dt><dd>{study.status}</dd>
-        <dt className="text-slate-500">Etik kurul onay no</dt><dd>{study.ethicsApprovalNo ?? "Girilmedi"}</dd>
+        {study.ethicsApprovalNo && (<><dt className="text-slate-500">Etik kurul onay no</dt><dd>{study.ethicsApprovalNo}</dd></>)}
       </dl>
 
       <section className="rounded-xl bg-amber-50 p-5 text-sm text-amber-900">

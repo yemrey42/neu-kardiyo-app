@@ -36,7 +36,7 @@ Yeni çalışmalar ileride Supabase'e alınabilir.
 - Her satıra `Etik Kurul No` ve `Kayıt Zamanı` eklenir.
 - Giriş: tek ortak şifre (`DATA_ENTRY_PASSWORD`), 8 saatlik imzalı çerez. Kişiye özel hesaplar
   Supabase ile gelecek.
-- Bir çalışmanın etik kurul onay numarası `lib/content.ts` içinde girilmeden formu açılmaz.
+- Etik kurul onay numarası opsiyonel: `lib/content.ts` içinde girilirse gösterilir ve her satıra yazılır.
 
 **Vercel ortam değişkenleri:** `GOOGLE_SERVICE_ACCOUNT_JSON` (Streamlit secrets'taki servis
 hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`, `DATA_ENTRY_PASSWORD`,
@@ -49,7 +49,6 @@ olarak paylaşılmış olmalı (Streamlit için zaten paylaşılmış durumda).
   çalışmaya özel takma kodla (ör. `HT-001`) tanımlanır. Eşleştirme listesi sitede değil,
   sorumlu araştırmacıda kalır.
 - Serbest metin alanlarında telefon/TC gibi uzun rakam dizileri reddedilir.
-- Etik kurul onay numarası girilmemiş çalışmaya veri eklenemez.
 - Sitede kayıt listeleme/görüntüleme yok; veriler yalnızca tabloya yetkili kişilerce erişilir.
 - İleride Supabase'e geçilen çalışmalarda `supabase/schema.sql` (rol bazlı erişim, `audit_log`,
   AB-Frankfurt) kullanılacak.

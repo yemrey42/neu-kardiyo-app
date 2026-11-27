@@ -102,7 +102,7 @@ export type Study = {
   title: string;
   area: string;
   summary: string;
-  ethicsApprovalNo: string | null; // Etik kurul onayı girilmeden veri girişi açılmaz
+  ethicsApprovalNo: string | null; // Opsiyonel; girilirse sayfada gösterilir ve her kayda yazılır
   status: "hazırlık" | "aktif" | "tamamlandı";
 };
 
