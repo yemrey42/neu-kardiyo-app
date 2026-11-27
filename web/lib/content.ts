@@ -53,16 +53,39 @@ export const literature: LiteratureItem[] = [
   },
 ];
 
-// Streamlit uygulamasında (web_app.py) bulunan eğitim araçları.
-// Yeni sitede ayrı sayfalar olarak yeniden yazılacak.
-export const educationTools = [
-  { title: "Kateterizasyon Simülasyonu", kind: "Simülasyon", status: "taşınacak" },
-  { title: "Transseptal Ponksiyon Simülasyonu", kind: "Simülasyon", status: "taşınacak" },
-  { title: "Kateter Hemodinami Hesaplayıcı", kind: "Hesaplayıcı", status: "taşınacak" },
-  { title: "Mitral Yetmezlik Hesaplayıcı", kind: "Hesaplayıcı", status: "taşınacak" },
-  { title: "Diyastolik Disfonksiyon Hesaplayıcı", kind: "Hesaplayıcı", status: "taşınacak" },
-  { title: "Kalp Atlası", kind: "Görsel içerik", status: "taşınacak" },
-] as const;
+// Eğitim araçları. Simülasyonlar Streamlit uygulamasından taşındı (public/simulasyon/*.html);
+// diyastolik fonksiyon modülü yeni sitede sıfırdan yazıldı.
+export type EducationTool = { slug: string; title: string; kind: string; desc: string; file?: string };
+
+export const educationTools: EducationTool[] = [
+  {
+    slug: "diyastolik-fonksiyon",
+    title: "Diyastolik Fonksiyon",
+    kind: "Görsel hesaplayıcı",
+    desc: "Elinizdeki eko ölçümleriyle dolum basıncı ve evre; eksik parametrede ne yapılacağı, AF ve tuzaklar.",
+  },
+  {
+    slug: "kateterizasyon",
+    title: "Kateterizasyon Simülasyonu",
+    kind: "Simülasyon",
+    desc: "Sağ ve sol kalp kateterizasyonu: kateter pozisyonuna göre basınç dalgaları ve EKG.",
+    file: "/simulasyon/kateterizasyon.html",
+  },
+  {
+    slug: "transseptal-ponksiyon",
+    title: "Transseptal Ponksiyon Simülasyonu",
+    kind: "Simülasyon",
+    desc: "Floroskopi ve TEE eş zamanlı: kılıfı çekme, iğneyi çevirme, çadırlanma ve ponksiyon.",
+    file: "/simulasyon/transseptal.html",
+  },
+  {
+    slug: "hemodinami",
+    title: "Kateter Hemodinami Hesaplayıcı",
+    kind: "Hesaplayıcı",
+    desc: "Fick / termodilüsyon debi, dirençler, şant ve kapak alanı; değerler kalp çizimi üzerinde.",
+    file: "/simulasyon/hemodinami.html",
+  },
+];
 
 // Soru şeması Streamlit soru bankasıyla aynı tutuldu:
 // SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak

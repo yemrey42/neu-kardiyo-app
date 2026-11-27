@@ -55,7 +55,7 @@ const items: Item[] = [
     text: "Önde gelen kardiyoloji dergilerindeki yeni yayınlar PubMed'den her gün otomatik olarak listelenir. Kliniğimizin yayınları ayrı bir bölümde.",
     visual: <Pages /> },
   { href: "/egitim", title: "Eğitim", accent: "text-emerald-600 bg-emerald-50",
-    text: "Kateterizasyon ve transseptal ponksiyon simülasyonları, hemodinami, mitral yetmezlik ve diyastolik fonksiyon hesaplayıcıları.",
+    text: "Kateterizasyon ve transseptal ponksiyon simülasyonları, hemodinami hesaplayıcısı ve görsel diyastolik fonksiyon modülü.",
     visual: <Monitor /> },
   { href: "/soru-bankasi", title: "Soru bankası", accent: "text-violet-600 bg-violet-50",
     text: "Kategorilere ayrılmış sorular, anında geri bildirim ve kaynaklı açıklamalar.",
