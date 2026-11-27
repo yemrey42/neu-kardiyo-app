@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transseptal Ponksiyon Simülasyonu</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--tx:#1b2430;--mu:#5d6b7c;--bd:#dde2e8;--sh:#eef1f5;--ac:#c0392b;--ok:#1e8e5a;--wa:#b86e00;--er:#c0392b;--bl:#2463b0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141a;--card:#18202a;--tx:#e6ebf1;--mu:#9aa7b6;--bd:#2a3542;--sh:#212b37;--ok:#3cc488;--wa:#e8a33c;--er:#ef6a5d;--bl:#6aa6ec;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141a;--card:#18202a;--tx:#e6ebf1;--mu:#9aa7b6;--bd:#2a3542;--sh:#212b37;--ok:#3cc488;--wa:#e8a33c;--er:#ef6a5d;--bl:#6aa6ec;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:14px}
+h1{font-size:21px;margin:2px 0}.sub{color:var(--mu);margin:0 0 10px}
+h3{font-size:14px;margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap}
+.bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:10px}
+select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);max-width:100%}
+button{font:inherit;font-size:13px;padding:5px 11px;margin:0 4px 4px 0;border-radius:16px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+button:hover{border-color:var(--mu)}
+button.on{background:var(--ac);border-color:var(--ac);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.dim{opacity:.45}
+button.pri{background:var(--bl);border-color:var(--bl);color:#fff}
+button.dan{border-color:var(--er);color:var(--er)}
+button.retract{background:var(--er);border-color:var(--er);color:#fff;animation:pl 1.2s ease-in-out infinite}
+@keyframes pl{50%{box-shadow:0 0 0 5px rgba(192,57,43,.25)}}
+@media (prefers-reduced-motion:reduce){button.retract{animation:none}}
+.lock{display:none;font-size:12.5px;border-radius:8px;padding:6px 9px;margin:4px 0;background:rgba(192,57,43,.12);border:1px solid var(--er)}
+.lock.on{display:block}.lock.okk{background:rgba(30,142,90,.12);border-color:var(--ok)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:300px 1fr 1fr;gap:12px}
+@media(max-width:1020px){.g3{grid-template-columns:1fr 1fr}.g3>.card:first-child{grid-column:1/-1}}
+@media(max-width:760px){.g2,.g3{grid-template-columns:1fr}}
+canvas{display:block;width:100%;height:auto;border-radius:8px;touch-action:none}
+.btnrow{display:flex;flex-wrap:wrap;align-items:center}
+.small{font-size:12px;color:var(--mu)}
+.ctl{margin:8px 0}
+.ctl label{display:flex;justify-content:space-between;font-size:12px;color:var(--mu);margin-bottom:2px}
+.ctl input[type=range]{width:100%}
+.dialrow{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px}
+.kv span:nth-child(odd){color:var(--mu)}
+.kv b{font-variant-numeric:tabular-nums}
+.hint{background:var(--sh);border-radius:8px;padding:7px 10px;margin-top:8px;font-size:13px}
+.hint.ok{border-left:4px solid var(--ok)}.hint.wa{border-left:4px solid var(--wa)}.hint.er{border-left:4px solid var(--er);}
+.alert{border-radius:8px;padding:8px 10px;margin:8px 0;font-size:13px;display:none}
+.alert.er{display:block;background:rgba(192,57,43,.12);border:1px solid var(--er)}
+.alert.ok{display:block;background:rgba(30,142,90,.12);border:1px solid var(--ok)}
+.alert.wa{display:block;background:rgba(184,110,0,.12);border:1px solid var(--wa)}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s}
+ol.steps li{counter-increment:s;padding:5px 8px 5px 34px;position:relative;border-radius:8px;margin-bottom:3px;font-size:13px}
+ol.steps li::before{content:counter(s);position:absolute;left:6px;top:5px;width:20px;height:20px;border-radius:50%;background:var(--sh);border:1px solid var(--bd);text-align:center;font-size:11px;line-height:19px}
+ol.steps li.done{color:var(--mu)}ol.steps li.done::before{content:"✓";background:var(--ok);border-color:var(--ok);color:#fff}
+ol.steps li.cur{background:var(--sh)}ol.steps li.cur::before{background:var(--bl);border-color:var(--bl);color:#fff}
+ol.steps li .d{display:none;color:var(--mu);font-size:12px;margin-top:2px}ol.steps li.cur .d{display:block}
+.chk{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--mu);margin-right:10px}
+details{margin:4px 0}summary{cursor:pointer;font-weight:600;padding:3px 0}
+details ul{margin:4px 0 8px;padding-left:20px}details li{margin:2px 0}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--sh);border:1px solid var(--bd);color:var(--mu)}
+.score{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--bd);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--sh)}
+.keys{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12.5px;color:var(--mu)}.keys b{color:var(--tx)}.keys span{white-space:nowrap}
+.foot{color:var(--mu);font-size:11.5px;margin-top:6px}
+</style></head><body><div class="wrap">
+
+<h1>Transseptal Ponksiyon Simülasyonu</h1>
+<p class="sub">Floroskopi ve TEE eş zamanlı. Kılıfı/dilatörü SVK'dan geri çekin, iğne göstergesini çevirin, TEE ile hedefi doğrulayıp septumu çadırlandırın ve ponksiyonu yapın.</p>
+<div class="keys"><b>Klavye kısayolları</b> <span>(çalışması için önce simülasyona bir kez tıklayın)</span>
+ <span><kbd>↑</kbd><kbd>↓</kbd> ilerlet / geri çek</span>
+ <span><kbd>←</kbd><kbd>→</kbd> saat yönü tersi (anterior) / saat yönü (posterior)</span>
+ <span><kbd>+</kbd><kbd>−</kbd> septuma baskı</span>
+ <span><kbd>N</kbd> iğne ilerlet / geri çek</span>
+ <span><kbd>K</kbd> kontrast</span>
+ <span><kbd>D</kbd> dilatör + kılıf</span>
+ <span><kbd>T</kbd> tel</span>
+ <span><kbd>1</kbd>–<kbd>4</kbd> C-kol (AP, RAO 30, RAO 45, LAO 45)</span>
+ <span><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> TEE (X-plane, bikaval, kısa aks, 4 boşluk)</span>
+</div>
+
+<div class="bar">
+  <label>Prosedür <select id="proc"></select></label>
+  <span id="procTag" class="tag"></span>
+  <span class="chk"><input type="checkbox" id="guided" checked> Rehberli adımlar</span>
+  <button id="reset" class="dan">↺ Baştan başla</button>
+</div>
+
+<div class="g2">
+  <div class="card">
+    <h3><span>Floroskopi</span><span class="btnrow" id="carmBtns"></span></h3>
+    <canvas id="fl" width="560" height="440"></canvas>
+    <div class="btnrow" style="margin-top:6px">
+      <span class="chk"><input type="checkbox" id="fFossa" checked> Fossa / hedef katmanı (eğitim)</span>
+      <span class="chk"><input type="checkbox" id="fLbl" checked> Etiketler</span>
+      <span class="chk"><input type="checkbox" id="fCS"> KS kateteri (EP)</span>
+      <span class="chk"><input type="checkbox" id="fPig" checked> Pigtail (NCC)</span>
+    </div>
+  </div>
+  <div class="card">
+    <h3><span>Transözofageal Eko</span><span class="btnrow" id="teeBtns"></span></h3>
+    <canvas id="te" width="560" height="440"></canvas>
+    <div class="btnrow" style="margin-top:6px">
+      <span class="chk"><input type="checkbox" id="tLbl" checked> Anatomik etiketler</span>
+      <span class="small" id="teeHint"></span>
+    </div>
+  </div>
+</div>
+
+<div class="g3">
+  <div class="card">
+    <h3>Kateter kontrolü</h3>
+    <div class="dialrow">
+      <canvas id="dial" width="150" height="150" title="Kadrana tıklayarak da çevirebilirsiniz"></canvas>
+      <div>
+        <div class="small">İğne göstergesi (ayak ucundan bakış)</div>
+        <div style="font-size:22px;font-weight:700" id="rotTxt">12:00</div>
+        <button id="ccw" title="Klavye: ←">↺ Saat yönü tersi<br><span class="small">→ anterior</span></button>
+        <button id="cw" title="Klavye: →">↻ Saat yönü<br><span class="small">→ posterior</span></button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label><span>Kılıf pozisyonu: <b id="hTxt"></b></span><span>↓ geri çek · ↑ ilerlet</span></label>
+      <div class="btnrow"><button id="dn" title="Klavye: ↓">⬇ Geri çek</button><button id="up" title="Klavye: ↑">⬆ İlerlet</button></div>
+      <input type="range" id="hS" min="-4.5" max="7" step="0.05" value="5.5">
+      <div class="small" style="display:flex;justify-content:space-between"><span>İVK</span><span>fossa</span><span>SVK</span></div>
+    </div>
+    <div class="ctl">
+      <label><span>Septuma ileri baskı (çadırlanma)</span><b id="pTxt">0%</b></label>
+      <input type="range" id="pS" min="0" max="100" step="1" value="0">
+    </div>
+    <div class="btnrow">
+      <button id="needle" class="pri" title="Klavye: N">🪡 İğneyi ilerlet</button>
+      <button id="contrast" title="Klavye: K">💉 Kontrast / SF</button>
+    </div>
+    <div class="btnrow">
+      <button id="dil" disabled>Dilatör + kılıfı LA'ya ilerlet</button>
+      <button id="wire" disabled>Teli sol üst PV'ye</button>
+    </div>
+    <div class="lock" id="lockNote"></div>
+    <div class="small" id="postNote">Bu iki adım, iğne fossadan LA'ya geçtikten sonra açılır.</div>
+  </div>
+
+  <div class="card">
+    <h3><span>Fossa haritası</span><span class="small">RA tarafından en-face (RAO ile aynı yön)</span></h3>
+    <canvas id="map" width="360" height="330"></canvas>
+    <div class="btnrow" style="margin-top:4px"><span class="chk"><input type="checkbox" id="mTgt" checked> Hedef bölgeyi göster</span><span class="chk"><input type="checkbox" id="mIso" checked> Yükseklik eğrileri</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Canlı değerlendirme</h3>
+    <div class="kv" id="kv"></div>
+    <div class="hint" id="hint"></div>
+    <div class="alert" id="alert"></div>
+    <div style="margin-top:8px"><div class="small" id="prLbl">İğne ucu basıncı</div><canvas id="pr" width="360" height="96"></canvas></div>
+  </div>
+</div>
+
+<div class="g2">
+  <div class="card" id="stepCard">
+    <h3>Rehberli adımlar</h3>
+    <ol class="steps" id="steps"></ol>
+  </div>
+  <div class="card">
+    <h3>Sonuç</h3>
+    <div id="result" class="small">Henüz ponksiyon yapılmadı.</div>
+  </div>
+</div>
+
+<div class="card" id="info"></div>
+
+<div class="card">
+  <h3>Temel bilgiler</h3>
+  <details open><summary>Septum anatomisi: gerçek septum neresi?</summary><ul>
+    <li><b>Gerçek interatriyal septum, büyük ölçüde fossa ovalis tabanıdır (septum primum).</b> İnce ve esnektir; çadırlanma burada belirgindir.</li>
+    <li>Fossayı çevreleyen kalın <b>limbus</b> (septum sekundum) aslında atriyal duvarın içe katlanmasıdır (interatriyal oluk / Waterston oluğu). Süperior ve posterior kenardan geçiş <b>ekstrakardiyak / perikardiyal</b> olabilir.</li>
+    <li>Anterosüperiorda <b>aort kökü (non-koroner kusp)</b>, posterosüperiorda SVK, posteroinferiorda İVK, anteroinferiorda koroner sinüs ağzı ve triküspit anülüsü bulunur.</li>
+    <li>Fossa dört bölgeye ayrılır: süperior-anterior, süperior-posterior, inferior-anterior, inferior-posterior. Her işlemin ideal kadranı farklıdır.</li>
+  </ul></details>
+  <details><summary>Floroskopi ipuçları</summary><ul>
+    <li><b>Saat kadranı (ayak ucundan bakış):</b> 12 anterior, 3 hastanın solu, 6 posterior, 9 hastanın sağı. Standart iğne yönü <b>saat 4–5</b>. Saat yönünde çevirmek ucu <b>posteriora</b>, tersine çevirmek <b>anteriora</b> götürür.</li>
+    <li><b>LAO 40–50°:</b> septum kenardan (edge-on) görünür. Uç sağa (hastanın soluna, LA'ya) bakmalı. Geri çekerken iki sıçrama izlenir: <b>1.</b> SVK'dan RA'ya geçiş, <b>2.</b> limbusun altından fossaya düşüş.</li>
+    <li><b>RAO 30–45°:</b> septum en-face görünür ve anterior–posterior ayrımı yapılır. Uç, aortik pigtail'in (NCC) <b>posterior-inferiorunda</b>, omurga tarafında olmalı.</li>
+    <li>AP'de fossa çoğunlukla omurganın sağ kenarına yakın izdüşer. Dev LA'da (örn. ciddi MS) septum yataylaşır, fossa daha inferior ve posteriora kayar ve klasik işaretler yanıltıcı olabilir.</li>
+  </ul></details>
+  <details><summary>TEE ipuçları</summary><ul>
+    <li><b>ME bikaval (≈90–110°):</b> SVK ekranın sağında, İVK solunda yer alır. Çadırlanmanın <b>süperior–inferior</b> konumu buradan değerlendirilir.</li>
+    <li><b>ME aort kapak kısa aks (≈30–60°):</b> aorta ekranın sağında (anterior), posterior septum solda kalır. Çadırlanmanın <b>anterior–posterior</b> konumu buradan değerlendirilir. Aortaya yakın çadırlanma tehlikelidir.</li>
+    <li><b>ME 4 boşluk (≈0°):</b> çadırlanma noktası ile mitral anülüs (koaptasyon) düzlemi arasındaki <b>yükseklik</b> ölçülür. M-TEER ve transseptal TMVR için kritiktir.</li>
+    <li><b>X-plane:</b> bikaval ve kısa aks eş zamanlı görüntülenir, süperior-posterior hedef tek bakışta doğrulanır.</li>
+    <li>Ponksiyon doğrulaması: LA basınç trasesi, LA'da kontrast ve TEE'de LA'da SF köpüğü. <b>Aortik basınç veya köpük görülürse iğneyi geri çekin, dilatörü asla ilerletmeyin.</b></li>
+  </ul></details>
+  <details><summary>Zor durumlar</summary><ul>
+    <li><b>Anevrizmal septum:</b> büyük ve sarkık çadır oluşur, iğne geçmeden LA serbest duvarına yaklaşabilir. RF iğne veya kılavuz tel tekniği düşünülür.</li>
+    <li><b>Kalın / lipomatöz septum, önceki cerrahi veya yama:</b> artmış direnç vardır. RF iğne veya dilatörle kontrollü ilerleme düşünülür, zorlamaktan kaçınılır.</li>
+    <li><b>PFO:</b> PFO tünelinden geçiş anterosüperior çıkar, M-TEER ve LAAO için genellikle uygunsuz koaksiyalite sağlar. Hedefe yönelik ayrı ponksiyon tercih edilir.</li>
+    <li><b>Önceki ASD/PFO kapatma cihazı:</b> cihazın genellikle posteroinferiorundaki doğal septumdan ponksiyon yapılır.</li>
+  </ul></details>
+  <p class="foot">Eğitim amaçlı şematik bir modeldir. Geometri, yükseklik ve basınç değerleri yaklaşık olup gerçek hasta anatomisinin yerini tutmaz. Hedefler: ESC/EACVI pratik önerileri ve yapısal kalp hastalığı girişim rehberleri (M-TEER: süperior-posterior, primer MY'de ≥4 cm, sekonder MY'de ≈3,5 cm; LAAO: inferior-posterior; kriyobalon PVİ: inferior-anterior).</p>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const D2R=Math.PI/180, TAU=Math.PI*2;
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const sstep=(e0,e1,x)=>{const t=clamp((x-e0)/(e1-e0),0,1);return t*t*(3-2*t)};
+// ---------- 3B geometri ----------
+// Hasta koordinatları: X = hastanın solu (+), Y = anterior (+), Z = süperior (+), cm
+// Septal koordinatlar: a = RA→LA derinliği, u = septum düzleminde anterior, v = süperior
+const N=[Math.SQRT1_2,-Math.SQRT1_2,0], UA=[Math.SQRT1_2,Math.SQRT1_2,0], ZV=[0,0,1];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], mul=(a,s)=>[a[0]*s,a[1]*s,a[2]*s];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const norm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l]};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function P(a,u,v){return [N[0]*a+UA[0]*u, N[1]*a+UA[1]*u, v]}
+const FA=0.9, FB=1.1, SA=2.3, SB=2.7;          // fossa ve septum yarı-eksenleri
+const AO={u:2.0,v:1.3,r:1.0};                   // aort kökü (NCC) septal izdüşümü
+const SVC_U=-0.4, IVC_U=-0.8, RA_A=-1.8;
+const heightAt=(u,v)=>3.7+0.9*v-0.35*u;          // mitral anülüs düzlemine yükseklik (cm)
+
+const PROCS={
+ teer_dmr:{ad:"M-TEER – primer (dejeneratif) MY",kisa:"Süperior-posterior · yükseklik ≥ 4,0–4,5 cm",t:{u:-0.45,v:0.62,ru:0.42,rv:0.4},h:[4.0,5.0],la:"mr",
+  not:["Hedef: fossanın <b>süperior-posterior</b> kadranı. Posterior yön, klips sisteminin mitral düzleme dik inmesi için yer açar.",
+   "Yükseklik <b>prolapsus/flail segmentinin</b> üzerinden düşünülmeli. Lezyon anülüsün üzerinde olduğundan primer MY'de daha yüksek ponksiyon (≥4–4,5 cm) gerekir.",
+   "Çok süperior veya anterior ponksiyon kılavuzu aortaya yaklaştırır ve sistem mitral düzleme göre anterior kalır. Çok inferior ponksiyonda klipsi manevra ettirecek yükseklik kalmaz.",
+   "Medial (A3/P3) lezyonlarda biraz daha yüksek ve posterior, lateral (A1/P1) lezyonlarda daha düşük yükseklik tolere edilebilir."]},
+ teer_fmr:{ad:"M-TEER – sekonder (fonksiyonel) MY",kisa:"Posterior, orta-süperior · yükseklik ≈ 3,5–4,0 cm",t:{u:-0.45,v:0.12,ru:0.42,rv:0.42},h:[3.5,4.2],la:"mr",
+  not:["Hedef yine <b>posterior</b>. Koaptasyon anülüsün altına (apikale) çekildiği için daha düşük bir yükseklik (≈3,5–4 cm) yeterlidir.",
+   "Aşırı yüksek ponksiyon, tethering'li ve derin koaptasyon noktasına inerken sistemin LV'ye fazla girmesine ve kontrolün zorlaşmasına neden olabilir.",
+   "Yükseklik ME 4 boşlukta (≈0°) çadırlanma noktasından koaptasyon düzlemine ölçülür."]},
+ pmbv:{ad:"Perkütan mitral balon valvüloplasti (Inoue)",kisa:"Orta / hafif inferior-posterior fossa",t:{u:-0.22,v:-0.25,ru:0.55,rv:0.5},h:null,la:"ms",
+  not:["Hedef: fossanın <b>orta–inferior ve hafif posterior</b> kısmı. Balonun LA içinde dönüp mitral kapağa yönlenmesine izin verir.",
+   "Çok süperior veya anterior ponksiyon aortik kök riskini artırır ve balonun MV'ye yönlendirilmesini zorlaştırır.",
+   "Ciddi MS'de dev LA septumu sağa ve aşağıya iter. Fossa daha inferior-posteriorda olabilir, TEE rehberliği bu nedenle değerlidir.",
+   "Ponksiyon sonrası LA basıncı yüksektir (büyük a dalgası, yüksek ortalama basınç). Transmitral gradiyent ölçümüyle birlikte değerlendirilir."]},
+ laao:{ad:"Sol atriyal apendiks kapatma (LAAO)",kisa:"İnferior-posterior",t:{u:-0.45,v:-0.6,ru:0.42,rv:0.42},h:null,la:"n",
+  not:["Hedef: fossanın <b>inferior-posterior</b> kadranı. LAA anterior-süperior-lateraldedir, inferior-posterior giriş kılıfın LAA boynuyla <b>koaksiyel</b> hizalanmasını sağlar.",
+   "Süperior veya anterior ponksiyonda kılıf LAA'nın tavanına veya posterior duvarına yönelir, cihazın eksen dışı yerleşme riski artar.",
+   "Anatomiye göre uyarlanır: örneğin anterior yönelimli LAA'da hafif daha anterior bir ponksiyon tercih edilebilir. Gerekirse yönlendirilebilir kılıf kullanılır."]},
+ af_cryo:{ad:"AF ablasyonu – kriyobalon PVİ",kisa:"İnferior-anterior",t:{u:0.38,v:-0.6,ru:0.42,rv:0.42},h:null,la:"n",
+  not:["Hedef: fossanın <b>inferior-anterior</b> kısmı. Balonun sağ inferior PV'ye (RIPV) dönmesi için LA içinde yer açar.",
+   "Çok posterior ponksiyon sağ PV'lere fazla yakın kalır, balon geri kıvrılamaz ve RIPV oklüzyonu zorlaşır.",
+   "Anterior gidilirken aort köküne yakınlık her zaman kontrol edilmelidir."]},
+ af_rf:{ad:"AF ablasyonu – RF (nokta nokta)",kisa:"Orta-inferior fossa (esnek)",t:{u:0.1,v:-0.35,ru:0.6,rv:0.55},h:null,la:"n",
+  not:["RF kateterleri yönlendirilebilir kılıflarla geniş bir manevra alanına sahiptir. Fossanın orta–inferior kısmı genellikle yeterlidir.",
+   "İnferior ponksiyon sağ inferior PV ve posterior duvar ulaşımını kolaylaştırır. Çift ponksiyonda iki giriş arasında mesafe bırakılır.",
+   "EP laboratuvarında KS kateteri (anteroinferior) ve His bölgesi ek floroskopik işaret olarak kullanılabilir."]},
+ tmvr:{ad:"Transseptal TMVR (valve-in-valve / ring)",kisa:"İnferior-posterior · yükseklik ≈ 3,5–4,0 cm",t:{u:-0.5,v:-0.3,ru:0.42,rv:0.42},h:[3.3,4.2],la:"mr",
+  not:["Hedef: <b>inferior-posterior</b> ve orta yükseklik. Uzun ve sert kapak sisteminin LA içinde kıvrılıp mitral düzleme koaksiyel inmesi için alan sağlar.",
+   "Çok yüksek ponksiyonda sistem LA tavanından dik açıyla iner ve koaksiyalite bozulur.",
+   "Ponksiyon sonrası septostomi balonu ile genişletme gerekebilir."]},
+ free:{ad:"Serbest pratik (hedef yok)",kisa:"Hedef gösterilmez",t:null,h:null,la:"n",
+  not:["Serbest modda hedef bölge tanımlı değildir. Rotasyon ve geri çekmenin floroskopi ve TEE'deki karşılığını keşfedin.",
+   "Deneyin: saat 3'e çevirip aort köküne doğru çadırlanma oluşturun, ardından saat 6'ya çevirip posterior kenarı görün."]}
+};
+
+const REG={fossa:"Fossa ovalis",sup:"Süperior limbus (septum sekundum)",inf:"İnferior limbus",ant:"Anterior limbus – aort köküne yakın",post:"Posterior kenar (posterior katlantı)",
+ aorta:"Aort kökü (NCC) komşuluğu",wsup:"SVK–RA bileşkesi / RA tavanı",winf:"İVK – KS ağzı bölgesi",want:"Anterior RA duvarı (triküspit / RAA yönü)",wpost:"Posterior RA serbest duvarı",
+ svc:"SVK içinde",ivc:"İVK girişi",free:"RA boşluğunda – septuma bakmıyor"};
+
+// ---------- durum ----------
+let S;
+function initState(keepProc){
+ const proc=keepProc&&S?S.proc:'teer_dmr';
+ S={proc,h:5.5,rot:12,push:0,needleOut:false,crossed:false,outcome:null,sheathLA:false,wire:false,
+  carm:45,tee:S?S.tee:'xp',fx:[],bub:[],mark:null,attempts:0,comp:0,result:null,alert:null,
+  done:{},visited:{},startedSVC:true,prevRegion:'svc',jumps:0,lastMsgT:0};
+}
+initState(false);
+
+function tipState(){
+ const h=S.h, phi=S.rot*30*D2R, d=[Math.sin(phi),Math.cos(phi),0];
+ const dn=dot(d,N), du=dot(d,UA);
+ const uSh=-0.15+0.03*h;
+ const r={d,dn,du,v:h,contact:false,region:'free',a:RA_A,u:uSh,tent:0,inSVC:false};
+ if(h>2.6){ r.inSVC=true; r.region='svc'; r.a=RA_A+0.22*dn; r.u=SVC_U+0.22*du; }
+ else if(h<-3.3){ r.region='ivc'; r.a=RA_A+0.3*dn; r.u=IVC_U+0.3*du; }
+ else if(dn>0.3){
+  let u=clamp(uSh+1.4*du/dn,-3.2,3.4); r.u=u; r.contact=true;
+  const e=(u/FA)**2+(h/FB)**2, dA=Math.hypot(u-AO.u,h-AO.v), e2=(u/SA)**2+(h/SB)**2;
+  let reg;
+  if(e<=1) reg='fossa';
+  else if(dA<AO.r) reg='aorta';
+  else if(e2<=1){const qu=u/FA,qv=h/FB; reg=Math.abs(qv)>=Math.abs(qu)?(qv>0?'sup':'inf'):(qu>0?'ant':'post');}
+  else {const qu=u/SA,qv=h/SB; reg=Math.abs(qv)>=Math.abs(qu)?(qv>0?'wsup':'winf'):(qu>0?'want':'wpost');}
+  r.region=reg;
+  r.a=-0.5*(1-sstep(1.08,0.92,e));
+  if(reg==='aorta') r.a=-0.4;
+  if(reg[0]==='w') r.a=-0.7-0.5*clamp((Math.sqrt(e2)-1)*2,0,1);
+  const k=reg==='fossa'?1.15:(reg==='aorta'?0.28:(reg[0]==='w'?0.1:0.22));
+  r.tent=S.crossed?0:S.push*k;
+ } else { r.a=RA_A+0.9*Math.max(dn,-0.4); r.u=uSh+0.9*du; }
+ r.height=heightAt(r.u,r.v);
+ r.dA=Math.hypot(r.u-AO.u,r.v-AO.v)-AO.r;
+ return r;
+}
+function quadName(u,v){
+ const sv=v>0.3?'süperior':(v<-0.3?'inferior':'orta'); const su=u>0.25?'anterior':(u<-0.25?'posterior':'orta');
+ if(sv==='orta'&&su==='orta') return 'merkez';
+ if(sv==='orta') return 'orta-'+su; if(su==='orta') return sv+' (orta AP)';
+ return sv+'-'+su;
+}
+const clockTxt=r=>{let x=((r%12)+12)%12; let hh=Math.floor(x), mm=Math.round((x-hh)*60); if(mm===60){hh++;mm=0} if(hh===0)hh=12; return hh+':'+String(mm).padStart(2,'0')};
+
+// ---------- yardımcılar ----------
+function catmull(pts,n){n=n||8;const out=[],L=pts[0].length;for(let i=0;i<pts.length-1;i++){const p0=pts[Math.max(0,i-1)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(pts.length-1,i+2)];
+ for(let j=0;j<n;j++){const t=j/n,t2=t*t,t3=t2*t,q=[];for(let k=0;k<L;k++)q.push(0.5*(2*p1[k]+(-p0[k]+p2[k])*t+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3));out.push(q)}}
+ out.push(pts[pts.length-1]);return out}
+function bez3(a,c,b,n){const o=[];for(let i=0;i<=n;i++){const t=i/n,m=1-t;o.push([0,1,2].map(k=>m*m*a[k]+2*m*t*c[k]+t*t*b[k]))}return o}
+function splitFromEnd(pts,L){let acc=0;for(let i=pts.length-1;i>0;i--){const a=pts[i],b=pts[i-1];const s=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+ if(acc+s>=L){const f=(L-acc)/s;const m=[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];return {prox:pts.slice(0,i).concat([m]),dist:[m].concat(pts.slice(i))}}acc+=s}
+ return {prox:[pts[0]],dist:pts}}
+function setupCanvas(cv){const dpr=Math.min(3,window.devicePixelRatio||1);
+ // mantıksal boyut yalnızca ilk seferde HTML özniteliğinden okunur; sonraki yeniden boyutlandırmalarda büyümez
+ if(!cv.dataset.w){cv.dataset.w=cv.getAttribute('width');cv.dataset.h=cv.getAttribute('height')}
+ const w=+cv.dataset.w,h=+cv.dataset.h;cv.style.aspectRatio=w+' / '+h;cv._w=w;cv._h=h;cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);return c}
+
+// gürültü dokuları
+function noiseCanvas(n,alpha){const c=document.createElement('canvas');c.width=c.height=n;const x=c.getContext('2d');const id=x.createImageData(n,n);
+ for(let i=0;i<id.data.length;i+=4){const g=Math.random()*255;id.data[i]=id.data[i+1]=id.data[i+2]=g;id.data[i+3]=alpha*255*Math.random()}x.putImageData(id,0,0);return c}
+const NOISE=[0,1,2].map(()=>noiseCanvas(140,0.55));
+function speckleCanvas(n){const c=document.createElement('canvas');c.width=c.height=n;const x=c.getContext('2d');
+ for(let i=0;i<n*n/5;i++){const g=120+Math.random()*135;x.fillStyle=`rgba(${g},${g},${g},${Math.random()*0.5})`;const w=1+Math.random()*2.5;x.fillRect(Math.random()*n,Math.random()*n,w,1+Math.random()*1.2)}return c}
+const SPK=[speckleCanvas(200),speckleCanvas(200)];
+
+const fl=$('fl'),te=$('te'),mp=$('map'),dl=$('dial'),pr=$('pr');
+let fctx,tctx,mctx,dctx,pctx;
+function setupAll(){fctx=setupCanvas(fl);tctx=setupCanvas(te);mctx=setupCanvas(mp);dctx=setupCanvas(dl);pctx=setupCanvas(pr)}
+setupAll(); window.addEventListener('resize',()=>{setupAll()});
+
+// ---------- sabit yapılar ----------
+const PIG_PATH=catmull([[2.4,-4.6,-14],[2.4,-4.6,4.2],[2.1,-3.5,7.3],[1.3,-1.1,8.4],[0.9,1.1,7.4],[1.35,1.6,4.6],[1.7,1.35,2.6],P(0.45,1.55,1.35)],6);
+const PIG_LOOP=(()=>{const c=P(0.45,1.55,0.85),o=[];const ax1=ZV,ax2=norm(UA);for(let i=0;i<=24;i++){const t=Math.PI/2+i/24*TAU*0.92;o.push(add(c,add(mul(ax1,0.5*Math.sin(t)),mul(ax2,0.5*Math.cos(t)))))}return o})();
+const AO_PATH=catmull([P(0.6,2.0,0.6),[1.7,1.35,2.6],[1.35,1.6,4.6],[0.9,1.1,7.4],[1.3,-1.1,8.4],[2.1,-3.5,7.3],[2.4,-4.6,4.2]],6);
+const LSPV=[P(3.7,-0.6,1.6),P(4.9,-0.3,2.3),P(5.7,0.1,2.6)];
+const CS_PATH=(()=>{const CM=[2.6,-0.7,-2.9],m=norm([0.62,0.45,-0.64]),e1=norm(cross(m,ZV)),e2=cross(m,e1),R=2.15;
+ const pt=t=>add(CM,add(mul(e1,R*Math.cos(t)),mul(e2,R*Math.sin(t))));
+ let best=0,by=1e9;for(let i=0;i<72;i++){const t=i/72*TAU,y=pt(t)[1];if(y<by){by=y;best=t}}
+ let arc=[];for(let i=0;i<=20;i++)arc.push(pt(best-1.7+3.4*i/20));
+ if(arc[0][0]>arc[arc.length-1][0])arc.reverse();
+ const os=arc[0];
+ return {pre:catmull([P(RA_A,SVC_U,15),P(RA_A,SVC_U,3),P(-1.5,0.2,0.2),P(-1.0,0.7,-2.0),os],6),arc}})();
+
+// ---------- kılıf yolu ----------
+function sheathGeom(r){
+ const base=P(RA_A,IVC_U,-14), ivcTop=P(RA_A,IVC_U,-3.5);
+ const tip=P(r.a+r.tent,r.u,r.v);
+ let pts,dir;
+ if(r.inSVC){
+  dir=norm(add(ZV,mul(r.d,0.25)));
+  pts=catmull([base,ivcTop,P(RA_A,-0.5,0),P(RA_A,SVC_U,2.4),P(RA_A,SVC_U,Math.max(2.6,r.v-0.8)),tip],6);
+ } else if(r.v<-3.3){
+  dir=norm(add(ZV,mul(r.d,0.4)));
+  pts=catmull([base,P(RA_A,IVC_U,r.v-2.5),tip],6);
+ } else {
+  dir=norm(add(mul(r.d,0.8),mul(ZV,0.55)));
+  const kv=Math.max(r.v-2.4,-3.6);
+  const K=P(RA_A-0.1,-0.45,kv), C=add(tip,mul(dir,-1.5));
+  const lower=kv>-3.4?[base,ivcTop,K]:[base,K];
+  pts=catmull(lower,6).concat(bez3(K,C,tip,10).slice(1));
+ }
+ return {pts,tip,dir};
+}
+
+// ---------- FLOROSKOPİ ----------
+const FX0=262,FY0=205,KF=19;
+let WOB=[0,0,0];
+function drawFluoro(t,r){
+ const c=fctx,W=560,H=440,al=S.carm*D2R,ca=Math.cos(al),sa=Math.sin(al);
+ const ww=p=>clamp((p[2]+7)/3,0,1)*clamp((6.5-p[2])/3,0,1);
+ const pr=(p,wob)=>{let x=p[0],y=p[1],z=p[2];if(wob!==false){const w=ww(p);x+=WOB[0]*w;y+=WOB[1]*w;z+=WOB[2]*w}return [FX0+KF*(x*ca-y*sa),FY0-KF*z]};
+ const line=(pts,w,col,wob)=>{c.beginPath();pts.forEach((p,i)=>{const q=pr(p,wob);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])});c.lineWidth=w;c.strokeStyle=col;c.lineCap='round';c.lineJoin='round';c.stroke()};
+ const ellipsoid=(ctr,axes,fill,blur)=>{const rx=[ca,-sa,0],ry=[0,0,1];let sxx=0,syy=0,sxy=0;axes.forEach(a=>{const ax=dot(rx,a),ay=dot(ry,a);sxx+=ax*ax;syy+=ay*ay;sxy+=ax*ay});
+  const tr=sxx+syy,det=sxx*syy-sxy*sxy,q=Math.sqrt(Math.max(0,tr*tr/4-det)),l1=tr/2+q,l2=Math.max(0.01,tr/2-q),th=0.5*Math.atan2(2*sxy,sxx-syy);
+  const p=pr(ctr);c.save();if(blur)c.filter=`blur(${blur}px)`;c.beginPath();c.ellipse(p[0],p[1],KF*Math.sqrt(l1),KF*Math.sqrt(l2),-th,0,TAU);c.fillStyle=fill;c.fill();c.restore()};
+ c.save();c.globalCompositeOperation='source-over';c.filter='none';
+ const g=c.createRadialGradient(W/2,H/2,40,W/2,H/2,380);g.addColorStop(0,'#d9d9d6');g.addColorStop(1,'#8f8f8c');c.fillStyle=g;c.fillRect(0,0,W,H);
+ c.globalCompositeOperation='multiply';
+ // akciğer/mediasten
+ const spx=pr([0,-6.5,0],false)[0];
+ c.save();c.filter='blur(18px)';c.fillStyle='rgba(120,120,118,0.35)';c.fillRect(spx-KF*2.6,0,KF*5.2,H);c.restore();
+ // diyafram
+ c.save();c.filter='blur(10px)';c.fillStyle='rgba(80,80,78,0.45)';c.beginPath();c.moveTo(0,H);c.lineTo(0,FY0+KF*8.4);
+ c.quadraticCurveTo(FX0-KF*5,FY0+KF*5.6,FX0+KF*0.5,FY0+KF*7.4);c.quadraticCurveTo(FX0+KF*6,FY0+KF*5.8,W,FY0+KF*8.8);c.lineTo(W,H);c.closePath();c.fill();c.restore();
+ // omurga
+ const vw=KF*(4.0*Math.abs(ca)+3.6*Math.abs(sa));
+ for(let z=-13;z<13;z+=2.55){const p=pr([0,-6.5,z],false);c.fillStyle='rgba(60,60,58,0.22)';rr(c,p[0]-vw/2,p[1]-KF*1.0,vw,KF*2.0,6);c.fill();
+  if(Math.abs(ca)>0.8){c.fillStyle='rgba(50,50,50,0.14)';c.beginPath();c.ellipse(p[0]-vw*0.32,p[1],5,7,0,0,TAU);c.ellipse(p[0]+vw*0.32,p[1],5,7,0,0,TAU);c.fill()}
+  else{const sp=pr([0,-9.2,z],false);c.fillStyle='rgba(50,50,50,0.12)';c.beginPath();c.ellipse(sp[0],sp[1]+4,KF*0.9,KF*0.55,0,0,TAU);c.fill()}}
+ // kalp gölgesi
+ const la=norm([0.68,0.45,-0.58]),lb=norm(cross(la,ZV)),lc=cross(la,lb);
+ ellipsoid([2.7,0.4,-2.9],[mul(la,6.2),mul(lb,4.6),mul(lc,4.2)],'rgba(70,70,68,0.33)',12);
+ ellipsoid(P(-2.3,-0.2,-0.8),[mul(N,2.4),mul(UA,2.6),mul(ZV,2.8)],'rgba(70,70,68,0.22)',10);
+ ellipsoid([1.4,-1.0,6.3],[[1.3,0,0],[0,1.3,0],[0,0,1.6]],'rgba(70,70,68,0.16)',8); // aortik topuz
+ // kontrast efektleri
+ const now=t;
+ S.fx=S.fx.filter(f=>now-f.t0<f.dur);
+ S.fx.forEach(f=>{const age=(now-f.t0)/f.dur,fi=Math.min(1,(now-f.t0)/0.25),fade=fi*(1-age)**1.3;
+  if(f.type==='la'){const col=`rgba(20,20,20,${0.42*fade})`;ellipsoid(P(2.3,-0.3,0.3),[mul(N,2.0),mul(UA,2.4),mul(ZV,1.9)],col,3);
+   ellipsoid(P(2.7,1.9,0.9),[mul(N,0.7),mul(UA,1.0),mul(ZV,0.6)],col,2);
+   [[3.9,-0.6,1.5],[3.9,-0.6,-0.6],[2.0,-2.6,1.4],[2.0,-2.6,-0.7]].forEach(q=>ellipsoid(P(...q),[mul(N,0.9),mul(UA,0.5),mul(ZV,0.45)],col,2))}
+  if(f.type==='ao'){const k=Math.min(1,(now-f.t0)/0.6);line(AO_PATH.slice(0,Math.max(2,Math.floor(AO_PATH.length*k))),KF*2.4,`rgba(25,25,25,${0.45*(1-age)})`)}
+  if(f.type==='stain'){const p=f.p;ellipsoid(p,[mul(N,0.25),mul(UA,0.55),mul(ZV,0.7)],`rgba(15,15,15,${0.55*(1-age)})`,2)}
+  if(f.type==='ra'){const p=f.p;ellipsoid(p,[mul(N,0.6+age*2),mul(UA,0.6+age*2),mul(ZV,0.8+age*2.5)],`rgba(30,30,30,${0.35*(1-age)})`,6)}
+  if(f.type==='peri'){c.save();c.lineWidth=7;c.strokeStyle=`rgba(20,20,20,${0.3*(1-age)})`;c.filter='blur(3px)';const p=pr([2.7,0.4,-2.9]);c.beginPath();c.ellipse(p[0],p[1],KF*6.4,KF*4.7,-0.5,0,TAU);c.stroke();c.restore()}
+ });
+ // TEE probu
+ line([P(4.0,-1.2,15),P(4.0,-1.2,1.8)],KF*0.85,'rgba(40,40,40,0.38)',false);
+ line([P(4.0,-1.2,1.8),P(4.0,-1.2,-0.5)],KF*1.25,'rgba(25,25,25,0.6)',false);
+ // pigtail
+ if($('fPig').checked){line(PIG_PATH,3.2,'rgba(15,15,15,0.75)');line(PIG_LOOP,3.2,'rgba(15,15,15,0.75)')}
+ // KS kateteri
+ if($('fCS').checked){line(CS_PATH.pre,3.4,'rgba(15,15,15,0.75)');line(CS_PATH.arc,3.4,'rgba(15,15,15,0.75)');
+  CS_PATH.arc.forEach((p,i)=>{if(i%2===0){const q=pr(p);c.fillStyle='rgba(0,0,0,0.85)';c.fillRect(q[0]-3,q[1]-3,6,6)}})}
+ // eğitim katmanı: fossa izdüşümü
+ if($('fFossa').checked){c.globalCompositeOperation='source-over';
+  const ring=(cu,cv,ra,rb,col,dash,wd)=>{c.beginPath();for(let i=0;i<=40;i++){const th=i/40*TAU;const q=pr(P(0,cu+ra*Math.cos(th),cv+rb*Math.sin(th)));i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])}c.setLineDash(dash||[]);c.lineWidth=wd||1.5;c.strokeStyle=col;c.stroke();c.setLineDash([])};
+  ring(0,0,SA,SB,'rgba(30,80,160,0.35)',[3,4],1.2);ring(0,0,FA,FB,'rgba(30,90,200,0.85)',[5,3],1.6);
+  const pp=PROCS[S.proc];if(pp.t&&$('mTgt').checked)ring(pp.t.u,pp.t.v,pp.t.ru,pp.t.rv,'rgba(20,150,80,0.9)',[],2);
+  c.globalCompositeOperation='multiply'}
+ // kılıf / dilatör / iğne
+ const G=sheathGeom(r);let pts=G.pts.slice();
+ if(S.sheathLA){pts=pts.concat([add(G.tip,mul(G.dir,0.8)),add(G.tip,mul(G.dir,1.7))])}
+ const sp=splitFromEnd(pts,S.sheathLA?0.9:1.4);
+ const ndl=S.needleOut&&!S.sheathLA?pts.concat([add(G.tip,mul(G.dir,0.65))]):splitFromEnd(pts,0.6).prox;
+ if(!S.wire||!S.sheathLA) line(ndl,1.8,'rgba(0,0,0,0.75)');
+ line(sp.prox,KF*0.3,'rgba(30,30,30,0.5)');
+ line(sp.dist,KF*0.2,'rgba(40,40,40,0.42)');
+ const mk=pr(sp.prox[sp.prox.length-1]);c.fillStyle='rgba(0,0,0,0.85)';c.beginPath();c.arc(mk[0],mk[1],3.4,0,TAU);c.fill();
+ if(S.wire){const st=pts[pts.length-1];line(catmull([st,P(2.0,-0.3,0.7)].concat(LSPV),6),1.6,'rgba(0,0,0,0.8)')}
+ // gürültü
+ c.globalCompositeOperation='overlay';c.globalAlpha=0.5;const nz=NOISE[(Math.random()*3)|0];const ox=Math.random()*140,oy=Math.random()*140;
+ for(let x=-ox;x<W;x+=140)for(let y=-oy;y<H;y+=140)c.drawImage(nz,x,y);
+ c.globalAlpha=1;c.globalCompositeOperation='source-over';
+ const vg=c.createRadialGradient(W/2,H/2,H*0.42,W/2,H/2,H*0.85);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.45)');c.fillStyle=vg;c.fillRect(0,0,W,H);
+ c.restore();
+ // etiketler
+ c.save();c.font='600 12px system-ui,sans-serif';
+ const lab=(p,txt,dx,dy,wob)=>{const q=pr(p,wob);halo(c,txt,q[0]+(dx||0),q[1]+(dy||0),'#111')};
+ const cname=S.carm===0?'AP':(S.carm>0?'LAO '+S.carm+'°':'RAO '+(-S.carm)+'°');
+ c.font='700 15px system-ui,sans-serif';halo(c,cname,12,22,'#111');
+ c.font='12px system-ui,sans-serif';
+ const ori=S.carm===0?'Hastanın sağı ◀  ▶ Hastanın solu':(S.carm>0?'◀ Anterior   ·   Posterior (omurga) ▶':'◀ Posterior (omurga)   ·   Anterior ▶');
+ halo(c,ori,W/2-c.measureText(ori).width/2,H-10,'#222');
+ if($('fLbl').checked){c.font='600 11.5px system-ui,sans-serif';
+  if($('fPig').checked)lab(P(0.45,1.55,0.85),'Pigtail (NCC)',18,-26);
+  lab(P(4.0,-1.2,-0.8),'TEE probu',14,14,false);
+  lab([0,-6.5,-9.5],'Omurga',vw/2+4,0,false);
+  lab(P(RA_A,IVC_U,-6),'SL kılıf',10,0);
+  if($('fCS').checked)lab(CS_PATH.arc[12],'KS',8,10);
+  const tq=pr(G.tip);if(S.crossed)halo(c,'→ LA',tq[0]+10,tq[1]-6,'#0a3a8a');else halo(c,'Dilatör ucu',tq[0]-78,tq[1]+4,'#0a3a8a');
+  if($('fFossa').checked){const fq=pr(P(0,-FA,-FB-0.2));halo(c,'fossa (şematik)',fq[0]-30,fq[1]+14,'#1d4fa0')}}
+ c.restore();
+}
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function halo(c,txt,x,y,col){c.lineWidth=3;c.strokeStyle='rgba(255,255,255,0.75)';c.strokeText(txt,x,y);c.fillStyle=col;c.fillText(txt,x,y)}
+
+// ---------- TEE ----------
+function teeFrame(x0,y0,w,h,depth,half){half=(half||45)*D2R;const apx=x0+w/2,apy=y0+18;const R=Math.min(h-30,(w/2-6)/Math.sin(half));const k=R/depth;
+ return {x0,y0,w,h,apx,apy,R,k,half,depth,T:(lx,d)=>[apx+lx*k,apy+d*k]}}
+function sectorPath(c,F){c.beginPath();c.moveTo(F.apx,F.apy);c.arc(F.apx,F.apy,F.R,Math.PI/2-F.half,Math.PI/2+F.half);c.closePath()}
+function polyCm(c,F,pts){c.beginPath();pts.forEach((p,i)=>{const q=F.T(p[0],p[1]);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])});c.closePath()}
+function lineCm(c,F,pts,w,col){c.beginPath();pts.forEach((p,i)=>{const q=F.T(p[0],p[1]);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])});c.lineWidth=w;c.strokeStyle=col;c.lineCap='round';c.lineJoin='round';c.stroke()}
+function ellCm(c,F,cx,cy,rx,ry){const q=F.T(cx,cy);c.beginPath();c.ellipse(q[0],q[1],rx*F.k,ry*F.k,0,0,TAU)}
+function cavity(c,F,fn){c.save();c.filter='blur(2px)';c.fillStyle='#060606';fn();c.fill();c.restore()}
+function tissueBase(c,F,t){c.fillStyle='#4b4b4b';sectorPath(c,F);c.fill();c.save();sectorPath(c,F);c.clip();c.globalAlpha=0.7;const s=SPK[(t*12|0)%2];
+ for(let x=F.x0;x<F.x0+F.w;x+=200)for(let y=F.y0;y<F.y0+F.h;y+=200)c.drawImage(s,x,y);c.restore()}
+function teeFinish(c,F,t,title,angle){
+ c.save();sectorPath(c,F);c.clip();
+ c.globalCompositeOperation='overlay';c.globalAlpha=0.35;const s=SPK[((t*12|0)+1)%2];for(let x=F.x0-50;x<F.x0+F.w;x+=200)for(let y=F.y0;y<F.y0+F.h;y+=200)c.drawImage(s,x,y);
+ c.globalCompositeOperation='source-over';c.globalAlpha=1;
+ const g=c.createRadialGradient(F.apx,F.apy,0,F.apx,F.apy,F.R);g.addColorStop(0,'rgba(255,255,255,0.18)');g.addColorStop(0.07,'rgba(0,0,0,0)');g.addColorStop(0.55,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,0.55)');c.fillStyle=g;c.fillRect(F.x0,F.y0,F.w,F.h);
+ c.restore();
+ c.strokeStyle='rgba(200,200,200,0.35)';c.lineWidth=1;sectorPath(c,F);c.stroke();
+ c.fillStyle='rgba(220,220,220,0.8)';for(let d=2;d<F.depth;d+=2){const a=Math.PI/2-F.half;const x=F.apx+Math.cos(a)*d*F.k,y=F.apy+Math.sin(a)*d*F.k;c.fillRect(x+3,y,4,1.2)}
+ c.font='600 12px system-ui,sans-serif';c.fillStyle='#9fe3ff';c.fillText(title,F.x0+8,F.y0+16);c.font='11px system-ui,sans-serif';c.fillStyle='#ccc';c.fillText(angle,F.x0+8,F.y0+31);
+ // açı göstergesi
+ const cx=F.x0+F.w-24,cy=F.y0+22,ang=parseFloat(angle)||0;c.strokeStyle='#888';c.beginPath();c.arc(cx,cy,12,0,TAU);c.stroke();c.strokeStyle='#9fe3ff';c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+12*Math.cos(Math.PI-ang*D2R),cy-12*Math.sin(Math.PI-ang*D2R));c.stroke();
+}
+function tlab(c,F,txt,lx,d,col){if(!$('tLbl').checked)return;const q=F.T(lx,d);c.font='600 11px system-ui,sans-serif';c.fillStyle=col||'rgba(255,230,140,0.95)';c.fillText(txt,q[0]-c.measureText(txt).width/2,q[1]+4)}
+function tbottom(c,F,txt){c.font='11px system-ui,sans-serif';c.fillStyle='#bbb';c.fillText(txt,F.x0+F.w/2-c.measureText(txt).width/2,F.y0+F.h-6)}
+function catheterCm(c,F,pts,w){
+ // akustik gölge
+ c.save();c.fillStyle='rgba(0,0,0,0.5)';c.filter='blur(2px)';
+ for(let i=0;i<pts.length-1;i++){const a=F.T(...pts[i]),b=F.T(...pts[i+1]);const ext=p=>{const dx=p[0]-F.apx,dy=p[1]-F.apy,l=Math.hypot(dx,dy)||1;return [p[0]+dx/l*F.R,p[1]+dy/l*F.R]};const ea=ext(a),eb=ext(b);
+  c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.lineTo(eb[0],eb[1]);c.lineTo(ea[0],ea[1]);c.closePath();c.fill()}
+ c.restore();
+ lineCm(c,F,pts.map(p=>[p[0],p[1]+0.32]),1.2,'rgba(230,230,230,0.25)');
+ lineCm(c,F,pts,w||3,'rgba(245,245,245,0.95)');
+}
+function bubbles(c,F,where,t,shape){
+ S.bub.forEach(b=>{if(b.where!==where)return;const age=t-b.t0;if(age<0||age>b.dur)return;const a=1-age/b.dur;
+  b.ps.forEach(p=>{const x=p[0]+Math.sin(t*3+p[2])*0.12+p[3]*age,y=p[1]+Math.cos(t*2.5+p[2])*0.1;const q=shape(x,y);if(!q)return;const s=F.T(q[0],q[1]);c.fillStyle=`rgba(255,255,255,${0.9*a})`;c.fillRect(s[0],s[1],2.2,2.2)})})
+}
+function addBubbles(where,t){const ps=[];for(let i=0;i<70;i++)ps.push([Math.random()*2-1,Math.random()*2-1,Math.random()*6,(Math.random()-0.5)*0.2]);S.bub=S.bub.filter(b=>t-b.t0<b.dur);S.bub.push({where,t0:t,dur:3.5,ps})}
+
+// --- bikaval ---
+function viewBic(c,F,r,t){
+ tissueBase(c,F,t);c.save();sectorPath(c,F);c.clip();
+ const contact=r.contact&&r.region[0]!=='w'&&r.region!=='aorta';
+ const vt=r.v, FBe=FB*Math.sqrt(Math.max(0,1-(r.u/FA)**2));
+ const tentAt=lx=>contact?r.tent*Math.pow(Math.max(0,1-Math.abs(lx-vt)/0.95),1.5):0;
+ const th=lx=>{const ins=1-sstep(FBe-0.12,FBe+0.12,Math.abs(lx));return 0.1*ins+(lx>0?0.55:0.45)*(1-ins)};
+ const beat=0.04*Math.sin(t*TAU*1.2);
+ // boşluklar
+ cavity(c,F,()=>{c.beginPath();for(let i=0;i<=30;i++){const a=Math.PI+i/30*Math.PI;const q=F.T(3.6*Math.cos(a),2.3+1.25*Math.sin(a)+beat);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])}const q1=F.T(3.6,3.6),q2=F.T(-3.6,3.6);c.lineTo(q1[0],q1[1]);c.lineTo(q2[0],q2[1]);c.closePath()});
+ cavity(c,F,()=>polyCm(c,F,[[-3.0,3.4],[3.0,3.4],[3.6,4.4],[3.6,6.6],[2.0,7.6],[-1.8,7.8],[-3.4,6.9],[-3.4,4.6]]));
+ cavity(c,F,()=>polyCm(c,F,[[2.4,3.75],[7.5,3.2],[7.5,5.4],[3.0,6.3]]));
+ cavity(c,F,()=>polyCm(c,F,[[-2.6,4.7],[-7.5,5.0],[-7.5,7.3],[-2.5,7.5]]));
+ // septum
+ const top=[],bot=[];for(let i=0;i<=80;i++){const lx=-3.4+6.8*i/80,tn=tentAt(lx);top.push([lx,3.55-tn+beat*0.5]);bot.push([lx,3.55+th(lx)-tn*(th(lx)<0.2?1:0.85)+beat*0.5])}
+ c.fillStyle='rgba(190,190,190,0.88)';polyCm(c,F,top.concat(bot.reverse()));c.fill();
+ lineCm(c,F,[[3.4,3.55],[7.5,3.05]],3,'rgba(200,200,200,0.8)');lineCm(c,F,[[-3.4,3.6],[-7.5,4.7]],3,'rgba(200,200,200,0.7)');
+ lineCm(c,F,[[-2.5,7.4],[-2.0,7.0+0.1*Math.sin(t*5)],[-1.5,6.6]],1.6,'rgba(220,220,220,0.8)'); // östaki valvi
+ // kateter
+ const tipD=3.55+th(vt)-tentAt(vt)*(th(vt)<0.2?1:0.85)+0.08;
+ let path;
+ if(r.inSVC){const sd=lx=>5.0-0.155*(lx-2.8);path=[[-7.5,6.3],[-2.6,6.15],[0.6,5.7],[2.8,5.0],[vt,sd(vt)]]}
+ else if(r.region==='ivc'){path=[[-7.5,6.3],[Math.max(vt-1.5,-7.4),6.2],[vt,5.8]]}
+ else if(contact){path=catmull([[-7.5,6.3],[-2.6,6.2],[vt-1.5,5.2],[vt-0.3,tipD+0.35],[vt,tipD]],5)}
+ else {const tx=vt+0.4,td=r.region[0]==='w'?4.1:4.9;path=catmull([[-7.5,6.3],[-2.6,6.2],[vt-1.2,5.6],[tx,td]],5)}
+ catheterCm(c,F,path,3.2);
+ const tp=path[path.length-1];
+ if(S.needleOut&&S.outcome==='la'){lineCm(c,F,[tp,[tp[0]+0.15,tp[1]-1.1]],1.6,'rgba(255,255,255,0.9)')}
+ if(S.needleOut&&S.outcome==='peri'){lineCm(c,F,[tp,[tp[0]+0.4,tp[1]-0.9]],1.6,'rgba(255,255,255,0.9)')}
+ if(S.sheathLA){lineCm(c,F,[tp,[tp[0]+0.5,2.4]],4,'rgba(245,245,245,0.95)')}
+ if(S.wire){lineCm(c,F,catmull([[tp[0]+0.5,2.4],[tp[0]+1.4,1.6],[3.2,1.4]],5),1.4,'rgba(255,255,255,0.9)')}
+ bubbles(c,F,'la',t,(x,y)=>[x*3.0,2.3+y*0.9]);
+ bubbles(c,F,'ra',t,(x,y)=>[vt+x*1.4,5.0+y*1.2]);
+ c.restore();
+ tlab(c,F,'LA',0,2.2);tlab(c,F,'RA',0.3,6.4);tlab(c,F,'SVK',2.9,5.0);tlab(c,F,'İVK',-3.3,6.3);
+ if(contact&&r.tent>0.15)tlab(c,F,'çadırlanma',vt+1.5,3.1-r.tent*0.5,'#ffd27a');
+ tbottom(c,F,'◀ İnferior (İVK)    ·    Süperior (SVK) ▶');
+}
+// --- kısa aks ---
+function viewSax(c,F,r,t){
+ tissueBase(c,F,t);c.save();sectorPath(c,F);c.clip();
+ const sU=u=>3.7+0.32*u, nv=[0.305,-0.952];
+ const contactSep=r.contact&&r.u<=1.1&&r.region[0]!=='w';
+ const vEff=clamp(r.v,-FB*0.99,FB*0.99), FAe=FA*Math.sqrt(Math.max(0,1-(vEff/FB)**2));
+ const ut=r.u;
+ const tentAt=u=>contactSep?r.tent*Math.pow(Math.max(0,1-Math.abs(u-ut)/0.95),1.5):0;
+ const th=u=>{const ins=1-sstep(FAe-0.12,FAe+0.12,Math.abs(u));const fossaHere=Math.abs(r.v)<FB;return fossaHere?0.1*ins+(u>0?0.5:0.45)*(1-ins):(u>0?0.5:0.48)};
+ const beat=0.04*Math.sin(t*TAU*1.2);
+ cavity(c,F,()=>polyCm(c,F,[[-3.4,sU(-3.4)],[-3.0,1.6],[-2,1.05],[0,0.95+beat],[2,1.15],[3.3,1.8],[3.7,2.7],[3.2,3.15],[2.4,3.28],[1.5,3.5],[1.1,sU(1.1)-0.05]]));
+ cavity(c,F,()=>polyCm(c,F,[[-3.4,sU(-3.4)+0.3],[1.0,sU(1.0)+0.3],[1.1,5.3],[0.75,6.15],[-0.6,6.9],[-2.4,7.0],[-3.6,6.0],[-3.9,4.2]]));
+ cavity(c,F,()=>polyCm(c,F,[[1.0,7.0],[1.6,6.35],[2.5,6.2],[3.5,5.95],[4.3,5.1],[4.9,4.0],[5.6,4.6],[5.3,6.6],[4.2,8.6],[1.8,8.9],[0.6,8.0]]));
+ const ac=[2.45,4.75],arad=1.2;
+ cavity(c,F,()=>ellCm(c,F,ac[0],ac[1],arad,arad));
+ // aort duvarı ve kuspler
+ c.strokeStyle='rgba(225,225,225,0.9)';c.lineWidth=3;ellCm(c,F,ac[0],ac[1],arad+0.05,arad+0.05);c.stroke();
+ const sys=(Math.sin(t*TAU*1.2)+1)/2>0.62;
+ [260,25,145].forEach(a=>{const q=F.T(ac[0]+arad*Math.cos(a*D2R),ac[1]+arad*Math.sin(a*D2R));const m=F.T(ac[0]+(sys?0.55:0)*Math.cos(a*D2R),ac[1]+(sys?0.55:0)*Math.sin(a*D2R));c.lineWidth=1.8;c.strokeStyle='rgba(235,235,235,0.9)';c.beginPath();c.moveTo(q[0],q[1]);c.lineTo(m[0],m[1]);c.stroke()});
+ // septum
+ const top=[],bot=[];for(let i=0;i<=80;i++){const u=-3.4+4.5*i/80,tn=tentAt(u),d=sU(u),w=th(u),tr=tn*(w<0.2?1:0.85);top.push([u+nv[0]*tn,d+nv[1]*tn+beat*0.4]);bot.push([u+nv[0]*tr,d+w+nv[1]*tr+beat*0.4])}
+ c.fillStyle='rgba(185,185,185,0.85)';polyCm(c,F,top.concat(bot.reverse()));c.fill();
+ // triküspit
+ const tv=(Math.sin(t*TAU*1.2)+1)/2>0.62?0:0.5;
+ lineCm(c,F,[[0.75,6.2],[1.2+tv*0.2,6.9+tv]],1.8,'rgba(225,225,225,0.85)');lineCm(c,F,[[0.45,7.6],[1.0,7.2+tv*0.4]],1.8,'rgba(225,225,225,0.85)');
+ // kateter
+ let tip;
+ if(contactSep){const tr=tentAt(ut)*(th(ut)<0.2?1:0.85);tip=[ut+nv[0]*tr,sU(ut)+th(ut)+nv[1]*tr+0.08]}
+ else if(r.contact&&r.u>1.1){const a=(205+clamp((r.u-1.1)/2.3,0,1)*45)*D2R;tip=[ac[0]+(arad+0.18)*Math.cos(a)-0.06*r.tent,ac[1]+(arad+0.18)*Math.sin(a)+0.25-r.tent*0.4]}
+ else if(r.inSVC) tip=null;
+ else tip=[ut-0.4,sU(ut)+1.4];
+ if(tip){catheterCm(c,F,[[tip[0]-0.35,tip[1]+1.0],tip],3.4);c.fillStyle='#fff';const q=F.T(tip[0],tip[1]);c.beginPath();c.arc(q[0],q[1],2.6,0,TAU);c.fill();
+  if(S.needleOut&&S.outcome==='la')lineCm(c,F,[tip,[tip[0]+0.35,tip[1]-1.1]],1.6,'rgba(255,255,255,0.9)');
+  if(S.needleOut&&S.outcome==='ao')lineCm(c,F,[tip,[ac[0]-0.4,ac[1]-0.2]],1.6,'rgba(255,255,255,0.9)');
+  if(S.sheathLA)lineCm(c,F,[tip,[tip[0]+0.5,tip[1]-1.4]],4,'rgba(245,245,245,0.95)');}
+ bubbles(c,F,'la',t,(x,y)=>[-0.4+x*2.4,2.1+y*0.75]);
+ bubbles(c,F,'ao',t,(x,y)=>{const rr2=Math.hypot(x,y);return rr2<1?[ac[0]+x*1.05,ac[1]+y*1.05]:null});
+ bubbles(c,F,'ra',t,(x,y)=>[-1.5+x*1.8,5.2+y*1.0]);
+ c.restore();
+ tlab(c,F,'LA',-0.6,1.9);tlab(c,F,'RA',-1.9,5.6);tlab(c,F,'Ao',ac[0],ac[1]+0.1);tlab(c,F,'RVOT',3.3,7.5);tlab(c,F,'NCC',ac[0]-0.95,ac[1]-0.15,'rgba(255,230,140,0.75)');
+ if(contactSep&&r.tent>0.15)tlab(c,F,'çadırlanma',ut-1.3,sU(ut)-r.tent*0.6-0.2,'#ffd27a');
+ if(r.inSVC)tlab(c,F,'(kateter SVK\'da – bu kesitte yok)',-1.2,7.6,'#bbb');
+ tbottom(c,F,'◀ Posterior    ·    Anterior (aorta) ▶');
+}
+// --- 4 boşluk ---
+function view4c(c,F,r,t){
+ tissueBase(c,F,t);c.save();sectorPath(c,F);c.clip();
+ const open=(Math.sin(t*TAU*1.2)+1)/2<0.62;
+ const contact=r.contact&&r.region[0]!=='w'&&r.region!=='aorta';
+ const yT=clamp(7.0-r.height,2.2,6.6);
+ const tentAt=y=>contact?r.tent*Math.pow(Math.max(0,1-Math.abs(y-yT)/0.95),1.5):0;
+ const iasX=y=>-0.75+0.2*(y-2.0)/4.8;
+ cavity(c,F,()=>polyCm(c,F,[[-0.7,2.2],[0.2,1.55],[1.6,1.6],[2.8,2.4],[3.35,4.2],[3.25,6.55],[-0.45,6.95]]));
+ cavity(c,F,()=>polyCm(c,F,[[-0.9,2.6],[-2.4,2.7],[-3.9,4.0],[-4.0,6.0],[-3.6,6.85],[-0.9,7.0]]));
+ cavity(c,F,()=>polyCm(c,F,[[-0.3,7.2],[3.3,6.8],[3.9,9.0],[3.2,11.4],[1.6,12.4],[0.3,11.6],[-0.25,9.5]]));
+ cavity(c,F,()=>polyCm(c,F,[[-0.85,7.3],[-3.6,7.0],[-4.3,9.0],[-3.0,11.0],[-1.2,11.4],[-0.75,9.5]]));
+ // IAS
+ const L=[],R=[];for(let i=0;i<=60;i++){const y=2.0+4.95*i/60,x=iasX(y),tn=tentAt(y);L.push([x-0.12+tn,y]);R.push([x+0.05+tn,y])}
+ c.fillStyle='rgba(215,215,215,0.95)';polyCm(c,F,L.concat(R.reverse()));c.fill();
+ // kapaklar
+ const aml=open?[0.5,9.1]:[1.35,7.55],pml=open?[2.7,8.7]:[1.45,7.6];
+ lineCm(c,F,[[-0.4,7.05],aml],2.2,'rgba(235,235,235,0.9)');lineCm(c,F,[[3.25,6.65],pml],2.2,'rgba(235,235,235,0.9)');
+ lineCm(c,F,[[-0.9,7.1],open?[-1.6,8.7]:[-2.2,7.5]],2,'rgba(225,225,225,0.85)');lineCm(c,F,[[-3.6,6.9],open?[-3.2,8.5]:[-2.3,7.5]],2,'rgba(225,225,225,0.85)');
+ // kateter
+ if(contact){const tip=[iasX(yT)-0.15+tentAt(yT),yT];catheterCm(c,F,catmull([[-3.8,7.6],[-2.6,6.4],[-1.4,yT+0.5],tip],5),3.2);
+  // ölçüm
+  const pp=PROCS[S.proc];const ok=!pp.h||(r.height>=pp.h[0]&&r.height<=pp.h[1]);
+  c.setLineDash([5,4]);lineCm(c,F,[[-1.4,7.06],[4.0,6.6]],1.2,'rgba(255,220,120,0.8)');c.setLineDash([]);
+  const mx=tip[0],my=6.98-0.085*(tip[0]+0.45);
+  lineCm(c,F,[tip,[mx,my]],1.6,ok?'#5df08f':'#ffb347');
+  const q=F.T(mx+0.25,(tip[1]+my)/2);c.font='700 13px system-ui,sans-serif';c.fillStyle=ok?'#5df08f':'#ffb347';c.fillText(r.height.toFixed(1).replace('.',',')+' cm',q[0],q[1]);
+  if(S.needleOut&&S.outcome==='la')lineCm(c,F,[tip,[tip[0]+1.0,tip[1]-0.1]],1.6,'rgba(255,255,255,0.9)');
+  if(S.sheathLA)lineCm(c,F,[tip,[tip[0]+1.4,tip[1]+0.2]],4,'rgba(245,245,245,0.95)');
+ } else if(!r.inSVC){catheterCm(c,F,[[-3.8,7.6],[-2.4,5.4]],3)}
+ bubbles(c,F,'la',t,(x,y)=>[1.3+x*1.6,4.0+y*1.6]);
+ bubbles(c,F,'ra',t,(x,y)=>[-2.4+x*1.1,4.8+y*1.3]);
+ c.restore();
+ tlab(c,F,'LA',1.5,3.4);tlab(c,F,'RA',-2.5,4.6);tlab(c,F,'LV',1.8,10.4);tlab(c,F,'RV',-2.4,9.6);tlab(c,F,'MV',3.9,6.4);
+ tbottom(c,F,contact?'Yükseklik: çadırlanma → mitral anülüs (koaptasyon) düzlemi':'Çadırlanma yok – septuma temas sağlayın');
+}
+function drawTEE(t,r){
+ const c=tctx,W=560,H=440;c.save();c.fillStyle='#000';c.fillRect(0,0,W,H);
+ if(S.tee==='xp'){const hh=Math.min(H,(W/4-6)/Math.sin(33*D2R)+52),yo=(H-hh)/2;const F1=teeFrame(0,yo,W/2,hh,8.6,33),F2=teeFrame(W/2,yo,W/2,hh,9.2,33);viewBic(c,F1,r,t);teeFinish(c,F1,t,'Bikaval','100°');viewSax(c,F2,r,t);teeFinish(c,F2,t,'Kısa aks (AV)','45°');
+  c.strokeStyle='#333';c.beginPath();c.moveTo(W/2,0);c.lineTo(W/2,H);c.stroke();c.font='600 11px system-ui';c.fillStyle='#9fe3ff';c.fillText('X-plane (eş zamanlı iki düzlem)',W/2-80,H-8)}
+ else if(S.tee==='bic'){const F=teeFrame(0,0,W,H,10,45);viewBic(c,F,r,t);teeFinish(c,F,t,'ME bikaval','100°')}
+ else if(S.tee==='sax'){const F=teeFrame(0,0,W,H,9.5,45);viewSax(c,F,r,t);teeFinish(c,F,t,'ME aort kapak kısa aks','45°')}
+ else {const F=teeFrame(0,0,W,H,13,45);view4c(c,F,r,t);teeFinish(c,F,t,'ME 4 boşluk','0°')}
+ c.restore();
+}
+
+// ---------- fossa haritası ----------
+function drawMap(r){
+ const c=mctx,W=360,H=330,cx=W/2,cy=H/2+4,k=38;const T=(u,v)=>[cx+u*k,cy-v*k];
+ const css=getComputedStyle(document.documentElement);const tx=css.getPropertyValue('--tx').trim(),mu=css.getPropertyValue('--mu').trim(),card=css.getPropertyValue('--card').trim();
+ const th=document.documentElement.dataset.theme;const dark=th?th==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+ c.fillStyle=card;c.fillRect(0,0,W,H);
+ c.fillStyle=dark?'#2a2530':'#f2e9e4';c.fillRect(6,6,W-12,H-12);
+ const E=(u,v,a,b)=>{const q=T(u,v);c.beginPath();c.ellipse(q[0],q[1],a*k,b*k,0,0,TAU)};
+ // komşu yapılar
+ c.fillStyle=dark?'rgba(120,120,130,0.35)':'rgba(90,90,100,0.18)';E(SVC_U,3.75,1.0,0.75);c.fill();E(IVC_U,-3.9,1.25,0.8);c.fill();
+ c.fillStyle='rgba(192,57,43,0.25)';E(AO.u,AO.v,AO.r,AO.r);c.fill();c.strokeStyle='rgba(192,57,43,0.7)';c.lineWidth=1.5;c.stroke();
+ c.fillStyle=dark?'rgba(120,120,130,0.45)':'rgba(90,90,100,0.28)';E(1.25,-2.95,0.42,0.3);c.fill();
+ c.strokeStyle=dark?'rgba(200,200,210,0.5)':'rgba(80,80,90,0.5)';c.lineWidth=2;c.beginPath();const tq=T(3.4,-1.0);c.arc(tq[0],tq[1],2.4*k,Math.PI*0.62,Math.PI*1.02);c.stroke();
+ // septum
+ c.fillStyle=dark?'#6b5640':'#e3c9a0';E(0,0,SA,SB);c.fill();c.strokeStyle=dark?'#9c8060':'#b8956a';c.lineWidth=1;c.stroke();
+ c.fillStyle=dark?'#8a7a68':'#f8efe2';E(0,0,FA,FB);c.fill();c.strokeStyle=dark?'#c8b090':'#9c7b50';c.lineWidth=1.6;c.setLineDash([4,3]);c.stroke();c.setLineDash([]);
+ c.strokeStyle=dark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.2)';c.lineWidth=1;c.beginPath();let a=T(-FA,0),b=T(FA,0);c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);a=T(0,-FB);b=T(0,FB);c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();
+ c.font='10px system-ui';c.fillStyle=mu;[['SP',-0.45,0.55],['SA',0.45,0.55],['İP',-0.45,-0.55],['İA',0.45,-0.55]].forEach(([s,u,v])=>{const q=T(u,v);c.fillText(s,q[0]-6,q[1]+4)});
+ // yükseklik eğrileri
+ if($('mIso').checked){c.save();E(0,0,SA,SB);c.clip();[3.0,3.5,4.0,4.5,5.0].forEach(Hh=>{c.beginPath();for(let i=0;i<=20;i++){const u=-2.4+4.8*i/20,v=(Hh-3.7+0.35*u)/0.9;const q=T(u,v);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])}
+  c.strokeStyle=dark?'rgba(140,190,255,0.45)':'rgba(30,90,180,0.35)';c.lineWidth=1;c.setLineDash([2,3]);c.stroke();c.setLineDash([]);const q=T(-2.0,(Hh-3.7-0.7)/0.9);c.font='9.5px system-ui';c.fillStyle=dark?'#9cc4ff':'#2a5ca8';c.fillText(Hh.toFixed(1).replace('.',',')+' cm',q[0]-4,q[1]-2)});c.restore()}
+ // hedef
+ const pp=PROCS[S.proc];
+ if(pp.t&&$('mTgt').checked){c.fillStyle='rgba(30,160,90,0.28)';E(pp.t.u,pp.t.v,pp.t.ru,pp.t.rv);c.fill();c.strokeStyle='rgba(30,160,90,0.95)';c.lineWidth=2;c.stroke();
+  const q=T(pp.t.u,pp.t.v+pp.t.rv);c.font='600 10.5px system-ui';c.fillStyle=dark?'#5fe39b':'#137a45';c.fillText('hedef',q[0]-14,q[1]-3)}
+ // etiketler
+ c.font='600 11px system-ui';c.fillStyle=tx;
+ const L=(s,u,v)=>{const q=T(u,v);c.fillText(s,q[0]-c.measureText(s).width/2,q[1]+4)};
+ L('SVK',SVC_U,3.75);L('İVK',IVC_U,-3.9);c.fillStyle=dark?'#ff8a7d':'#a5281b';L('Aort kökü',AO.u+0.15,AO.v+0.15);c.font='10px system-ui';L('(NCC)',AO.u+0.15,AO.v-0.2);c.fillStyle=tx;L('KS',1.25,-2.95);c.fillStyle=mu;L('triküspit',3.15,-2.3);L('limbus',-1.55,1.85);
+ c.font='600 11px system-ui';c.fillStyle=mu;c.fillText('Süperior ▲',W-84,22);c.fillText('▼ İnferior',W-84,H-12);c.save();c.translate(16,cy+40);c.rotate(-Math.PI/2);c.fillText('◀ Posterior',0,0);c.restore();c.save();c.translate(W-10,cy-40);c.rotate(Math.PI/2);c.fillText('Anterior ▶',0,0);c.restore();
+ // işaret
+ if(S.mark){const q=T(S.mark.u,S.mark.v);c.strokeStyle=S.mark.col;c.lineWidth=3;c.beginPath();c.moveTo(q[0]-6,q[1]-6);c.lineTo(q[0]+6,q[1]+6);c.moveTo(q[0]+6,q[1]-6);c.lineTo(q[0]-6,q[1]+6);c.stroke()}
+ // uç
+ if(r.inSVC){c.font='600 11px system-ui';c.fillStyle=dark?'#8ab8ff':'#2463b0';c.fillText('uç SVK içinde ▲',cx-44,40)}
+ else if(r.region==='ivc'){c.font='600 11px system-ui';c.fillStyle=dark?'#8ab8ff':'#2463b0';c.fillText('uç İVK girişinde ▼',cx-48,H-24)}
+ else{const vv=clamp(r.v,-4.1,4.1),uu=clamp(r.u,-4.4,4.4);const q=T(uu,vv);
+  const col=!r.contact?'#888':(r.region==='fossa'?'#2463b0':(r.region==='aorta'||r.region==='ant'?'#c0392b':'#d08000'));
+  if(r.contact&&S.push>0.02){c.strokeStyle=col;c.lineWidth=1.5;c.beginPath();c.arc(q[0],q[1],7+S.push*14,0,TAU);c.stroke()}
+  c.fillStyle=r.contact?col:'transparent';c.strokeStyle=col;c.lineWidth=2;c.beginPath();c.arc(q[0],q[1],6,0,TAU);r.contact?c.fill():c.stroke();
+  if(!r.contact){c.font='10px system-ui';c.fillStyle=mu;c.fillText('temas yok',q[0]+9,q[1]+4)}
+  if(r.contact&&!S.crossed){c.strokeStyle=dark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.4)';c.lineWidth=1.2;c.beginPath();c.moveTo(q[0]-10,q[1]+14);c.lineTo(q[0]-26,q[1]+14);c.stroke();c.font='9.5px system-ui';c.fillStyle=mu;c.fillText('↻',q[0]-36,q[1]+18)}}
+}
+// ---------- kadran ----------
+function drawDial(){
+ const c=dctx,W=150,cx=75,cy=75,R=58;const css=getComputedStyle(document.documentElement);const tx=css.getPropertyValue('--tx').trim(),mu=css.getPropertyValue('--mu').trim(),sh=css.getPropertyValue('--sh').trim(),bd=css.getPropertyValue('--bd').trim();
+ c.clearRect(0,0,W,W);c.fillStyle=sh;c.beginPath();c.arc(cx,cy,R+8,0,TAU);c.fill();c.strokeStyle=bd;c.stroke();
+ const arc=(h1,h2,col,w)=>{c.strokeStyle=col;c.lineWidth=w;c.beginPath();c.arc(cx,cy,R,(h1*30-90)*D2R,(h2*30-90)*D2R);c.stroke()};
+ arc(2.6,6.7,'rgba(36,99,176,0.25)',8);arc(4,5,'rgba(30,142,90,0.75)',8);
+ c.font='600 10px system-ui';c.fillStyle=mu;for(let i=1;i<=12;i++){const a=(i*30-90)*D2R;const s=String(i);c.fillText(s,cx+(R-14)*Math.cos(a)-c.measureText(s).width/2,cy+(R-14)*Math.sin(a)+4)}
+ c.font='700 9.5px system-ui';c.fillStyle=tx;c.fillText('ANT',cx-9,10);c.fillText('POST',cx-12,W-2);c.fillText('SOL',W-19,cy+3);c.fillText('SAĞ',0,cy+3);
+ const a=(S.rot*30-90)*D2R;c.strokeStyle='#c0392b';c.lineWidth=4;c.lineCap='round';c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+(R-4)*Math.cos(a),cy+(R-4)*Math.sin(a));c.stroke();
+ c.fillStyle='#c0392b';c.beginPath();c.arc(cx,cy,5,0,TAU);c.fill();
+}
+// ---------- basınç ----------
+const PBUF=[];let lastPS=0;
+const gk=(ph,c0,w)=>{let d=Math.abs(ph-c0);d=Math.min(d,1-d);return Math.exp(-((d/w)**2))};
+function pressureNow(t){
+ const ph=(t*1.2)%1;let src='ra';
+ if(S.needleOut&&S.outcome==='la'||S.sheathLA)src='la';else if(S.needleOut&&S.outcome==='ao')src='ao';else if(S.needleOut&&S.outcome==='peri')src='peri';
+ let p;
+ if(src==='ra')p=6+3.5*gk(ph,0.08,0.05)+2.5*gk(ph,0.48,0.07)-1.5*gk(ph,0.3,0.06);
+ else if(src==='la'){const m=PROCS[S.proc].la;if(m==='mr')p=13+4*gk(ph,0.1,0.05)+20*gk(ph,0.43,0.09);else if(m==='ms')p=24+7*gk(ph,0.08,0.05)+6*gk(ph,0.47,0.08);else p=10+4*gk(ph,0.1,0.05)+6*gk(ph,0.46,0.08)}
+ else if(src==='ao'){const s=ph<0.12?0:(ph<0.4?Math.sin((ph-0.12)/0.28*Math.PI*0.75):0);p=72+50*s+(ph>0.4?12*Math.exp(-(ph-0.4)*3):0)-((ph>0.38&&ph<0.42)?4:0)}
+ else p=1.5+0.5*Math.sin(ph*TAU);
+ return {p:p+(Math.random()-0.5)*0.4,src};
+}
+function drawPress(t){
+ const c=pctx,W=360,H=96;const {p,src}=pressureNow(t);PBUF.push({p,src});while(PBUF.length>220)PBUF.shift();
+ c.fillStyle='#0b1015';c.fillRect(0,0,W,H);const max=src==='ao'?150:40;
+ c.strokeStyle='rgba(255,255,255,0.08)';c.lineWidth=1;for(let y=0;y<=max;y+=(max>50?25:10)){const yy=H-8-(y/max)*(H-16);c.beginPath();c.moveTo(30,yy);c.lineTo(W,yy);c.stroke();c.fillStyle='#667';c.font='9px system-ui';c.fillText(y,4,yy+3)}
+ const col={ra:'#6fb6ff',la:'#ffd24a',ao:'#ff5c5c',peri:'#aaa'}[src];
+ c.strokeStyle=col;c.lineWidth=1.8;c.beginPath();PBUF.forEach((q,i)=>{const x=30+i*(W-32)/220,y=H-8-clamp(q.p/max,0,1.05)*(H-16);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();
+ const nm={ra:'RA (iğne dilatör içinde)',la:'LA basıncı',ao:'AORTİK basınç!',peri:'Sönük / perikardiyal?'}[src];
+ c.fillStyle=col;c.font='600 11px system-ui';c.fillText(nm,36,13);
+}
+
+// ---------- değerlendirme ----------
+function liveHint(r){
+ const pp=PROCS[S.proc];
+ if(S.outcome==='ao')return ['er','İğneyi geri çekin (↩) ve rotasyonu posteriora (↻) alarak fossaya dönün.'];
+ if(S.outcome==='peri')return ['er','İğneyi geri çekin (↩), TEE ile perikardı kontrol edin ve fossaya dönün.'];
+ if(S.outcome==='free')return ['wa','İğne RA içinde serbest. Septuma temas olmadan iğneyi ilerletmeyin, çünkü RA serbest duvarı veya RAA perforasyonu riski vardır. İğneyi geri çekin.'];
+ if(S.wire)return ['ok','Tel sol üst PV\'de, kılıf LA\'da. Prosedüre özgü kılıf değişimine hazırsınız. Heparin (hedef ACT) unutmayın.'];
+ if(S.sheathLA)return ['ok','Dilatör ve kılıf LA\'da. Şimdi teli sol üst pulmoner vene yerleştirin.'];
+ if(S.crossed)return ['ok','LA\'ya geçildi: LA basınç trasesi, kontrast ve TEE\'de LA\'da köpük doğrulandı. Dilatör ve kılıfı iğne üzerinden ilerletin.'];
+ if(r.inSVC){const ok=S.rot>=4&&S.rot<=5;return ok?['ok','Gösterge saat '+clockTxt(S.rot)+'. LAO veya AP floroskopi altında yavaşça <b>geri çekin</b> (⬇) ve iki sıçramayı izleyin.']:['wa','Geri çekmeden önce iğne göstergesini <b>saat 4–5</b> yönüne çevirin. Şu an saat '+clockTxt(S.rot)+'.']}
+ if(r.region==='ivc')return ['wa','İVK girişine indiniz, septum geride kaldı. Sistemi tekrar SVK\'ya ilerletip yeniden geri çekin (pratikte tel ile SVK\'ya dönülür).'];
+ if(r.region==='free'){return ['wa','Uç septuma bakmıyor (saat '+clockTxt(S.rot)+'). '+(r.dn<0.3&&Math.sin(S.rot*30*D2R)<0?'Uç RA serbest duvarına bakıyor. ':'')+'Saat 4–5 yönüne çevirin.']}
+ const tipsU=du=>du<0?'saat yönünde çevirin (↻ posterior)':'saat yönünün tersine çevirin (↺ anterior)';
+ switch(r.region){
+  case 'sup':return ['wa','Uç <b>fossanın üzerinde</b>, kalın süperior limbusta. Biraz daha geri çekin ve fossaya düşüşü (2. sıçrama) bekleyin. Bu bölgeden ponksiyon ekstrakardiyak olabilir.'];
+  case 'inf':return ['wa','Uç <b>fossanın altında</b>, inferior limbusta. Kılıfı hafifçe ilerletin (⬆).'];
+  case 'ant':return ['er','Çok anterior, <b>aort köküne yakın</b>. Saat yönünde (↻) posteriora çevirin. RAO\'da uç pigtail\'in posterioruna geçmeli.'];
+  case 'aorta':return ['er','Uç aort kökü (NCC) komşuluğunda. Kısa aksta çadırlanma aortaya bitişik. Ponksiyon <b>yapmayın</b>, saat yönünde çevirin.'];
+  case 'post':return ['wa','Çok posterior: posterior katlantı ve ekstrakardiyak alan riski var. Saat yönünün tersine (↺) hafifçe çevirin.'];
+  case 'wsup':return ['wa','SVK–RA bileşkesi seviyesindesiniz. Geri çekmeye devam edin.'];
+  case 'winf':return ['wa','İVK / KS ağzı bölgesi: çok inferior. Kılıfı ilerletin.'];
+  case 'want':return ['er','Anterior RA duvarı ve triküspit yönü. Saat yönünde (↻) çevirin.'];
+  case 'wpost':return ['er','Posterior RA serbest duvarı: perforasyon riski. Saat yönünün tersine (↺) çevirin.'];
+ }
+ // fossa içinde
+ if(!pp.t)return ['ok','Fossa ovalis içinde ('+quadName(r.u,r.v)+'). Çadırlanma oluşturup ponksiyon yapabilirsiniz.'];
+ const du=pp.t.u-r.u,dv=pp.t.v-r.v,adv=[];
+ if(Math.abs(dv)>0.22)adv.push(dv>0?'biraz <b>ilerletin</b> (süperior, ⬆)':'biraz <b>geri çekin</b> (inferior, ⬇)');
+ if(Math.abs(du)>0.22)adv.push(tipsU(du));
+ if(pp.h&&(r.height<pp.h[0]||r.height>pp.h[1]))adv.push('yükseklik '+r.height.toFixed(1).replace('.',',')+' cm, hedef '+pp.h[0].toFixed(1).replace('.',',')+'–'+pp.h[1].toFixed(1).replace('.',',')+' cm (4 boşlukta ölçün)');
+ const inT=((r.u-pp.t.u)/pp.t.ru)**2+((r.v-pp.t.v)/pp.t.rv)**2<=1;
+ if(inT&&adv.length===0)return ['ok','<b>Hedef bölgedesiniz</b> ('+quadName(r.u,r.v)+'). TEE\'de doğrulayın, '+(S.push<0.45?'septuma ileri baskı ile <b>çadırlanma</b> oluşturun':'çadırlanma yeterli, <b>iğneyi ilerletin</b>')+'.'];
+ return [inT?'ok':'wa','Fossa içinde ('+quadName(r.u,r.v)+'). Hedef: '+pp.kisa+'. Öneri: '+(adv.join('; ')||'konum kabul edilebilir')+'.'];
+}
+function teeHintTxt(r){
+ if(!r.contact||r.region[0]==='w')return '';
+ const si=r.v>0.3?'SVK tarafında (süperior)':(r.v<-0.3?'İVK tarafında (inferior)':'ortada (SI)');
+ const ap=r.u>0.6?'aortaya yakın (anterior)':(r.u<-0.25?'aortadan uzak (posterior)':'orta (AP)');
+ if(S.tee==='bic')return 'Bikaval: çadırlanma '+si+'.';
+ if(S.tee==='sax')return 'Kısa aks: çadırlanma '+ap+'.';
+ if(S.tee==='4c')return 'Yükseklik: '+r.height.toFixed(1).replace('.',',')+' cm';
+ return 'Bikaval: '+si+' · Kısa aks: '+ap;
+}
+function setTxt(id,v){const e=$(id);if(e.textContent!==v)e.textContent=v}
+function setDis(id,v){const e=$(id);if(e.disabled!==v)e.disabled=v}
+let lastKV='',lastHint='',lastAlert='';
+function updateStatus(r){
+ const pp=PROCS[S.proc];
+ const reg=r.region==='fossa'?'Fossa ovalis – '+quadName(r.u,r.v):REG[r.region];
+ const rows=[['Uç konumu','<b>'+reg+'</b>'],['İğne göstergesi','<b>saat '+clockTxt(S.rot)+'</b>'],
+  ['Çadırlanma',r.contact&&r.tent>0.15?'<b>var</b> ('+(r.tent*10).toFixed(0)+' mm)':'yok'],
+  ['MV anülüsüne yükseklik',r.contact?'<b>'+r.height.toFixed(1).replace('.',',')+' cm</b>':'–'],
+  ['Aort köküne mesafe',r.contact?'<b>'+Math.max(0,r.dA).toFixed(1).replace('.',',')+' cm</b>'+(r.dA<0.6?' ⚠':''):'–'],
+  ['Hedef',pp.kisa]];
+ if(r.contact&&S.carm<0){rows.push(['RAO işareti',r.u<AO.u-1.4?'uç pigtail\'in posteriorunda ✓':'uç pigtail\'e çok yakın ⚠'])}
+ const kvh=rows.map(x=>'<span>'+x[0]+'</span><span>'+x[1]+'</span>').join('');if(kvh!==lastKV){$('kv').innerHTML=kvh;lastKV=kvh}
+ const [cls,txt]=liveHint(r);if(cls+txt!==lastHint){const h=$('hint');h.className='hint '+cls;h.innerHTML=txt;lastHint=cls+txt}
+ setTxt('teeHint',teeHintTxt(r));
+ setTxt('rotTxt',clockTxt(S.rot));
+ $('hTxt').textContent=r.inSVC?'SVK':(r.region==='ivc'?'İVK':(r.v>0?'+':'')+r.v.toFixed(1).replace('.',',')+' cm');
+ $('pTxt').textContent=Math.round(S.push*100)+'%';
+ const ak=S.alert?S.alert.join('|'):'';if(ak!==lastAlert){const al=$('alert');if(S.alert){al.className='alert '+S.alert[0];al.innerHTML=S.alert[1]}else al.className='alert';lastAlert=ak}
+ const lock=S.needleOut||S.crossed;['hS','pS'].forEach(id=>setDis(id,lock));['up','dn','cw','ccw'].forEach(id=>$(id).classList.toggle('dim',lock));
+ setTxt('needle',S.needleOut&&!S.crossed?'↩ İğneyi geri çek':'🪡 İğneyi ilerlet');{const nb=$('needle'),rt=S.needleOut&&!S.crossed;if(nb.classList.contains('retract')!==rt){nb.classList.toggle('retract',rt);nb.classList.toggle('pri',!rt)}}
+ {const ln=$('lockNote'),cls=S.crossed?'lock on okk':(S.needleOut?'lock on':'lock'),tx=S.crossed?'✓ LA\'ya geçildi, kateter sabit. Yeni deneme: ↺ Baştan başla.':(S.needleOut?'🔒 İğne dışarıda, kateter kilitli. Hareket için önce "↩ İğneyi geri çek" (N).':'');if(ln.className!==cls)ln.className=cls;if(ln.textContent!==tx)ln.textContent=tx}setDis('needle',S.crossed);
+ setDis('dil',!(S.crossed&&!S.sheathLA));setDis('wire',!(S.sheathLA&&!S.wire));
+ setTxt('postNote',S.wire?'Transseptal erişim tamamlandı.':(S.sheathLA?'Sıradaki adım: teli sol üst PV\'ye yerleştirin.':(S.crossed?'LA\'ya geçildi, dilatör ve kılıfı ilerletebilirsiniz.':'Bu iki adım, iğne fossadan LA\'ya geçtikten sonra açılır.')));
+ if(document.activeElement!==$('hS')&&+$('hS').value!==S.h)$('hS').value=S.h;if(document.activeElement!==$('pS')&&+$('pS').value!==Math.round(S.push*100))$('pS').value=Math.round(S.push*100);
+}
+
+// ---------- adımlar ----------
+const STEPS=[
+ {id:'svc',t:'Sistem SVK\'da',d:'Femoral venden J-tel SVK\'ya, SL-1 (veya Mullins) kılıf + dilatör tel üzerinden SVK\'ya ilerletildi. Tel çekildi, Brockenbrough iğnesi dilatör içine ucu dilatör ucunun 1–2 cm gerisinde kalacak şekilde yerleştirildi ve yıkandı.',c:()=>true},
+ {id:'rot',t:'İğne göstergesini saat 4–5\'e çevir',d:'Ayak ucundan bakıldığında gösterge (iğne flanşı) saat 4–5 yönünde, yani hastanın sol-posterioruna bakmalı. Bu adımı SVK içindeyken yapın.',c:r=>S.rot>=4&&S.rot<=5.25},
+ {id:'j1',t:'Geri çek: 1. sıçrama (SVK → RA)',d:'LAO (veya AP) floroskopide sistemi yavaşça geri çekin. Uç SVK–RA bileşkesinden RA\'ya geçerken medial bir sıçrama yapar.',c:r=>!r.inSVC&&r.contact},
+ {id:'j2',t:'2. sıçrama: fossaya düşüş',d:'Geri çekmeye devam edin. Uç kalın süperior limbusun altından ince fossa ovalise "düşer". LAO\'da uç sola (LA\'ya) doğru küçük bir sıçrama yapar.',c:r=>r.region==='fossa'},
+ {id:'bic',t:'TEE bikaval: süperior–inferior ayar',d:'Bikaval (≈100°) veya X-plane görüntüde çadırlanmanın SVK–İVK eksenindeki yerini değerlendirin. İlerletme ve geri çekme ile ayarlayın.',c:r=>(S.tee==='bic'||S.tee==='xp')&&r.region==='fossa'&&(!PROCS[S.proc].t||Math.abs(PROCS[S.proc].t.v-r.v)<PROCS[S.proc].t.rv)},
+ {id:'sax',t:'TEE kısa aks: anterior–posterior ayar',d:'Kısa aks (≈45°) görüntüde çadırlanmanın aortaya uzaklığını değerlendirin. Rotasyonla ayarlayın: saat yönü posterior, tersi anterior.',c:r=>(S.tee==='sax'||S.tee==='xp')&&r.region==='fossa'&&(!PROCS[S.proc].t||Math.abs(PROCS[S.proc].t.u-r.u)<PROCS[S.proc].t.ru)},
+ {id:'h4c',t:'4 boşluk: yüksekliği ölç',d:'ME 4 boşlukta (≈0°) çadırlanma noktası ile mitral anülüs (koaptasyon) düzlemi arasındaki mesafeyi ölçün.',c:r=>S.tee==='4c'&&r.region==='fossa'&&PROCS[S.proc].h&&r.height>=PROCS[S.proc].h[0]&&r.height<=PROCS[S.proc].h[1],only:p=>!!PROCS[p].h},
+ {id:'tent',t:'Çadırlanma oluştur',d:'"Septuma ileri baskı" kaydırıcısını en az %45\'e getirin (veya <kbd>+</kbd> tuşu). Uç fossa içinde olmalı. TEE\'de belirgin çadırlanma görün. Floroskopide kontrast septal boyanma verir.',c:r=>r.region==='fossa'&&S.push>=0.45},
+ {id:'cross',t:'İğneyi ilerlet ve doğrula',d:'"🪡 İğneyi ilerlet" düğmesine basın (veya <kbd>N</kbd>). LA basınç trasesi, kontrastın LA\'yı doldurması ve TEE\'de LA\'da köpük ile doğrulayın.',c:r=>S.crossed},
+ {id:'sheath',t:'Dilatör–kılıf LA\'ya, tel sol üst PV\'ye',d:'Önce dilatör, sonra kılıf iğne üzerinden LA\'ya ilerletilir. İğne ve dilatör çekilir, tel sol üst PV\'ye yerleştirilir ve heparin verilir.',c:r=>S.wire}
+];
+let stepsHTML='';
+function updateSteps(r){
+ const list=STEPS.filter(s=>!s.only||s.only(S.proc));let cur=-1;
+ list.forEach((s,i)=>{if(!S.done[s.id]&&s.c(r)&&(i===0||S.done[list[i-1].id]))S.done[s.id]=true});
+ // ileri adımlar tamamlandıysa öncekileri de say
+ for(let i=list.length-1;i>=0;i--){if(S.done[list[i].id]){for(let j=0;j<i;j++)S.done[list[j].id]=true;break}}
+ for(let i=0;i<list.length;i++){if(!S.done[list[i].id]){cur=i;break}}
+ const h=list.map((s,i)=>'<li class="'+(S.done[s.id]?'done':(i===cur?'cur':''))+'">'+s.t+'<div class="d">'+s.d+'</div></li>').join('');
+ if(h!==stepsHTML){$('steps').innerHTML=h;stepsHTML=h}
+}
+
+// ---------- eylemler ----------
+function evaluate(r){
+ const pp=PROCS[S.proc];const items=[];let score=100;
+ items.push('Ponksiyon yeri: <b>fossa ovalis – '+quadName(r.u,r.v)+'</b>, MV anülüsüne yükseklik <b>'+r.height.toFixed(1).replace('.',',')+' cm</b>, aort köküne <b>'+Math.max(0,r.dA).toFixed(1).replace('.',',')+' cm</b>.');
+ if(pp.t){const dz=Math.hypot((r.u-pp.t.u)/pp.t.ru,(r.v-pp.t.v)/pp.t.rv);
+  if(dz<=1)items.push('✅ Hedef kadranda ('+pp.kisa+').');
+  else{score-=Math.min(45,(dz-1)*35+10);const dv=pp.t.v-r.v,du=pp.t.u-r.u;const w=[];if(Math.abs(dv)>0.25)w.push(dv>0?'daha süperior':'daha inferior');if(Math.abs(du)>0.25)w.push(du>0?'daha anterior':'daha posterior');items.push('⚠️ Hedefin dışında. İdeal yer '+w.join(' ve ')+' olmalıydı.')}}
+ if(pp.h){if(r.height<pp.h[0]){score-=Math.min(35,(pp.h[0]-r.height)*45);items.push('⚠️ Yükseklik düşük (hedef '+pp.h[0].toFixed(1).replace('.',',')+'–'+pp.h[1].toFixed(1).replace('.',',')+' cm). Sistemi manevra ettirecek alan kısıtlı olabilir.')}
+  else if(r.height>pp.h[1]){score-=Math.min(35,(r.height-pp.h[1])*45);items.push('⚠️ Yükseklik fazla. Sistemin mitral düzleme inişi ve koaksiyel hizalanması zorlaşabilir.')}
+  else items.push('✅ Yükseklik uygun.')}
+ if(r.dA<0.6){score-=12;items.push('⚠️ Aort köküne çok yakın bir ponksiyon.')}
+ score-=S.comp*15+Math.max(0,S.attempts-1)*4;score=Math.round(clamp(score,0,100));
+ if(S.comp)items.push('❌ '+S.comp+' komplikasyonlu girişim (aortik / ekstrakardiyak iğne geçişi).');
+ S.result={score,items};S.mark={u:r.u,v:r.v,col:score>=80?'#1e8e5a':(score>=55?'#d08000':'#c0392b')};
+ renderResult();
+}
+function renderResult(){
+ const el=$('result');
+ if(!S.result){el.innerHTML='<span class="small">Henüz ponksiyon yapılmadı. Girişim: '+S.attempts+(S.comp?' · Komplikasyon: '+S.comp:'')+'</span>';return}
+ const sc=S.result.score,col=sc>=80?'var(--ok)':(sc>=55?'var(--wa)':'var(--er)');
+ el.innerHTML='<div class="score" style="color:'+col+'">'+sc+'<span class="small"> / 100</span></div><div class="small">'+PROCS[S.proc].ad+' · Girişim: '+S.attempts+'</div><ul style="margin:6px 0;padding-left:18px">'+S.result.items.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+}
+function doNeedle(){
+ const t=performance.now()/1000;const r=tipState();
+ if(S.needleOut&&!S.crossed){S.needleOut=false;S.outcome=null;S.alert=['wa','İğne dilatör içine geri çekildi. Konumu yeniden ayarlayın.'];return}
+ if(S.crossed)return;
+ if(r.inSVC||r.region==='ivc'){S.alert=['wa','Uç SVK veya İVK içinde. İğneyi burada ilerletmeyin.'];return}
+ if(!r.contact){S.alert=['wa','Uç septuma temas etmiyor (saat '+clockTxt(S.rot)+'). İğne çıkarılmadı. Önce saat 4–5 yönüne çevirip septuma temas sağlayın; serbest RA\'da iğne ilerletmek RA duvarı perforasyonu riski taşır.'];return}
+ if(S.push<0.45){S.alert=['wa','Yeterli çadırlanma yok. Önce kılıf ve dilatörle septuma ileri baskı uygulayın (≥%45).'];return}
+ S.attempts++;
+ if(r.region==='fossa'){S.needleOut=true;S.crossed=true;S.outcome='la';S.push=0;S.alert=['ok','✅ İğne LA\'da: basınç trasesi LA dalga formuna döndü. Kontrast LA\'yı dolduruyor, TEE\'de LA\'da köpük var.'];
+  S.fx.push({type:'la',t0:t,dur:3});addBubbles('la',t);evaluate(r)}
+ else if(r.region==='aorta'||(r.region==='ant'&&r.dA<0.35)){S.needleOut=true;S.outcome='ao';S.comp++;S.alert=['er','❌ <b>Aortik ponksiyon!</b> Arteriyel basınç trasesi var, kontrast aortadan yukarı akıyor, kısa aksta köpük aortada. Yalnızca iğne ile yapılan ponksiyon çoğunlukla tolere edilir. İğneyi geri çekin, <b>dilatör veya kılıfı ilerletmeyin</b>, perikardı izleyin.'];
+  S.fx.push({type:'ao',t0:t,dur:1.6});addBubbles('ao',t);renderResult()}
+ else if(['sup','post','wsup','wpost'].includes(r.region)){S.needleOut=true;S.outcome='peri';S.comp++;S.alert=['er','❌ <b>Ekstrakardiyak geçiş</b> ('+REG[r.region]+'). İğne interatriyal katlantıdan perikardiyal ve ekstrakardiyak alana geçti: basınç sönük, kontrast perikardiyal alanda. İğneyi geri çekin ve tamponad açısından TEE ile izleyin.'];
+  S.fx.push({type:'peri',t0:t,dur:8});renderResult()}
+ else {S.alert=['wa','Kalın musküler doku ('+REG[r.region]+'): iğne ilerlemiyor. Zorlamayın, fossaya dönün.'+(r.region==='ant'?' Aort köküne de yakınsınız!':'')];renderResult()}
+}
+function doContrast(){
+ const t=performance.now()/1000,r=tipState();const G=sheathGeom(r);
+ if(S.outcome==='la'||S.sheathLA){S.fx.push({type:'la',t0:t,dur:3});addBubbles('la',t)}
+ else if(S.outcome==='ao'){S.fx.push({type:'ao',t0:t,dur:1.6});addBubbles('ao',t)}
+ else if(S.outcome==='peri'){S.fx.push({type:'peri',t0:t,dur:8})}
+ else if(r.contact&&S.push>0.2){S.fx.push({type:'stain',t0:t,dur:6,p:G.tip});addBubbles('ra',t);S.alert=['ok','Septal boyanma (tenting stain): dilatör ucu septuma oturmuş durumda.']}
+ else {S.fx.push({type:'ra',t0:t,dur:1.0,p:G.tip});addBubbles('ra',t)}
+}
+
+// ---------- arayüz ----------
+const sel=$('proc');Object.entries(PROCS).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.ad;sel.appendChild(o)});
+function renderInfo(){const pp=PROCS[S.proc];$('procTag').textContent=pp.kisa;$('info').innerHTML='<h3>'+pp.ad+' – ponksiyon stratejisi</h3><ul style="margin:4px 0;padding-left:20px">'+pp.not.map(x=>'<li>'+x+'</li>').join('')+'</ul>'}
+sel.addEventListener('change',()=>{S.proc=sel.value;S.done={};stepsHTML='';if(S.result){const r=tipState();evaluate(r)}renderInfo()});
+const CARMS=[[0,'AP'],[-30,'RAO 30'],[-45,'RAO 45'],[45,'LAO 45']];
+CARMS.forEach(([a,n])=>{const b=document.createElement('button');b.textContent=n;b.dataset.a=a;b.onclick=()=>{S.carm=a;syncBtns()};$('carmBtns').appendChild(b)});
+const TEES=[['xp','X-plane'],['bic','Bikaval'],['sax','Kısa aks'],['4c','4 boşluk']];
+TEES.forEach(([k,n])=>{const b=document.createElement('button');b.textContent=n;b.dataset.k=k;b.onclick=()=>{S.tee=k;syncBtns()};$('teeBtns').appendChild(b)});
+function syncBtns(){[...$('carmBtns').children].forEach(b=>b.classList.toggle('on',+b.dataset.a===S.carm));[...$('teeBtns').children].forEach(b=>b.classList.toggle('on',b.dataset.k===S.tee))}
+const lockd=()=>S.needleOut||S.crossed;
+function lockMsg(){S.alert=S.crossed?['ok','LA\'ya geçildi, kateter sabitlendi. Yeni deneme için <b>↺ Baştan başla</b>.']:['er','🔒 İğne dilatörün dışında, kateter hareket ettirilemez. Önce <b>↩ İğneyi geri çek</b> (veya <kbd>N</kbd>).']}
+function moveH(dh){if(lockd()){lockMsg();return}S.h=clamp(S.h+dh,-4.5,7);if(S.push>0&&Math.abs(dh)>0){S.push=Math.max(0,S.push-0.15)}S.alert=null}
+function rotate(dr){if(lockd()){lockMsg();return}S.rot=((S.rot+dr)%12+12)%12;S.alert=null}
+$('up').onclick=()=>moveH(0.15);$('dn').onclick=()=>moveH(-0.15);
+$('cw').onclick=()=>rotate(0.25);$('ccw').onclick=()=>rotate(-0.25);
+$('hS').oninput=e=>{if(lockd())return;S.h=+e.target.value;S.alert=null};
+$('pS').oninput=e=>{if(lockd())return;S.push=+e.target.value/100};
+$('needle').onclick=doNeedle;$('contrast').onclick=doContrast;
+$('dil').onclick=()=>{S.sheathLA=true;S.alert=['ok','Dilatör ve ardından kılıf LA\'ya ilerletildi, iğne çekildi.']};
+$('wire').onclick=()=>{S.wire=true;S.alert=['ok','Tel sol üst pulmoner vende. Transseptal erişim tamamlandı.']};
+$('reset').onclick=()=>{initState(true);stepsHTML='';syncBtns();renderResult()};
+$('guided').onchange=e=>{$('stepCard').style.display=e.target.checked?'':'none'};
+// kadrana tıklama
+function dialPick(ev){if(lockd()){lockMsg();return}const b=dl.getBoundingClientRect();const x=(ev.clientX-b.left)/b.width*150-75,y=(ev.clientY-b.top)/b.height*150-75;let h=Math.atan2(x,-y)/D2R/30;if(h<0)h+=12;S.rot=Math.round(h*4)/4%12}
+let dragging=false;dl.addEventListener('pointerdown',e=>{dragging=true;dialPick(e)});window.addEventListener('pointerup',()=>dragging=false);dl.addEventListener('pointermove',e=>{if(dragging)dialPick(e)});
+document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey)return;if(e.target.tagName==='SELECT'||e.target.tagName==='INPUT'&&e.target.type!=='range'&&e.target.type!=='checkbox')return;
+ const k=e.key;if(k==='ArrowUp'){moveH(0.1);e.preventDefault()}else if(k==='ArrowDown'){moveH(-0.1);e.preventDefault()}else if(k==='ArrowRight'){rotate(0.25);e.preventDefault()}else if(k==='ArrowLeft'){rotate(-0.25);e.preventDefault()}
+ else{const kk=k.toLowerCase();
+  if(kk==='n')doNeedle();else if(kk==='k')doContrast();
+  else if(k==='+'||k==='='){if(lockd())lockMsg();else S.push=Math.min(1,S.push+0.1)}else if(k==='-'||k==='_'){if(lockd())lockMsg();else S.push=Math.max(0,S.push-0.1)}
+  else if(kk==='d'){if(!$('dil').disabled)$('dil').click()}else if(kk==='t'){if(!$('wire').disabled)$('wire').click()}
+  else if('1234'.includes(k)&&k.length===1){S.carm=CARMS[+k-1][0];syncBtns()}
+  else if('qwer'.includes(kk)&&kk.length===1){S.tee=TEES['qwer'.indexOf(kk)][0];syncBtns()}}});
+
+// ---------- döngü ----------
+let lastStat=0;
+function frame(ms){
+ const t=ms/1000;const w=t*TAU*1.2;WOB=[0.06*Math.sin(w),0.05*Math.sin(w+0.8),0.06*Math.sin(w+1.6)];
+ const r=tipState();
+ drawFluoro(t,r);drawTEE(t,r);drawMap(r);drawDial();drawPress(t);
+ if(t-lastStat>0.12){updateStatus(r);updateSteps(r);lastStat=t}
+ requestAnimationFrame(frame);
+}
+sel.value=S.proc;renderInfo();syncBtns();renderResult();requestAnimationFrame(frame);
+})();
+</script>
+</body></html>

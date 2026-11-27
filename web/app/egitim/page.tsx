@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageTitle } from "@/components/PageTitle";
 import { educationTools } from "@/lib/content";
 
@@ -9,17 +10,20 @@ export default function EducationPage() {
     <>
       <PageTitle
         title="Eğitim Modülü"
-        desc="Simülasyonlar, klinik hesaplayıcılar ve eğitim materyalleri. Araçlar mevcut uygulamamızdan aşamalı olarak bu siteye taşınacaktır."
+        desc="Etkileşimli simülasyonlar ve görsel hesaplayıcılar. Bilgisayarda en iyi deneyim için geniş ekran önerilir."
       />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-2">
         {educationTools.map((t) => (
-          <div key={t.title} className="rounded-xl border border-slate-200 bg-white p-5">
+          <Link
+            key={t.slug}
+            href={`/egitim/${t.slug}`}
+            className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand hover:shadow-md"
+          >
             <p className="text-xs font-medium uppercase tracking-wide text-brand">{t.kind}</p>
-            <h2 className="mt-1 font-semibold">{t.title}</h2>
-            <span className="mt-3 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-              Yakında
-            </span>
-          </div>
+            <h2 className="mt-1 text-lg font-semibold">{t.title}</h2>
+            <p className="mt-2 text-sm text-slate-600">{t.desc}</p>
+            <span className="mt-4 inline-block text-sm font-semibold text-brand group-hover:underline">Aç →</span>
+          </Link>
         ))}
       </div>
     </>
