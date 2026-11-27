@@ -8,3 +8,22 @@
 body {
   @apply bg-slate-50 text-slate-800 antialiased;
 }
+
+/* Kalp atışı */
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.06); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.04); }
+  70% { transform: scale(1); }
+}
+.heart-beat path {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: heartbeat 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heart-beat path { animation: none; }
+}
+html { scroll-behavior: smooth; }
+body { overflow-x: hidden; }
