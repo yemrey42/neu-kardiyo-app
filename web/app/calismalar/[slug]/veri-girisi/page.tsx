@@ -1,0 +1,57 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { studies } from "@/lib/content";
+import { getFormSpec, groupBySection } from "@/lib/studyForms";
+import { studySheetConfig } from "@/lib/studyConfig";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { LoginForm } from "@/app/giris/LoginForm";
+import { logout } from "@/app/giris/actions";
+import { StudyForm } from "./StudyForm";
+
+export const dynamic = "force-dynamic";
+
+// Veriler şimdilik Google Sheets'e yazılır (Streamlit ile aynı tablo, ayrı "WEB - ..." sekmeleri).
+// Kurallar:
+//  - Ad, soyad, TC kimlik no, telefon, dosya/protokol numarası GİRİLMEZ.
+//  - Hasta yalnızca çalışmaya özel takma kodla (ör. HT-001) tanımlanır;
+//    kod-hasta eşleştirme listesi sitede değil, sorumlu araştırmacıda tutulur.
+//  - Etik kurul onay numarası opsiyoneldir; girilirse her satıra yazılır.
+export default async function DataEntry({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const study = studies.find((s) => s.slug === slug);
+  const spec = getFormSpec(slug);
+  const cfg = studySheetConfig[slug];
+  if (!study || !spec || !cfg) notFound();
+
+  const email = await currentUserEmail();
+  const here = `/calismalar/${slug}/veri-girisi`;
+
+  return (
+    <div className="space-y-6">
+      <Link href={`/calismalar/${study.slug}`} className="text-sm text-brand">← {study.title}</Link>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold">Veri Girişi: {study.title}</h1>
+        {email && (
+          <form action={logout} className="text-sm text-slate-500">
+            <input type="hidden" name="next" value={here} />
+            {email} · <button className="underline">Çıkış</button>
+          </form>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Yalnızca anonim veri: ad, TC kimlik no, telefon, dosya numarası <b>girilmez</b>.</li>
+          <li>Hasta, çalışmaya özel kodla tanımlanır ({cfg.codePrefix}-001 gibi). Eşleştirme listesi sorumlu araştırmacıdadır.</li>
+          {study.ethicsApprovalNo && <li>Etik kurul onay no: {study.ethicsApprovalNo}</li>}
+        </ul>
+      </div>
+
+      {!email ? (
+        <LoginForm next={here} />
+      ) : (
+        <StudyForm slug={slug} spec={spec} sections={groupBySection(spec)} codePrefix={cfg.codePrefix} />
+      )}
+    </div>
+  );
+}
