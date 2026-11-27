@@ -47,8 +47,7 @@ Yeni çalışmalar ileride Supabase'e alınabilir.
 - Etik kurul onay numarası opsiyonel: `lib/content.ts` içinde girilirse gösterilir ve her satıra yazılır.
 
 **Vercel ortam değişkenleri:** `GOOGLE_SERVICE_ACCOUNT_JSON` (Streamlit secrets'taki servis
-hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`, `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Servis hesabının e-postası tabloya **Düzenleyici**
+hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`. (Supabase değerleri kodda tanımlı.) Servis hesabının e-postası tabloya **Düzenleyici**
 olarak paylaşılmış olmalı (Streamlit için zaten paylaşılmış durumda).
 
 ### Kullanıcı hesapları (Supabase)
@@ -58,7 +57,7 @@ olarak paylaşılmış olmalı (Streamlit için zaten paylaşılmış durumda).
    (böylece dışarıdan kimse hesap açamaz).
 3. Kullanıcı eklemek: Authentication → Users → **Add user → Create new user** → e-posta + şifre,
    "Auto Confirm User" işaretli. Hesabı kapatmak için aynı ekrandan kullanıcıyı silin.
-4. Project Settings → API'den `Project URL` ve `anon public` anahtarını Vercel'e girin.
+4. Proje adresi ve publishable anahtar `lib/supabaseConfig.ts` içinde tanımlı; Vercel'e ayrıca girmeye gerek yok.
 
 Şifre sıfırlama şimdilik yönetici tarafından (Users ekranından) yapılır.
 

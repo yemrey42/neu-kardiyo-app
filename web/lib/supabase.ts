@@ -1,9 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./supabaseConfig";
 
-// Ortam değişkenleri tanımlı değilse null döner; iskelet Supabase olmadan da çalışır.
 export function getSupabaseBrowserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
+  const url = SUPABASE_URL;
+  const key = SUPABASE_PUBLISHABLE_KEY;
   return createBrowserClient(url, key);
 }

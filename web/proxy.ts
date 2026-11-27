@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/lib/supabaseConfig";
 
 // Supabase oturum çerezini her istekte yeniler (süresi dolan erişim jetonu için).
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return response;
+  const url = SUPABASE_URL;
+  const key = SUPABASE_PUBLISHABLE_KEY;
 
   const supabase = createServerClient(url, key, {
     cookies: {
