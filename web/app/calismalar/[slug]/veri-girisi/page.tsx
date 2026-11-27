@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { studies } from "@/lib/content";
 import { getFormSpec, groupBySection } from "@/lib/studyForms";
 import { studySheetConfig } from "@/lib/studyConfig";
-import { hasSession } from "@/lib/dataEntryAuth";
-import { LoginForm } from "./LoginForm";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { LoginForm } from "@/app/giris/LoginForm";
+import { logout } from "@/app/giris/actions";
 import { StudyForm } from "./StudyForm";
-import { logout } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,16 +23,18 @@ export default async function DataEntry({ params }: { params: Promise<{ slug: st
   const cfg = studySheetConfig[slug];
   if (!study || !spec || !cfg) notFound();
 
-  const loggedIn = await hasSession();
+  const email = await currentUserEmail();
+  const here = `/calismalar/${slug}/veri-girisi`;
 
   return (
     <div className="space-y-6">
       <Link href={`/calismalar/${study.slug}`} className="text-sm text-brand">← {study.title}</Link>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Veri Girişi: {study.title}</h1>
-        {loggedIn && (
-          <form action={logout.bind(null, slug)}>
-            <button className="text-sm text-slate-500 underline">Çıkış</button>
+        {email && (
+          <form action={logout} className="text-sm text-slate-500">
+            <input type="hidden" name="next" value={here} />
+            {email} · <button className="underline">Çıkış</button>
           </form>
         )}
       </div>
@@ -45,8 +47,8 @@ export default async function DataEntry({ params }: { params: Promise<{ slug: st
         </ul>
       </div>
 
-      {!loggedIn ? (
-        <LoginForm slug={slug} />
+      {!email ? (
+        <LoginForm next={here} />
       ) : (
         <StudyForm slug={slug} spec={spec} sections={groupBySection(spec)} codePrefix={cfg.codePrefix} />
       )}

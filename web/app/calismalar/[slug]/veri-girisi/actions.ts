@@ -1,36 +1,19 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { studies } from "@/lib/content";
 import { getFormSpec, computeDerived } from "@/lib/studyForms";
 import { studySheetConfig } from "@/lib/studyConfig";
 import { upsertRow } from "@/lib/sheets";
-import { checkPassword, endSession, hasSession, startSession } from "@/lib/dataEntryAuth";
+import { currentUserEmail } from "@/lib/supabaseServer";
 
 export type SaveState = { ok: boolean; message: string } | null;
-
-export async function login(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  const pw = String(formData.get("password") ?? "");
-  try {
-    if (!checkPassword(pw)) return { ok: false, message: "Şifre yanlış." };
-  } catch (e) {
-    return { ok: false, message: (e as Error).message };
-  }
-  await startSession();
-  revalidatePath(`/calismalar/${slug}/veri-girisi`);
-  return { ok: true, message: "Giriş başarılı." };
-}
-
-export async function logout(slug: string) {
-  await endSession();
-  revalidatePath(`/calismalar/${slug}/veri-girisi`);
-}
 
 // Kimlik numarası / telefon gibi görünen uzun rakam dizileri serbest metinde kabul edilmez.
 const LOOKS_IDENTIFYING = /\d[\d\s-]{9,}\d/;
 
 export async function saveRecord(slug: string, _prev: SaveState, formData: FormData): Promise<SaveState> {
-  if (!(await hasSession())) return { ok: false, message: "Oturum süresi doldu, tekrar giriş yapın." };
+  const userEmail = await currentUserEmail();
+  if (!userEmail) return { ok: false, message: "Oturum süresi doldu, tekrar giriş yapın." };
 
   const study = studies.find((s) => s.slug === slug);
   const spec = getFormSpec(slug);
@@ -76,6 +59,7 @@ export async function saveRecord(slug: string, _prev: SaveState, formData: FormD
     ...row,
     ...computeDerived(slug, row),
     "Etik Kurul No": study.ethicsApprovalNo ?? "",
+    Kaydeden: userEmail,
     "Kayıt Zamanı": new Date().toISOString(),
   };
 

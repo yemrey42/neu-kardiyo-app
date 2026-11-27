@@ -1,24 +1,25 @@
 import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { LoginForm } from "./LoginForm";
+import { logout } from "./actions";
 
 export const metadata: Metadata = { title: "Giriş" };
+export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const email = await currentUserEmail();
   return (
     <div className="max-w-md">
-      <PageTitle title="Ekip Girişi" desc="Soru bankası istatistikleri, akademik takip ve veri girişi için." />
-      <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
-        <label className="block text-sm">
-          Kurumsal e-posta
-          <input type="email" disabled placeholder="ad.soyad@..." className="mt-1 block w-full rounded border px-3 py-2" />
-        </label>
-        <button disabled className="w-full rounded bg-brand px-4 py-2 text-white opacity-60">
-          Giriş bağlantısı gönder
-        </button>
-        <p className="text-xs text-slate-500">
-          Supabase bağlandığında e-posta ile şifresiz giriş (magic link) aktif olacaktır.
-        </p>
-      </form>
+      <PageTitle title="Ekip Girişi" desc="Klinik çalışma veri girişi için e-posta ve şifrenizle giriş yapın." />
+      {email ? (
+        <form action={logout} className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 text-sm">
+          <p>Giriş yapıldı: <b>{email}</b></p>
+          <button className="rounded border px-3 py-1">Çıkış</button>
+        </form>
+      ) : (
+        <LoginForm />
+      )}
     </div>
   );
 }

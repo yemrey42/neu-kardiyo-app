@@ -17,7 +17,7 @@ Veritabanı/Giriş: Supabase (EU – Frankfurt).
 | Soru bankası | `/soru-bankasi` | Çalışan örnek test (Streamlit soru şemasıyla uyumlu) |
 | Klinik çalışmalar | `/calismalar` | 5 çalışma + bilgilendirme sayfası |
 | Veri girişi | `/calismalar/[slug]/veri-girisi` | Çalışıyor: şifreli giriş, Google Sheets'e yazar |
-| Ekip girişi | `/giris` | Supabase bağlanınca aktif olacak |
+| Ekip girişi | `/giris` | E-posta + şifre (Supabase Auth) |
 | KVKK | `/kvkk` | Taslak metin (hukuk onayı gerekli) |
 
 İçerikler şimdilik `lib/content.ts` içinde; veritabanı şeması `supabase/schema.sql`.
@@ -34,14 +34,25 @@ Yeni çalışmalar ileride Supabase'e alınabilir.
   bkz. `lib/studyConfig.ts`). Sekme yoksa ilk kayıtta oluşur. Streamlit'in sekmelerine dokunulmaz.
 - `KayıtID` = katılımcı kodu + ziyaret + tarih. Aynı KayıtID tekrar kaydedilirse satır güncellenir.
 - Her satıra `Etik Kurul No` ve `Kayıt Zamanı` eklenir.
-- Giriş: tek ortak şifre (`DATA_ENTRY_PASSWORD`), 8 saatlik imzalı çerez. Kişiye özel hesaplar
-  Supabase ile gelecek.
+- Giriş: kişiye özel **e-posta + şifre** (Supabase Auth). Supabase'de yalnızca kullanıcı hesapları
+  tutulur, çalışma verisi tutulmaz. Her satıra kaydeden kişinin e-postası (`Kaydeden`) yazılır.
 - Etik kurul onay numarası opsiyonel: `lib/content.ts` içinde girilirse gösterilir ve her satıra yazılır.
 
 **Vercel ortam değişkenleri:** `GOOGLE_SERVICE_ACCOUNT_JSON` (Streamlit secrets'taki servis
-hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`, `DATA_ENTRY_PASSWORD`,
-`SESSION_SECRET` (uzun rastgele metin). Servis hesabının e-postası tabloya **Düzenleyici**
+hesabı bilgilerinin JSON hali, tek satır), `GOOGLE_SHEET_ID`, `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Servis hesabının e-postası tabloya **Düzenleyici**
 olarak paylaşılmış olmalı (Streamlit için zaten paylaşılmış durumda).
+
+### Kullanıcı hesapları (Supabase)
+
+1. supabase.com → New project, bölge **Central EU (Frankfurt)**.
+2. Authentication → Sign In / Providers → **Email** açık; **"Allow new users to sign up" KAPALI**
+   (böylece dışarıdan kimse hesap açamaz).
+3. Kullanıcı eklemek: Authentication → Users → **Add user → Create new user** → e-posta + şifre,
+   "Auto Confirm User" işaretli. Hesabı kapatmak için aynı ekrandan kullanıcıyı silin.
+4. Project Settings → API'den `Project URL` ve `anon public` anahtarını Vercel'e girin.
+
+Şifre sıfırlama şimdilik yönetici tarafından (Users ekranından) yapılır.
 
 ## Etik / KVKK ilkeleri (veri girişi)
 
