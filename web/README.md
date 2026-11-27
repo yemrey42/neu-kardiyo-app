@@ -12,7 +12,7 @@ Veritabanı/Giriş: Supabase (EU – Frankfurt).
 | Sayfa | Yol | Durum |
 |---|---|---|
 | Klinik haberleri | `/haberler` | Örnek içerik |
-| Güncel literatür | `/literatur` | Örnek içerik |
+| Güncel literatür | `/literatur` | PubMed'den günlük otomatik (konu filtresi + klinik yayınları) |
 | Eğitim | `/egitim` | Streamlit'teki simülasyon/hesaplayıcı listesi, taşınacak |
 | Soru bankası | `/soru-bankasi` | Çalışan örnek test (Streamlit soru şemasıyla uyumlu) |
 | Klinik çalışmalar | `/calismalar` | 5 çalışma + bilgilendirme sayfası |
@@ -21,6 +21,14 @@ Veritabanı/Giriş: Supabase (EU – Frankfurt).
 | KVKK | `/kvkk` | Taslak metin (hukuk onayı gerekli) |
 
 İçerikler şimdilik `lib/content.ts` içinde; veritabanı şeması `supabase/schema.sql`.
+
+## Otomatik literatür (PubMed)
+
+`/literatur` sayfası PubMed E-utilities ile önde gelen kardiyoloji dergilerinin son 14 günlük
+makalelerini listeler (konu filtresiyle) ve adres alanında "Necmettin Erbakan" + kardiyoloji geçen
+yayınları "Kliniğimizden yayınlar" bölümünde gösterir. Yanıtlar 24 saat önbellekte tutulur.
+Dergi listesi, konular ve kurum sorgusu `lib/pubmed.ts` içinde. İsteğe bağlı `NCBI_API_KEY`
+ortam değişkeni (ücretsiz, NCBI hesabından) daha yüksek istek limiti sağlar.
 
 ## Klinik çalışma veri girişi (Google Sheets)
 
