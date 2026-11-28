@@ -22,6 +22,8 @@ export type BankQuestion = {
   explanation: string;
   source?: string;
   media?: QuestionMedia;
+  /** Kalp atlasındaki yapılar (aorta, mitral, lv ...); yalnızca metin sorularında. */
+  regions?: string[];
 };
 
 export type QuestionBankData = {

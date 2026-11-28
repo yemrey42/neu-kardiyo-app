@@ -14,7 +14,7 @@ export default async function QuestionBankPage() {
     <>
       <PageTitle
         title="Kardiyoloji Soru Bankası"
-        desc={`${questions.length} soru, ${cats} konu. Pratik modda her cevaptan sonra açıklamayı gör, sınav modunda süreye karşı çöz, seri modunda rekorunu kır.`}
+        desc={`${questions.length} soru, ${cats} konu. Pratikte kalp modelinden yapı seçerek çöz, sınavda süreye karşı yarış, seride rekorunu kır.`}
       />
       {origin === "sample" && (
         <p className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

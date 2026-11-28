@@ -2,6 +2,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import { googleAccessToken, googleConfigured } from "./sheets";
 import { sampleQuestions } from "./sampleQuestions";
+import { atlasRegions, fold } from "./atlasTopics";
 import { LETTERS, type BankQuestion, type Letter, type QuestionBankData, type QuestionKind, type QuestionMedia } from "./questionTypes";
 
 // Soru bankası Streamlit ile aynı Google tablosundan okunur (web_app.py: MEDIA_SHEET_ID).
@@ -79,6 +80,8 @@ export function parseQuestionRows(kind: QuestionKind, values: string[][], tabLab
   if (!values.length) return [];
   const [header, ...rows] = values;
   const col = columnFinder(header);
+  const ANATOMY = new Set(["anatomi", "anatomik yapi", "anatomikyapi", "anatomik bolge", "yapi"]);
+  const anatomyCols = header.map((h, i) => (ANATOMY.has(fold(String(h ?? ""))) ? i : -1)).filter((i) => i >= 0);
   const prefix = kind === "text" ? "M" : kind === "photo" ? "F" : "V";
   const out: BankQuestion[] = [];
   const seen = new Set<string>();
@@ -102,10 +105,14 @@ export function parseQuestionRows(kind: QuestionKind, values: string[][], tabLab
     let id = `${prefix}-${col(row, "SoruID") || i + 2}`;
     if (seen.has(id)) id = `${id}-${i + 2}`;
     seen.add(id);
+    const category = col(row, "Kategori") || "Genel";
+    const tags = anatomyCols.map((i) => String(row[i] ?? "").trim()).filter(Boolean).join(";");
+    const regions = kind === "text" ? atlasRegions(tags, col(row, "Kategori"), text) : [];
     out.push({
       id,
       kind,
-      category: col(row, "Kategori") || "Genel",
+      category,
+      regions: regions.length ? regions : undefined,
       text,
       options,
       correct,

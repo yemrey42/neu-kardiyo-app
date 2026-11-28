@@ -10,7 +10,7 @@ const MODES: { id: Mode; title: string; desc: string; icon: React.ReactNode }[] 
   {
     id: "pratik",
     title: "Pratik",
-    desc: "Her cevaptan sonra doğrusu, açıklaması ve kaynağı hemen gelir.",
+    desc: "Kalp modelinde bir yapıya dokun, o yapının sorularını çöz. Açıklama hemen gelir.",
     icon: <path d="M4 12h3l2-6 4 12 2-6h5" />,
   },
   {
@@ -191,73 +191,92 @@ export function QuestionBank({ questions }: { questions: BankQuestion[] }) {
   // ------------------------------- Kurulum ---------------------------------
   const solvedIds = Object.keys(progress.q).filter((id) => questions.some((q) => q.id === id));
   const solvedCorrect = solvedIds.filter((id) => progress.q[id].last === 1).length;
-  const allCats = Object.entries(countBy(questions, (q) => q.category)).sort((a, b) => b[1] - a[1]);
   const wrongAvailable = byKind.filter((q) => wrongIds.has(q.id)).length;
+  const startButton = (
+    <button
+      type="button"
+      disabled={!take}
+      onClick={() => start(mode, pool, take)}
+      className="rounded-xl bg-brand px-6 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-40"
+    >
+      {MODES.find((m) => m.id === mode)?.title} başlat · {take} soru
+    </button>
+  );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="space-y-6">
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">1 · Mod</h2>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {MODES.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setMode(m.id)}
-                aria-pressed={mode === m.id}
-                className={`group flex gap-3 rounded-2xl border p-4 text-left transition sm:block ${
-                  mode === m.id ? "border-brand bg-red-50/60 ring-2 ring-brand/20" : "border-slate-200 bg-white hover:border-slate-300"
-                }`}
-              >
-                <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${mode === m.id ? "bg-brand text-white" : "bg-slate-100 text-slate-600"}`}>
-                  <Icon>{m.icon}</Icon>
-                </span>
-                <span className="block min-w-0">
-                  <span className="block font-semibold text-slate-900 sm:mt-3">{m.title}</span>
-                  <span className="mt-1 block text-sm leading-snug text-slate-600">{m.desc}</span>
-                </span>
-              </button>
-            ))}
-          </div>
+    <div className="space-y-5">
+      {/* Genel ilerleme: tek satır */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+        <span className="flex items-center gap-3">
+          <Ring value={solvedIds.length ? solvedCorrect / solvedIds.length : 0} size={52} />
+          <span className="font-semibold text-slate-900">İlerlemen</span>
+        </span>
+        <span className="text-slate-600">
+          Çözülen <b className="tabular-nums text-slate-900">{solvedIds.length}/{questions.length}</b>
+        </span>
+        <span className="text-slate-600">
+          Doğru <b className="tabular-nums text-slate-900">{solvedCorrect}</b>
+        </span>
+        <span className="text-slate-600">
+          En iyi seri <b className="tabular-nums text-slate-900">{progress.bestStreak}</b>
+        </span>
+        <span className="ml-auto">
+          <ResetButton onReset={() => setProgress(clearProgress())} disabled={!solvedIds.length} />
+        </span>
+      </div>
+
+      <section>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setMode(m.id)}
+              aria-pressed={mode === m.id}
+              className={`group flex gap-3 rounded-2xl border p-4 text-left transition ${
+                mode === m.id ? "border-brand bg-red-50/60 ring-2 ring-brand/20" : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${mode === m.id ? "bg-brand text-white" : "bg-slate-100 text-slate-600"}`}>
+                <Icon>{m.icon}</Icon>
+              </span>
+              <span className="block min-w-0">
+                <span className="block font-semibold text-slate-900">{m.title}</span>
+                <span className="mt-0.5 block text-sm leading-snug text-slate-600">{m.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {mode === "pratik" ? (
+        <section className="space-y-3">
+          <HeartAtlas questions={questions} onAnswer={(id, ok) => updateProgress((p) => recordAnswer(p, id, ok))} />
+          <p className="text-sm text-slate-500">
+            Atlasta yeri olmayan sorular da dahil, konudan bağımsız çözmek için{" "}
+            <button type="button" className="font-medium text-brand underline" onClick={() => start("pratik", byKind, Math.min(20, byKind.length))}>
+              karışık pratik başlat
+            </button>
+            .
+          </p>
         </section>
-
-        {kindsAvailable.length > 1 && (
-          <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">2 · Soru türü</h2>
-            <div className="flex flex-wrap gap-2">
-              {kindsAvailable.map((k) => (
-                <Chip
-                  key={k}
-                  on={kinds.includes(k)}
-                  onClick={() => setKinds((ks) => (ks.includes(k) ? (ks.length > 1 ? ks.filter((x) => x !== k) : ks) : [...ks, k]))}
-                >
-                  {KIND_LABEL[k]} <span className="opacity-70">· {questions.filter((q) => q.kind === k).length}</span>
-                </Chip>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{kindsAvailable.length > 1 ? "3" : "2"} · Konu</h2>
-          <div className="flex flex-wrap gap-2">
-            <Chip on={!cats.length} onClick={() => setCats([])}>
-              Tümü <span className="opacity-70">· {byKind.length}</span>
-            </Chip>
-            {categories.map(([c, n]) => (
-              <Chip key={c} on={cats.includes(c)} onClick={() => setCats((cs) => (cs.includes(c) ? cs.filter((x) => x !== c) : [...cs, c]))}>
-                {c} <span className="opacity-70">· {n}</span>
-              </Chip>
-            ))}
+      ) : (
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-4">
+            {startButton}
+            <p className="text-sm text-slate-500">
+              {!take
+                ? "Bu seçimle soru yok; filtreleri genişlet."
+                : mode === "sinav"
+                  ? `Süre ${fmtTime(take * SECONDS_PER_QUESTION)} (soru başına 1 dk)`
+                  : `Rekorun: ${progress.bestStreak}`}
+            </p>
           </div>
-        </section>
 
-        <section className="flex flex-wrap items-end gap-6">
-          {mode !== "seri" && (
-            <div>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Soru sayısı</h2>
-              <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-100 pt-4 text-sm">
+            {mode === "sinav" && (
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-500">Soru sayısı</span>
                 {[10, 20, 40].map((n) => (
                   <Chip key={n} on={count === n} onClick={() => setCount(n)}>
                     {n}
@@ -266,84 +285,100 @@ export function QuestionBank({ questions }: { questions: BankQuestion[] }) {
                 <Chip on={count >= 9999} onClick={() => setCount(9999)}>
                   Tümü
                 </Chip>
-              </div>
-            </div>
-          )}
-          <label className={`flex items-center gap-2 text-sm ${wrongAvailable ? "text-slate-700" : "text-slate-400"}`}>
-            <input type="checkbox" className="h-4 w-4 accent-brand" checked={onlyWrong} disabled={!wrongAvailable} onChange={(e) => setOnlyWrong(e.target.checked)} />
-            Yalnızca son denemede yanlış yaptıklarım ({wrongAvailable})
-          </label>
-        </section>
-
-        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-          <button
-            type="button"
-            disabled={!take}
-            onClick={() => start(mode, pool, take)}
-            className="rounded-xl bg-brand px-6 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-40"
-          >
-            Başla · {take} soru
-          </button>
-          <p className="text-sm text-slate-500">
-            {!take
-              ? "Bu seçimle soru yok; filtreleri genişlet."
-              : mode === "sinav"
-                ? `Süre: ${fmtTime(take * SECONDS_PER_QUESTION)} (soru başına 1 dk)`
-                : mode === "seri"
-                  ? `En iyi serin: ${progress.bestStreak}`
-                  : "Klavye: A–E ile seç, Enter ile ilerle."}
-          </p>
-        </div>
-      </div>
-
-      <aside className="space-y-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="font-semibold text-slate-900">İlerlemen</h2>
-          <div className="mt-4 flex items-center gap-4">
-            <Ring value={solvedIds.length ? solvedCorrect / solvedIds.length : 0} size={104} label="isabet" />
-            <dl className="space-y-1 text-sm">
-              <div>
-                <dt className="inline text-slate-500">Çözülen: </dt>
-                <dd className="inline font-semibold">
-                  {solvedIds.length} / {questions.length}
-                </dd>
-              </div>
-              <div>
-                <dt className="inline text-slate-500">En iyi seri: </dt>
-                <dd className="inline font-semibold">{progress.bestStreak}</dd>
-              </div>
-              <div>
-                <dt className="inline text-slate-500">Test: </dt>
-                <dd className="inline font-semibold">{progress.sessions}</dd>
-              </div>
-            </dl>
+              </span>
+            )}
+            {kindsAvailable.length > 1 && (
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-500">Tür</span>
+                {kindsAvailable.map((k) => (
+                  <Chip
+                    key={k}
+                    on={kinds.includes(k)}
+                    onClick={() => setKinds((ks) => (ks.includes(k) ? (ks.length > 1 ? ks.filter((x) => x !== k) : ks) : [...ks, k]))}
+                  >
+                    {KIND_LABEL[k]}
+                  </Chip>
+                ))}
+              </span>
+            )}
+            <label className={`flex items-center gap-2 ${wrongAvailable ? "text-slate-700" : "text-slate-400"}`}>
+              <input type="checkbox" className="h-4 w-4 accent-brand" checked={onlyWrong} disabled={!wrongAvailable} onChange={(e) => setOnlyWrong(e.target.checked)} />
+              Yalnızca yanlışlarım ({wrongAvailable})
+            </label>
           </div>
-          <ul className="mt-5 space-y-2.5">
-            {allCats.map(([c, n]) => {
-              const ids = questions.filter((q) => q.category === c).map((q) => q.id);
-              const ok = ids.filter((id) => progress.q[id]?.last === 1).length;
-              const tried = ids.filter((id) => progress.q[id]).length;
-              return (
-                <li key={c}>
-                  <div className="flex justify-between text-xs text-slate-600">
-                    <span className="truncate pr-2">{c}</span>
-                    <span className="shrink-0 tabular-nums">
-                      {ok}/{n}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className="bg-emerald-500 transition-all" style={{ width: `${(ok / n) * 100}%` }} />
-                    <div className="bg-red-300 transition-all" style={{ width: `${((tried - ok) / n) * 100}%` }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <ResetButton onReset={() => setProgress(clearProgress())} disabled={!solvedIds.length} />
-        </div>
-        <p className="px-1 text-xs leading-relaxed text-slate-500">İlerlemen yalnızca bu tarayıcıda saklanır; kimseyle paylaşılmaz.</p>
-      </aside>
+
+          <details className="group border-t border-slate-100 pt-3 text-sm">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-slate-600">
+              <span className="text-xs transition group-open:rotate-90">▶</span>
+              Konu: <b className="font-medium text-slate-900">{cats.length ? cats.join(", ") : `Tümü (${byKind.length})`}</b>
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Chip on={!cats.length} onClick={() => setCats([])}>
+                Tümü
+              </Chip>
+              {categories.map(([c, n]) => (
+                <Chip key={c} on={cats.includes(c)} onClick={() => setCats((cs) => (cs.includes(c) ? cs.filter((x) => x !== c) : [...cs, c]))}>
+                  {c} <span className="opacity-70">· {n}</span>
+                </Chip>
+              ))}
+            </div>
+          </details>
+        </section>
+      )}
     </div>
+  );
+}
+
+// ------------------------------- Kalp atlası -------------------------------
+
+type AtlasEntry = { id: string; stem: string; options: [string, string][]; key: string; why: string; source: [string, string] };
+
+function HeartAtlas({ questions, onAnswer }: { questions: BankQuestion[]; onAnswer: (id: string, correct: boolean) => void }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(720);
+  const banks = useMemo(() => {
+    const out: Record<string, AtlasEntry[]> = {};
+    for (const q of questions) {
+      if (q.kind !== "text" || !q.regions) continue;
+      const src = q.source ?? "";
+      const entry: AtlasEntry = {
+        id: q.id,
+        stem: q.text,
+        options: q.options.map((o) => [o.letter, o.text]),
+        key: q.correct,
+        why: q.explanation,
+        source: [src, /^https?:\/\/\S+$/i.test(src) ? src : ""],
+      };
+      for (const r of q.regions) (out[r] ??= []).push(entry);
+    }
+    return out;
+  }, [questions]);
+  const answerRef = useRef(onAnswer);
+  answerRef.current = onAnswer;
+
+  useEffect(() => {
+    const send = () => ref.current?.contentWindow?.postMessage({ type: "neu-atlas:init", banks, status: "ready" }, window.location.origin);
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin || e.source !== ref.current?.contentWindow) return;
+      const d = e.data as { type?: string; height?: number; qid?: string; correct?: boolean };
+      if (d?.type === "neu-atlas:ready") send();
+      else if (d?.type === "neu-atlas:height" && typeof d.height === "number") setHeight(Math.max(400, Math.min(2400, d.height)));
+      else if (d?.type === "neu-atlas:answer" && typeof d.qid === "string") answerRef.current(d.qid, d.correct === true);
+    };
+    window.addEventListener("message", onMsg);
+    send(); // iframe zaten yüklendiyse
+    return () => window.removeEventListener("message", onMsg);
+  }, [banks]);
+
+  return (
+    <iframe
+      ref={ref}
+      src="/simulasyon/kalp-atlasi.html?embed=1"
+      title="Kalp atlası: yapıya dokun, sorularını çöz"
+      className="block w-full rounded-2xl border border-slate-200"
+      style={{ height }}
+      onLoad={() => ref.current?.contentWindow?.postMessage({ type: "neu-atlas:init", banks, status: "ready" }, window.location.origin)}
+    />
   );
 }
 
@@ -351,7 +386,7 @@ function ResetButton({ onReset, disabled }: { onReset: () => void; disabled: boo
   const [ask, setAsk] = useState(false);
   if (disabled) return null;
   return ask ? (
-    <p className="mt-4 text-xs text-slate-600">
+    <p className="text-xs text-slate-600">
       İlerleme silinsin mi?{" "}
       <button className="font-semibold text-brand" onClick={() => (onReset(), setAsk(false))}>
         Evet, sil
@@ -362,7 +397,7 @@ function ResetButton({ onReset, disabled }: { onReset: () => void; disabled: boo
       </button>
     </p>
   ) : (
-    <button className="mt-4 text-xs text-slate-400 underline hover:text-slate-600" onClick={() => setAsk(true)}>
+    <button className="text-xs text-slate-400 underline hover:text-slate-600" onClick={() => setAsk(true)}>
       İlerlemeyi sıfırla
     </button>
   );

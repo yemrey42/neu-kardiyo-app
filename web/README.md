@@ -42,6 +42,8 @@ tabloya hiçbir şey yazmaz. Sayfa en fazla 5 dakikada bir yenilenir.
 - Fotoğraf/video dosyaları Streamlit'in Drive klasöründen adıyla bulunur ve `/api/soru-medya`
   üzerinden servis hesabıyla aktarılır (klasörün herkese açık olması gerekmez).
 - Bağlantı kurulamazsa sayfa çökmez; uyarıyla örnek sorular (`lib/sampleQuestions.ts`) gösterilir.
+- Pratik mod Streamlit'teki 3B kalp atlasıdır (`public/simulasyon/kalp-atlasi.html`). Metin soruları
+  `Anatomi` kolonu, yoksa Kategori + soru metniyle yapılara eşleşir (`lib/atlasTopics.ts`, Streamlit kurallarıyla aynı).
 - Kişisel ilerleme, yanlışlar ve en iyi seri yalnızca kullanıcının tarayıcısında tutulur.
 - Gereken ortam değişkenleri veri girişiyle aynı: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`.
   İsteğe bağlı: `QUESTION_SHEET_ID`, `QUESTION_MEDIA_FOLDER_ID`. Yerel deneme için

@@ -6,6 +6,7 @@ const opts = (...t: string[]) => t.map((text, i) => ({ letter: "ABCDE"[i] as Ban
 export const sampleQuestions: BankQuestion[] = [
   {
     id: "S-1",
+    regions: ["lv"],
     kind: "text",
     category: "Elektrofizyoloji",
     text: "Tam AV blokta kalıcı pacing için ileti sistemi pacing yöntemlerinden hangisi sol dal bölgesini hedefler?",
@@ -16,6 +17,7 @@ export const sampleQuestions: BankQuestion[] = [
   },
   {
     id: "S-2",
+    regions: ["mitral"],
     kind: "text",
     category: "Kapak hastalıkları",
     text: "PISA yöntemiyle doğrudan hesaplanan parametre hangisidir?",
@@ -26,6 +28,7 @@ export const sampleQuestions: BankQuestion[] = [
   },
   {
     id: "S-3",
+    regions: ["aortic_valve"],
     kind: "text",
     category: "Kapak hastalıkları",
     text: "Normal akımlı, ciddi aort darlığını tanımlayan bulgu hangisidir?",
@@ -36,6 +39,7 @@ export const sampleQuestions: BankQuestion[] = [
   },
   {
     id: "S-4",
+    regions: ["lv"],
     kind: "text",
     category: "Kalp yetersizliği",
     text: "HFrEF'te mortaliteyi azaltan dört temel ilaç grubundan biri olmayan hangisidir?",
@@ -46,6 +50,7 @@ export const sampleQuestions: BankQuestion[] = [
   },
   {
     id: "S-5",
+    regions: ["pa"],
     kind: "text",
     category: "Hemodinami",
     text: "Güncel ESC/ERS tanımına göre pulmoner hipertansiyon için istirahatte ortalama pulmoner arter basıncı eşiği nedir?",
@@ -56,6 +61,7 @@ export const sampleQuestions: BankQuestion[] = [
   },
   {
     id: "S-6",
+    regions: ["mitral", "la"],
     kind: "text",
     category: "Ekokardiyografi",
     text: "Diyastolik değerlendirmede ortalama E/e' için yüksek dolum basıncını düşündüren eşik hangisidir?",
@@ -76,6 +82,7 @@ export const sampleQuestions: BankQuestion[] = [
   },
   {
     id: "S-8",
+    regions: ["rv"],
     kind: "text",
     category: "Ekokardiyografi",
     text: "TTE'de sağ ventrikül sistolik disfonksiyonunu düşündüren TAPSE değeri hangisidir?",
