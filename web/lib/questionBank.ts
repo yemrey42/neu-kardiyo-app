@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import { googleAccessToken, googleConfigured } from "./sheets";
 import { sampleQuestions } from "./sampleQuestions";
 import { atlasRegions, fold } from "./atlasTopics";
-import { LETTERS, type BankQuestion, type CaseMedia, type ClinicalCase, type Letter, type QuestionBankData, type QuestionKind, type QuestionMedia } from "./questionTypes";
+import { driveIndex, nameKey } from "./driveMedia";
+import { LETTERS, type BankQuestion, type QuestionSection, type Letter, type QuestionBankData, type QuestionKind, type QuestionMedia } from "./questionTypes";
 
 // Soru bankası Streamlit ile aynı Google tablosundan okunur (web_app.py: MEDIA_SHEET_ID).
 //  - Metin soruları: tablonun 3. sekmesi (QUESTION_WS_INDEX = 2)
@@ -60,7 +61,9 @@ function mediaFor(kind: QuestionKind, file: string, link: string): QuestionMedia
     const src = `/api/soru-medya?f=${encodeURIComponent(file)}`;
     return kind === "photo" ? { type: "image", src } : { type: "video", src };
   }
-  if (!/^https?:\/\//i.test(link)) return undefined;
+  // Streamlit tablolarında GorselURL/VideoURL kolonuna çoğunlukla dosya adı yazılıyor.
+  if (link && !/^https?:\/\//i.test(link)) return mediaFor(kind, link, "");
+  if (!link) return undefined;
   const id = driveId(link);
   if (kind === "photo") return { type: "image", src: id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : link };
   return id ? { type: "iframe", src: `https://drive.google.com/file/d/${id}/preview` } : { type: "video", src: link };
@@ -93,11 +96,10 @@ export function parseQuestionRows(kind: QuestionKind, values: string[][], tabLab
     const text = col(row, "Soru");
     const options = LETTERS.map((letter) => ({ letter, text: col(row, letter) })).filter((o) => o.text);
     const correct = parseCorrect(col(row, "Dogru", "Doğru", "Cevap"), options);
-    const media = mediaFor(
-      kind,
-      kind === "photo" ? col(row, "GorselDosya", "GörselDosya", "DosyaAdi", "DosyaAdı") : col(row, "VideoDosya", "DosyaAdi", "DosyaAdı"),
-      kind === "photo" ? col(row, "GorselURL", "GörselURL", "FotoURL", "ResimURL", "MedyaURL") : col(row, "VideoURL", "MedyaURL"),
-    );
+    const fileCol = kind === "photo" ? col(row, "GorselDosya", "GörselDosya", "DosyaAdi", "DosyaAdı") : col(row, "VideoDosya", "DosyaAdi", "DosyaAdı");
+    const linkCol = kind === "photo" ? col(row, "GorselURL", "GörselURL", "FotoURL", "ResimURL", "MedyaURL") : col(row, "VideoURL", "MedyaURL");
+    const media = mediaFor(kind, fileCol, linkCol);
+    const mediaFile = fileCol || (linkCol && !/^https?:\/\//i.test(linkCol) ? linkCol : "");
     if (!text || options.length < 2 || !correct || !options.some((o) => o.letter === correct) || (kind !== "text" && !media)) {
       skipped++;
       return;
@@ -111,6 +113,8 @@ export function parseQuestionRows(kind: QuestionKind, values: string[][], tabLab
     out.push({
       id,
       kind,
+      section: kind === "text" ? "theory" : "neu",
+      mediaFile: mediaFile || undefined,
       category,
       regions: regions.length ? regions : undefined,
       text,
@@ -160,6 +164,7 @@ export async function loadQuestionBank(deps: Deps = {}): Promise<QuestionBankDat
       ranges = data.valueRanges ?? [];
     }
     const questions = tabs.flatMap((t, i) => parseQuestionRows(t.kind, ranges[i]?.values ?? [], t.label, notes));
+    await assignSections(questions, !fixture, notes);
     if (!questions.length) {
       notes.push("Tabloda aktif soru bulunamadı.");
       return { questions: sampleQuestions, origin: "sample", notes };
@@ -197,79 +202,35 @@ function explain(e: unknown): string {
   return "Google tablosu okunamadı.";
 }
 
-// ============================ Kliniğimizden vakalar ============================
-// Aynı tablonun "Vakalar" sekmesi. Görüntüler Drive'daki soru klasöründe (veya onun "Vakalar" alt klasöründe).
-// Başlıklar: VakaID | Aktif | Baslik | Kategori | Dosyalar | Oyku | Soru | Cevap | Aciklama | Kaynak
-// İsteğe bağlı çoktan seçmeli: A | B | C | D | E | Dogru (doluysa şıklı gösterilir).
-// Dosyalar: dosya adları veya Drive linkleri; virgül, noktalı virgül ya da alt satırla ayrılır.
+const BOOK = /echo doppler haemodynamics|echo doppler hemodynamics/i;
 
-export const CASES_TAB = "Vakalar";
-export const CASE_HEADERS = ["VakaID", "Aktif", "Baslik", "Kategori", "Dosyalar", "Oyku", "Soru", "Cevap", "Aciklama", "Kaynak"];
-
-export function parseCaseRows(values: string[][]): ClinicalCase[] {
-  if (!values.length) return [];
-  const [header, ...rows] = values;
-  const col = columnFinder(header);
-  const out: ClinicalCase[] = [];
-  rows.forEach((row, i) => {
-    if (!ACTIVE.has(col(row, "Aktif").toLocaleLowerCase("tr"))) return;
-    const question = col(row, "Soru");
-    const media = col(row, "Dosyalar", "Dosya", "GorselDosya", "Görseller", "Gorseller", "Medya")
-      .split(/[,;\n]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map(caseMedia)
-      .filter((m): m is CaseMedia => !!m);
-    const options = LETTERS.map((letter) => ({ letter, text: col(row, letter) })).filter((o) => o.text);
-    const correct = options.length >= 2 ? parseCorrect(col(row, "Dogru", "Doğru"), options) : null;
-    const answer = col(row, "Cevap", "Yanit", "Yanıt");
-    if (!question || (!answer && !correct)) return;
-    out.push({
-      id: `V-${col(row, "VakaID") || i + 2}`,
-      title: col(row, "Baslik", "Başlık") || `Vaka ${col(row, "VakaID") || i + 1}`,
-      category: col(row, "Kategori") || "Genel",
-      history: col(row, "Oyku", "Öykü", "Klinik"),
-      question,
-      answer,
-      explanation: col(row, "Aciklama", "Açıklama"),
-      source: col(row, "Kaynak") || undefined,
-      media,
-      options: correct ? options : undefined,
-      correct: correct ?? undefined,
-    });
-  });
-  return out.reverse(); // en yeni vaka üstte
-}
-
-function caseMedia(item: string): CaseMedia | null {
-  if (/^https?:\/\//i.test(item)) {
-    const id = driveId(item);
-    if (id) return { src: `/api/soru-medya?id=${id}`, type: "auto" };
-    return { src: item, type: /\.(mp4|webm|ogg|mov)(\?|$)/i.test(item) ? "video" : "image" };
-  }
-  if (/[\\/]/.test(item)) return null;
-  return { src: `/api/soru-medya?f=${encodeURIComponent(item)}`, type: /\.(mp4|webm|ogg|mov)$/i.test(item) ? "video" : "image" };
-}
-
-export async function loadCases(deps: Deps = {}): Promise<{ cases: ClinicalCase[]; note?: string }> {
-  const fixture = process.env.QUESTION_BANK_FIXTURE;
-  if (!fixture && !deps.token && !googleConfigured()) return { cases: [], note: "Google servis hesabı tanımlı değil." };
-  try {
-    if (fixture) {
-      const data = JSON.parse(await readFile(fixture, "utf8")) as { values: Record<string, string[][]> };
-      const v = data.values[CASES_TAB];
-      return v ? { cases: parseCaseRows(v) } : { cases: [], note: `"${CASES_TAB}" sekmesi bulunamadı.` };
+/** Görselli soruları Drive alt klasörüne göre bölümlere ayırır; klasör bulunamazsa Kaynak'a bakar. */
+async function assignSections(questions: BankQuestion[], useDrive: boolean, notes: string[]) {
+  const media = questions.filter((q) => q.kind !== "text");
+  if (!media.length) return;
+  let index: Awaited<ReturnType<typeof driveIndex>> | null = null;
+  if (useDrive) {
+    try {
+      index = await driveIndex();
+    } catch (e) {
+      console.error("[soru-bankasi] drive", e);
+      notes.push("Drive klasörü listelenemedi; görselli sorular Kaynak kolonuna göre ayrıldı.");
     }
-    const f = deps.fetch ?? fetch;
-    const token = deps.token ?? (await googleAccessToken(READONLY));
-    const id = process.env.QUESTION_SHEET_ID || DEFAULT_QUESTION_SHEET_ID;
-    const meta = await getJson(`${SHEETS_API}/${id}?fields=sheets.properties(title,index)`, token, f);
-    const has = (meta.sheets ?? []).some((s: { properties: { title: string } }) => s.properties.title === CASES_TAB);
-    if (!has) return { cases: [], note: `Tabloda "${CASES_TAB}" sekmesi henüz yok.` };
-    const data = await getJson(`${SHEETS_API}/${id}/values/${encodeURIComponent(`'${CASES_TAB}'`)}?majorDimension=ROWS`, token, f);
-    return { cases: parseCaseRows(data.values ?? []) };
-  } catch (e) {
-    console.error("[vakalar]", e);
-    return { cases: [], note: explain(e) };
   }
+  let missing = 0;
+  for (const q of media) {
+    const hits = q.mediaFile && index ? (index.byName.get(nameKey(q.mediaFile)) ?? []) : [];
+    const file = hits.length === 1 ? hits[0] : undefined;
+    if (file) {
+      // Kimlikle istemek ad aramasından hızlı ve aynı ad başka klasörde olsa da doğru dosyayı verir.
+      q.media = { type: q.kind === "photo" ? "image" : "video", src: `/api/soru-medya?id=${file.id}` };
+    } else if (index && q.mediaFile) missing++;
+    const folder = fold(file?.folder ?? "");
+    q.section = folder.includes("doppler") ? "doppler" : folder.includes("neu") || folder.includes("vaka") ? "neu" : BOOK.test(q.source ?? "") ? "doppler" : "neu";
+  }
+  if (missing) notes.push(`${missing} görselli sorunun dosyası Drive klasöründe bulunamadı (dosya adını kontrol edin).`);
+}
+
+export function bySection(questions: BankQuestion[], section: QuestionSection) {
+  return questions.filter((q) => (q.section ?? (q.kind === "text" ? "theory" : "neu")) === section);
 }

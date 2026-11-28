@@ -97,8 +97,8 @@ export function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
             </div>
             <div className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-brand">{c.category}</p>
-              <h2 className="mt-1 font-semibold text-slate-900">{c.title}</h2>
-              <p className="mt-1 line-clamp-2 text-sm text-slate-600">{c.history || c.question}</p>
+              {c.title && <h2 className="mt-1 font-semibold text-slate-900">{c.title}</h2>}
+              <p className={`mt-1 line-clamp-3 text-sm ${c.title ? "text-slate-600" : "text-slate-800"}`}>{c.history || c.question}</p>
             </div>
           </button>
         ))}
@@ -209,7 +209,7 @@ function CaseView({
         <section className="space-y-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-brand">{c.category}</p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">{c.title}</h1>
+            {c.title && <h1 className="mt-1 text-2xl font-bold text-slate-900">{c.title}</h1>}
           </div>
           {c.history && (
             <div className="rounded-xl bg-slate-100 p-4 text-sm leading-relaxed text-slate-700">

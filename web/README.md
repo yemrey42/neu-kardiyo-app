@@ -51,13 +51,17 @@ tabloya hiçbir şey yazmaz. Sayfa en fazla 5 dakikada bir yenilenir.
 
 ## Asistanlar İçin
 
-`/asistan` altında iki bölüm var: soru bankası (`/asistan/soru-bankasi`, eski `/soru-bankasi` yönlenir)
-ve **Kliniğimizden Vakalar** (`/asistan/vakalar`).
+`/asistan` altında üç bölüm; hepsi aynı soru tablosundan okunur (`lib/questionBank.ts`):
 
-Vakalar soru tablosunun **Vakalar** sekmesinden okunur (`loadCases`, `lib/questionBank.ts`):
-`VakaID | Aktif | Baslik | Kategori | Dosyalar | Oyku | Soru | Cevap | Aciklama | Kaynak | A..E | Dogru`.
-`Dosyalar`a Drive'daki `Kardiyoloji_Soru_Medya/Vakalar` klasörüne yüklenen dosyaların adları (virgülle)
-veya Drive linkleri yazılır. A–E ve Dogru doluysa vaka şıklı, boşsa "Cevabı göster" ile açık uçlu çalışır.
+| Bölüm | Yol | Kaynak |
+|---|---|---|
+| Teorik Soru Bankası | `/asistan/soru-bankasi` | `SoruBankasi` (3.) sekmesi, metin soruları |
+| Doppler Hemodinami | `/asistan/doppler` | `Fotograflar` / `Videolar` satırları, dosyası Drive'da **doppler hemodinami** klasöründe |
+| Kliniğimizden Vakalar | `/asistan/vakalar` | `Fotograflar` / `Videolar` satırları, dosyası Drive'da **Neu vakalar** klasöründe |
+
+Görselli sorunun bölümü dosyanın Drive alt klasöründen anlaşılır (`lib/driveMedia.ts`); klasör
+bulunamazsa Kaynak kolonunda kitap adı geçiyorsa Doppler'e, geçmiyorsa Vakalar'a düşer.
+`GorselURL` / `VideoURL` kolonuna dosya adı (ör. `dh_vaka01_lvot_cw.png`) yazılır. Eski `/soru-bankasi` yönlenir.
 
 ## Klinik çalışma veri girişi (Google Sheets)
 

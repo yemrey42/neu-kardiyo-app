@@ -122,7 +122,7 @@ function fmtTime(sec: number) {
 
 // ---------------------------------------------------------------------------
 
-export function QuestionBank({ questions }: { questions: BankQuestion[] }) {
+export function QuestionBank({ questions, atlas = true }: { questions: BankQuestion[]; atlas?: boolean }) {
   const [progress, setProgress] = useState<Progress>({ q: {}, bestStreak: 0, sessions: 0 });
   useEffect(() => setProgress(loadProgress()), []);
   const updateProgress = useCallback((fn: (p: Progress) => Progress) => {
@@ -242,14 +242,16 @@ export function QuestionBank({ questions }: { questions: BankQuestion[] }) {
               </span>
               <span className="block min-w-0">
                 <span className="block font-semibold text-slate-900">{m.title}</span>
-                <span className="mt-0.5 block text-sm leading-snug text-slate-600">{m.desc}</span>
+                <span className="mt-0.5 block text-sm leading-snug text-slate-600">
+                  {m.id === "pratik" && !atlas ? "Her cevaptan sonra doğrusu, açıklaması ve kaynağı hemen gelir." : m.desc}
+                </span>
               </span>
             </button>
           ))}
         </div>
       </section>
 
-      {mode === "pratik" ? (
+      {mode === "pratik" && atlas ? (
         <section className="space-y-3">
           <HeartAtlas questions={questions} onAnswer={(id, ok) => updateProgress((p) => recordAnswer(p, id, ok))} />
           <p className="text-sm text-slate-500">
@@ -269,12 +271,14 @@ export function QuestionBank({ questions }: { questions: BankQuestion[] }) {
                 ? "Bu seçimle soru yok; filtreleri genişlet."
                 : mode === "sinav"
                   ? `Süre ${fmtTime(take * SECONDS_PER_QUESTION)} (soru başına 1 dk)`
-                  : `Rekorun: ${progress.bestStreak}`}
+                  : mode === "seri"
+                    ? `Rekorun: ${progress.bestStreak}`
+                    : "Klavye: A–E ile seç, Enter ile ilerle."}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-100 pt-4 text-sm">
-            {mode === "sinav" && (
+            {mode !== "seri" && (
               <span className="flex flex-wrap items-center gap-2">
                 <span className="text-slate-500">Soru sayısı</span>
                 {[10, 20, 40].map((n) => (

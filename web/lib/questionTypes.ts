@@ -10,10 +10,16 @@ export type QuestionMedia =
   | { type: "video"; src: string }
   | { type: "iframe"; src: string };
 
+/** theory: SoruBankasi sekmesi · doppler: "doppler hemodinami" klasörü · neu: "Neu vakalar" klasörü */
+export type QuestionSection = "theory" | "doppler" | "neu";
+
 export type BankQuestion = {
   /** Sekme önekiyle benzersiz kimlik (M-12, F-3, V-1). */
   id: string;
   kind: QuestionKind;
+  section?: QuestionSection;
+  /** Tablodaki dosya adı (görselli sorularda). */
+  mediaFile?: string;
   category: string;
   text: string;
   /** Boş seçenekler çıkarılmış hali. */
@@ -34,6 +40,7 @@ export type QuestionBankData = {
   notes: string[];
 };
 
+/** NEÜ vakaları kart görünümü için. */
 export type CaseMedia = { src: string; type: "image" | "video" | "auto" };
 
 export type ClinicalCase = {
@@ -42,7 +49,6 @@ export type ClinicalCase = {
   category: string;
   history: string;
   question: string;
-  /** Açık uçlu cevap (şıklı vakalarda boş olabilir). */
   answer: string;
   explanation: string;
   source?: string;
@@ -50,3 +56,20 @@ export type ClinicalCase = {
   options?: { letter: Letter; text: string }[];
   correct?: Letter;
 };
+
+export function questionToCase(q: BankQuestion): ClinicalCase {
+  const m = q.media;
+  return {
+    id: q.id,
+    title: "",
+    category: q.category,
+    history: "",
+    question: q.text,
+    answer: "",
+    explanation: q.explanation,
+    source: q.source,
+    media: m && m.type !== "iframe" ? [{ src: m.src, type: m.type }] : [],
+    options: q.options,
+    correct: q.correct,
+  };
+}

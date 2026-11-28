@@ -7,16 +7,23 @@ export const metadata: Metadata = { title: "Asistanlar İçin" };
 const sections = [
   {
     href: "/asistan/soru-bankasi",
-    title: "Soru Bankası",
-    desc: "3B kalp atlası üzerinden pratik, süreli sınav ve seri modları. Sorular kliniğimizin soru tablosundan gelir.",
+    title: "Teorik Soru Bankası",
+    desc: "3B kalp atlası üzerinden pratik, süreli sınav ve seri modları.",
     accent: "bg-violet-50 text-violet-700",
     icon: <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />,
   },
   {
+    href: "/asistan/doppler",
+    title: "Doppler Hemodinami",
+    desc: "Görüntülü Doppler soruları. Kaynak: Clinical Applications of Echo Doppler Haemodynamics (2025).",
+    accent: "bg-sky-50 text-sky-700",
+    icon: <path d="M2 16h3l2-8 3 12 3-14 3 10 2-4h4" />,
+  },
+  {
     href: "/asistan/vakalar",
     title: "Kliniğimizden Vakalar",
-    desc: "Kliniğimizde karşılaştığımız vakaların görüntü ve videoları; önce düşün, sonra cevabı ve açıklamayı aç.",
-    accent: "bg-sky-50 text-sky-700",
+    desc: "Kendi hastalarımızdan görüntü ve videolu vakalar; önce yorumla, sonra cevabı aç.",
+    accent: "bg-red-50 text-brand",
     icon: (
       <>
         <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -31,7 +38,7 @@ export default function AssistantsPage() {
   return (
     <>
       <PageTitle title="Asistanlar İçin" desc="Kardiyoloji asistanlarımız için çalışma ve vaka tartışma alanı." />
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-3">
         {sections.map((s) => (
           <Link key={s.href} href={s.href} className="group rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-brand hover:shadow-md">
             <span className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${s.accent}`}>

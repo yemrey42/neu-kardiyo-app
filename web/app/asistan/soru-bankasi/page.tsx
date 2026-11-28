@@ -2,20 +2,22 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
 import { QuestionBank } from "./QuestionBank";
-import { loadQuestionBank } from "@/lib/questionBank";
+import { bySection, loadQuestionBank } from "@/lib/questionBank";
 
-export const metadata: Metadata = { title: "Soru Bankası" };
+export const metadata: Metadata = { title: "Teorik Soru Bankası" };
 // Sorular Google tablosundan en fazla 5 dakikada bir yenilenir.
 export const revalidate = 300;
 
 export default async function QuestionBankPage() {
-  const { questions, origin, notes } = await loadQuestionBank();
+  const bank = await loadQuestionBank();
+  const { origin, notes } = bank;
+  const questions = bySection(bank.questions, "theory");
   const cats = new Set(questions.map((q) => q.category)).size;
   return (
     <>
       <Link href="/asistan" className="mb-3 inline-block text-sm text-brand">← Asistanlar İçin</Link>
       <PageTitle
-        title="Kardiyoloji Soru Bankası"
+        title="Teorik Soru Bankası"
         desc={`${questions.length} soru, ${cats} konu. Pratikte kalp modelinden yapı seçerek çöz, sınavda süreye karşı yarış, seride rekorunu kır.`}
       />
       {origin === "sample" && (
