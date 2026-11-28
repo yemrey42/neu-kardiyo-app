@@ -3,14 +3,12 @@ import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
 import { QuestionBank } from "./QuestionBank";
 import { bySection, loadQuestionBank } from "@/lib/questionBank";
-import { currentUserEmail } from "@/lib/supabaseServer";
-import { AssistantGate } from "@/components/TeamGate";
 
 export const metadata: Metadata = { title: "Teorik Soru Bankası" };
-// Girişli sayfa; sorular Google tablosundan en fazla 5 dakikada bir yenilenir (veri önbelleği).
+// Herkese açık; sorular Google tablosundan en fazla 5 dakikada bir yenilenir.
+export const revalidate = 300;
 
 export default async function QuestionBankPage() {
-  if (!(await currentUserEmail())) return <AssistantGate next="/asistan/soru-bankasi" title="Teorik Soru Bankası" />;
   const bank = await loadQuestionBank();
   const { origin, notes } = bank;
   const questions = bySection(bank.questions, "theory");
