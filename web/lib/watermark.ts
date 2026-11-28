@@ -4,7 +4,7 @@ import { WATERMARK_PNG_BASE64 } from "./watermarkImage";
 import { fold } from "./atlasTopics";
 
 // Kliniğimizin kendi vaka görüntülerine "Dr. YEY" yazısını görüntünün kendisine işler.
-// Sağ altta belirgin, ortada soluk ikinci bir yazı: görüntü kırpılsa da imza kalır.
+// Görüntünün ortasında soluk bir yazı olarak.
 
 const MARK = Buffer.from(WATERMARK_PNG_BASE64, "base64");
 
@@ -24,19 +24,12 @@ export async function watermarkImage(input: ArrayBuffer, mimeType: string): Prom
   const W = meta.autoOrient?.width ?? meta.width ?? 800;
   const H = meta.autoOrient?.height ?? meta.height ?? 600;
   const edge = Math.min(W, H);
-  const corner = await mark(Math.min(W * 0.28, edge * 0.45), 0.8);
-  const center = await mark(Math.min(W * 0.45, edge * 0.7), 0.12);
-  const pad = Math.round(edge * 0.03);
+  const center = await mark(Math.min(W * 0.45, edge * 0.7), 0.16);
   const composed = img.composite([
     {
       input: center.data,
       left: Math.max(0, Math.round((W - center.info.width) / 2)),
       top: Math.max(0, Math.round((H - center.info.height) / 2)),
-    },
-    {
-      input: corner.data,
-      left: Math.max(0, W - corner.info.width - pad),
-      top: Math.max(0, H - corner.info.height - pad),
     },
   ]);
   if (mimeType === "image/png" || mimeType === "image/gif") return { body: await composed.png().toBuffer(), mimeType: "image/png" };

@@ -108,7 +108,7 @@ export function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
 }
 
 // Kendi vaka görüntülerimiz: sağ tık, sürükleme, seçme ve indirme kapalı.
-// Görsellerde "Dr. YEY" sunucuda görüntünün içine işlenir; videolarda oynatıcının üstünde durur.
+// Görsellerde "Dr. YEY" sunucuda görüntünün ortasına soluk olarak işlenir; videolarda oynatıcının ortasında durur.
 const guard = {
   onContextMenu: (e: React.SyntheticEvent) => e.preventDefault(),
   onDragStart: (e: React.SyntheticEvent) => e.preventDefault(),
@@ -118,17 +118,8 @@ const noSave = "select-none [-webkit-touch-callout:none] [-webkit-user-drag:none
 
 function Signature({ small = false }: { small?: boolean }) {
   return (
-    <span aria-hidden className="pointer-events-none absolute inset-0 select-none">
-      <span
-        className={`absolute font-extrabold tracking-tight text-white/80 [text-shadow:0_0_3px_rgba(0,0,0,.9),0_1px_2px_rgba(0,0,0,.8)] ${
-          small ? "bottom-1.5 right-2 text-xs" : "right-3 top-3 text-lg sm:text-2xl"
-        }`}
-      >
-        Dr. YEY
-      </span>
-      {!small && (
-        <span className="absolute inset-0 grid place-items-center text-5xl font-extrabold text-white/15 sm:text-7xl">Dr. YEY</span>
-      )}
+    <span aria-hidden className="pointer-events-none absolute inset-0 grid select-none place-items-center">
+      <span className={`font-extrabold text-white/15 ${small ? "text-2xl" : "text-5xl sm:text-7xl"}`}>Dr. YEY</span>
     </span>
   );
 }
