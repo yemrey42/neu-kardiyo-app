@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
 import { QuestionBank } from "../soru-bankasi/QuestionBank";
 import { bySection, loadQuestionBank } from "@/lib/questionBank";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { AssistantGate } from "@/components/TeamGate";
 
 export const metadata: Metadata = { title: "Doppler Hemodinami Soruları" };
 // Google tablosundan (Fotograflar / Videolar, Drive'daki "doppler hemodinami" klasörü) en fazla 5 dakikada bir yenilenir.
-export const revalidate = 300;
 
 export default async function DopplerPage() {
+  if (!(await currentUserEmail())) return <AssistantGate next="/asistan/doppler" title="Doppler Hemodinami Soruları" />;
   const { questions: all, origin } = await loadQuestionBank();
   const questions = origin === "google" ? bySection(all, "doppler") : [];
   return (

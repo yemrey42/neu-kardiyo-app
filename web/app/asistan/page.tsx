@@ -1,28 +1,29 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
+import { currentUserEmail } from "@/lib/supabaseServer";
 
 export const metadata: Metadata = { title: "Asistanlar İçin" };
 
 const sections = [
   {
     href: "/asistan/soru-bankasi",
+    locked: true,
     title: "Teorik Soru Bankası",
-    desc: "3B kalp atlası üzerinden pratik, süreli sınav ve seri modları.",
     accent: "bg-violet-50 text-violet-700",
     icon: <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />,
   },
   {
     href: "/asistan/doppler",
+    locked: true,
     title: "Doppler Hemodinami",
-    desc: "Görüntülü Doppler soruları. Kaynak: Clinical Applications of Echo Doppler Haemodynamics (2025).",
     accent: "bg-sky-50 text-sky-700",
     icon: <path d="M2 16h3l2-8 3 12 3-14 3 10 2-4h4" />,
   },
   {
     href: "/asistan/goruntuleme",
+    locked: true,
     title: "Görüntüleme",
-    desc: "Eko raporlama standartları ve artefakt tanıma; yeni görüntüleme modülleri eklenecek.",
     accent: "bg-emerald-50 text-emerald-700",
     icon: (
       <>
@@ -34,7 +35,6 @@ const sections = [
   {
     href: "/asistan/vakalar",
     title: "Kliniğimizden Vakalar",
-    desc: "Kendi hastalarımızdan görüntü ve videolu vakalar; önce yorumla, sonra cevabı aç.",
     accent: "bg-red-50 text-brand",
     icon: (
       <>
@@ -46,7 +46,8 @@ const sections = [
   },
 ];
 
-export default function AssistantsPage() {
+export default async function AssistantsPage() {
+  const signedIn = !!(await currentUserEmail());
   return (
     <>
       <PageTitle title="Asistanlar İçin" desc="Kardiyoloji asistanlarımız için çalışma ve vaka tartışma alanı." />
@@ -59,8 +60,9 @@ export default function AssistantsPage() {
               </svg>
             </span>
             <h2 className="mt-4 text-xl font-semibold text-slate-900">{s.title}</h2>
-            <p className="mt-1 text-slate-600">{s.desc}</p>
-            <span className="mt-4 inline-block text-sm font-medium text-brand">Aç →</span>
+            <span className="mt-4 inline-block text-sm font-medium text-brand">
+              {s.locked && !signedIn ? "🔒 Giriş yaparak aç →" : "Aç →"}
+            </span>
           </Link>
         ))}
       </div>

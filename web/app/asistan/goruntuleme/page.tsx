@@ -2,10 +2,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
 import { imagingModules } from "@/lib/content";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { AssistantGate } from "@/components/TeamGate";
 
 export const metadata: Metadata = { title: "Görüntüleme" };
 
-export default function ImagingPage() {
+export default async function ImagingPage() {
+  if (!(await currentUserEmail())) return <AssistantGate next="/asistan/goruntuleme" title="Görüntüleme" />;
   return (
     <>
       <Link href="/asistan" className="text-sm text-brand">

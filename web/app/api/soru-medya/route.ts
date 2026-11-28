@@ -1,6 +1,7 @@
 import { googleConfigured } from "@/lib/sheets";
 import { driveIndex, driveToken, nameKey, type DriveFile } from "@/lib/driveMedia";
 import { isOwnCaseFolder, watermarkImage } from "@/lib/watermark";
+import { currentUserEmail } from "@/lib/supabaseServer";
 
 // Soru görsellerini/videolarını Streamlit'in kullandığı Drive klasöründen (ve alt klasörlerinden)
 // servis hesabıyla okuyup tarayıcıya aktarır. Klasörün herkese açık olması gerekmez; jeton tarayıcıya gitmez.
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
     if (!ALLOWED.has(file.mimeType)) return fail(415, "Desteklenmeyen dosya biçimi.");
 
     const own = isOwnCaseFolder(file.folder);
+    // Kendi vakalarımız herkese açık; soru bankası ve Doppler görselleri yalnızca giriş yapanlara.
+    if (!own && !(await currentUserEmail())) return fail(401, "Giriş gerekli.");
     // Kendi vakalarımız: dosya adresi doğrudan sekmede açılıp kaydedilemesin (yalnızca sayfa içinden gösterilir).
     if (own && request.headers.get("sec-fetch-dest") === "document") return fail(403, "Bu görüntü yalnızca site içinde görüntülenebilir.");
 
@@ -65,7 +68,8 @@ export async function GET(request: Request) {
 
     const headers = new Headers({
       "Content-Type": file.mimeType,
-      "Cache-Control": "public, max-age=3600, s-maxage=86400",
+      // Girişli içerik paylaşılan önbelleğe (CDN) girmesin.
+      "Cache-Control": own ? "public, max-age=3600, s-maxage=86400" : "private, max-age=3600",
       "Accept-Ranges": "bytes",
       "X-Content-Type-Options": "nosniff",
       ...(own ? { "Content-Disposition": "inline" } : {}),

@@ -18,8 +18,12 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  // Görüntüleme modüllerinin HTML dosyaları girişsiz doğrudan açılmasın.
+  if (!data.user && request.nextUrl.pathname.startsWith("/moduller/")) {
+    return NextResponse.redirect(new URL("/asistan/goruntuleme", request.url));
+  }
   return response;
 }
 
-export const config = { matcher: ["/calismalar/:path*", "/giris"] };
+export const config = { matcher: ["/calismalar/:path*", "/giris", "/asistan/:path*", "/moduller/:path*", "/api/soru-medya"] };
