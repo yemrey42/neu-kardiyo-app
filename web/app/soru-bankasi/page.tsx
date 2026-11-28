@@ -19,6 +19,7 @@ export default async function QuestionBankPage() {
       {origin === "sample" && (
         <p className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           Soru tablosuna şu an ulaşılamadı; aşağıda örnek sorular gösteriliyor.
+          {notes.length > 0 && <span className="mt-1 block text-xs opacity-80">Sebep: {notes.join(" ")}</span>}
         </p>
       )}
       <QuestionBank questions={questions} />

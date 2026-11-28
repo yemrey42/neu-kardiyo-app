@@ -160,7 +160,7 @@ export async function loadQuestionBank(deps: Deps = {}): Promise<QuestionBankDat
     return { questions, origin: "google", notes };
   } catch (e) {
     console.error("[soru-bankasi]", e);
-    return { questions: sampleQuestions, origin: "sample", notes: [...notes, "Google tablosu okunamadı."] };
+    return { questions: sampleQuestions, origin: "sample", notes: [...notes, explain(e)] };
   }
 }
 
@@ -175,4 +175,17 @@ function pickTabs(props: { title: string; index: number }[], notes: string[]) {
     if (sorted.some((p) => p.title === title)) tabs.push({ title, kind, label: `"${title}" sekmesi` });
   }
   return tabs;
+}
+
+/** Hatayı yöneticinin anlayacağı, gizli bilgi içermeyen bir cümleye çevirir. */
+function explain(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e);
+  if (/DECODER|PEM|asn1|private key|secretOrPrivateKey|key must be/i.test(m))
+    return "Özel anahtar okunamadı: GOOGLE_PRIVATE_KEY değeri eksik veya hatalı yapıştırılmış.";
+  if (/invalid_grant|invalid_client|unauthorized_client|account not found/i.test(m))
+    return "Google anahtarı reddetti: e-posta ile anahtar eşleşmiyor ya da anahtar silinmiş.";
+  if (/Sheets 403/.test(m)) return "Google Sheets 403: servis hesabının soru tablosuna erişimi yok veya Sheets API kapalı.";
+  if (/Sheets 404/.test(m)) return "Google Sheets 404: soru tablosu bulunamadı.";
+  if (/Sheets (\d+)/.test(m)) return `Google Sheets hatası (${m.match(/Sheets (\d+)/)![1]}).`;
+  return "Google tablosu okunamadı.";
 }

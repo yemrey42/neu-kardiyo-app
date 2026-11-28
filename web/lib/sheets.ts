@@ -25,6 +25,11 @@ function config() {
   return { creds, sheetId };
 }
 
+/** Yapıştırırken eklenen tırnakları, \\n kaçışlarını ve Windows satır sonlarını düzeltir. */
+function cleanKey(raw: string) {
+  return raw.trim().replace(/^["']|["'],?$/g, "").replace(/\\n/g, "\n").replace(/\r/g, "");
+}
+
 /** Servis hesabı ortam değişkenleri girilmiş mi? (Hata fırlatmadan kontrol.) */
 export function googleConfigured() {
   try {
@@ -39,8 +44,8 @@ export function googleConfigured() {
 export async function googleAccessToken(scopes: string[]) {
   const { creds } = config();
   const client = new JWT({
-    email: creds.client_email,
-    key: creds.private_key.replace(/\\n/g, "\n"),
+    email: creds.client_email.trim().replace(/^["']|["']$/g, ""),
+    key: cleanKey(creds.private_key),
     scopes,
   });
   const { token } = await client.getAccessToken();
