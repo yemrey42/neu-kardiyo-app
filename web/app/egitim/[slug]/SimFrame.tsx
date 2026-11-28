@@ -13,7 +13,8 @@ export function SimFrame({ src, title }: { src: string; title: string }) {
     let ro: ResizeObserver | undefined;
     const measure = () => {
       const doc = frame.contentDocument;
-      if (doc?.body) setHeight(Math.max(600, doc.documentElement.scrollHeight));
+      // body yüksekliği ölçülür: documentElement çerçeve yüksekliğinin altına inmediği için içerik kısaldığında çerçeve de küçülebilsin
+      if (doc?.body) setHeight(Math.max(600, Math.ceil(Math.max(doc.body.scrollHeight, doc.body.getBoundingClientRect().height)) + 24));
     };
     const onLoad = () => {
       measure();

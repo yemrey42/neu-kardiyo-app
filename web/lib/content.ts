@@ -87,6 +87,17 @@ export const educationTools: EducationTool[] = [
   },
 ];
 
+// Asistanlar İçin › Görüntüleme: teorik görüntüleme modülleri (public/moduller/*.html).
+export const imagingModules: EducationTool[] = [
+  {
+    slug: "eko-raporlama-artefakt",
+    title: "Eko Raporlama ve Artefakt Eğitimi",
+    kind: "Teorik modül",
+    desc: "ASE 2025'e göre standart eko raporu (algoritmalar, terimler, aciliyet, örnek raporlar) ve ASE 2026 artefakt tanıma/azaltma rehberi.",
+    file: "/moduller/eko-raporlama-artefakt.html",
+  },
+];
+
 // Soru şeması Streamlit soru bankasıyla aynı tutuldu:
 // SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak
 export type Study = {
