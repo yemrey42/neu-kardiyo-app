@@ -87,7 +87,7 @@ export const educationTools: EducationTool[] = [
   },
 ];
 
-// Asistanlar İçin › Görüntüleme: teorik görüntüleme modülleri (public/moduller/*.html).
+// Asistanlar İçin › Ekokardiyografi Odası: teorik görüntüleme modülleri (public/moduller/*.html).
 export const imagingModules: EducationTool[] = [
   {
     slug: "eko-raporlama-artefakt",

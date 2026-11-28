@@ -19,9 +19,9 @@ export async function proxy(request: NextRequest) {
     },
   });
   const { data } = await supabase.auth.getUser();
-  // Görüntüleme modüllerinin HTML dosyaları girişsiz doğrudan açılmasın.
+  // Ekokardiyografi Odası modüllerinin HTML dosyaları girişsiz doğrudan açılmasın.
   if (!data.user && request.nextUrl.pathname.startsWith("/moduller/")) {
-    return NextResponse.redirect(new URL("/asistan/goruntuleme", request.url));
+    return NextResponse.redirect(new URL("/asistan/eko-odasi", request.url));
   }
   return response;
 }

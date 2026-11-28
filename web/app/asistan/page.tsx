@@ -21,9 +21,9 @@ const sections = [
     icon: <path d="M2 16h3l2-8 3 12 3-14 3 10 2-4h4" />,
   },
   {
-    href: "/asistan/goruntuleme",
+    href: "/asistan/eko-odasi",
     locked: true,
-    title: "Görüntüleme",
+    title: "Ekokardiyografi Odası",
     accent: "bg-emerald-50 text-emerald-700",
     icon: (
       <>
