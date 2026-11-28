@@ -89,37 +89,6 @@ export const educationTools: EducationTool[] = [
 
 // Soru şeması Streamlit soru bankasıyla aynı tutuldu:
 // SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak
-export type Question = {
-  id: string;
-  category: string;
-  text: string;
-  options: Record<"A" | "B" | "C" | "D" | "E", string>;
-  correct: "A" | "B" | "C" | "D" | "E";
-  explanation: string;
-  source?: string;
-};
-
-export const sampleQuestions: Question[] = [
-  {
-    id: "Q1",
-    category: "Elektrofizyoloji",
-    text: "Örnek soru: Tam AV blokta kalıcı pacing için ileti sistemi pacing yöntemlerinden hangisi sol dal bölgesini hedefler?",
-    options: { A: "HBP", B: "LBBAP", C: "RV apikal", D: "CRT-D", E: "Epikardiyal" },
-    correct: "B",
-    explanation: "LBBAP (left bundle branch area pacing) sol dal bölgesini hedefler. Bu bir örnek sorudur.",
-    source: "Örnek",
-  },
-  {
-    id: "Q2",
-    category: "Kapak hastalıkları",
-    text: "Örnek soru: PISA yöntemiyle hesaplanan parametre hangisidir?",
-    options: { A: "EROA", B: "LVEF", C: "TAPSE", D: "E/e'", E: "LAVI" },
-    correct: "A",
-    explanation: "PISA yöntemi ile efektif regürjitan orifis alanı (EROA) hesaplanır. Bu bir örnek sorudur.",
-    source: "Örnek",
-  },
-];
-
 export type Study = {
   slug: string;
   title: string;

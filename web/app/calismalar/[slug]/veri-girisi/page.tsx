@@ -4,7 +4,7 @@ import { studies } from "@/lib/content";
 import { getFormSpec, groupBySection } from "@/lib/studyForms";
 import { studySheetConfig } from "@/lib/studyConfig";
 import { currentUserEmail } from "@/lib/supabaseServer";
-import { LoginForm } from "@/app/giris/LoginForm";
+import { TeamGate } from "@/components/TeamGate";
 import { logout } from "@/app/giris/actions";
 import { StudyForm } from "./StudyForm";
 
@@ -18,13 +18,13 @@ export const dynamic = "force-dynamic";
 //  - Etik kurul onay numarası opsiyoneldir; girilirse her satıra yazılır.
 export default async function DataEntry({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const here = `/calismalar/${slug}/veri-girisi`;
+  const email = await currentUserEmail();
+  if (!email) return <TeamGate next={here} />;
   const study = studies.find((s) => s.slug === slug);
   const spec = getFormSpec(slug);
   const cfg = studySheetConfig[slug];
   if (!study || !spec || !cfg) notFound();
-
-  const email = await currentUserEmail();
-  const here = `/calismalar/${slug}/veri-girisi`;
 
   return (
     <div className="space-y-6">
@@ -47,11 +47,7 @@ export default async function DataEntry({ params }: { params: Promise<{ slug: st
         </ul>
       </div>
 
-      {!email ? (
-        <LoginForm next={here} />
-      ) : (
-        <StudyForm slug={slug} spec={spec} sections={groupBySection(spec)} codePrefix={cfg.codePrefix} />
-      )}
+      <StudyForm slug={slug} spec={spec} sections={groupBySection(spec)} codePrefix={cfg.codePrefix} />
     </div>
   );
 }

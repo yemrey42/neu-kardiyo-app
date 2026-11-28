@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { studies } from "@/lib/content";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { TeamGate } from "@/components/TeamGate";
 
-export function generateStaticParams() {
-  return studies.map((s) => ({ slug: s.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function StudyDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  // Girişsiz ziyaretçi, adresin geçerli bir çalışma olup olmadığını da öğrenmez.
+  if (!(await currentUserEmail())) return <TeamGate next={`/calismalar/${slug}`} />;
   const study = studies.find((s) => s.slug === slug);
   if (!study) notFound();
 

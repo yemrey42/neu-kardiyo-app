@@ -2,10 +2,14 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
 import { studies, academicTracking } from "@/lib/content";
+import { currentUserEmail } from "@/lib/supabaseServer";
+import { TeamGate } from "@/components/TeamGate";
 
 export const metadata: Metadata = { title: "Klinik Çalışmalar" };
+export const dynamic = "force-dynamic";
 
-export default function StudiesPage() {
+export default async function StudiesPage() {
+  if (!(await currentUserEmail())) return <TeamGate next="/calismalar" />;
   return (
     <>
       <PageTitle
