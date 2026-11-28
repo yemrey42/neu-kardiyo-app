@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CaseMedia, ClinicalCase, Letter } from "@/lib/questionTypes";
 
 const SEEN_KEY = "neu-vakalar-v1";
@@ -107,6 +107,32 @@ export function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
   );
 }
 
+// Kendi vaka görüntülerimiz: sağ tık, sürükleme, seçme ve indirme kapalı.
+// Görsellerde "Dr. YEY" sunucuda görüntünün içine işlenir; videolarda oynatıcının üstünde durur.
+const guard = {
+  onContextMenu: (e: React.SyntheticEvent) => e.preventDefault(),
+  onDragStart: (e: React.SyntheticEvent) => e.preventDefault(),
+  draggable: false,
+};
+const noSave = "select-none [-webkit-touch-callout:none] [-webkit-user-drag:none]";
+
+function Signature({ small = false }: { small?: boolean }) {
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-0 select-none">
+      <span
+        className={`absolute font-extrabold tracking-tight text-white/80 [text-shadow:0_0_3px_rgba(0,0,0,.9),0_1px_2px_rgba(0,0,0,.8)] ${
+          small ? "bottom-1.5 right-2 text-xs" : "right-3 top-3 text-lg sm:text-2xl"
+        }`}
+      >
+        Dr. YEY
+      </span>
+      {!small && (
+        <span className="absolute inset-0 grid place-items-center text-5xl font-extrabold text-white/15 sm:text-7xl">Dr. YEY</span>
+      )}
+    </span>
+  );
+}
+
 /** Kartta küçük önizleme: video ise ilk kare, değilse görsel. */
 function Thumb({ m }: { m: CaseMedia }) {
   const [asVideo, setAsVideo] = useState(m.type === "video");
@@ -114,14 +140,15 @@ function Thumb({ m }: { m: CaseMedia }) {
   if (failed) return <span className="absolute inset-0 grid place-items-center text-sm text-slate-400">Önizleme yok</span>;
   return asVideo ? (
     <>
-      <video src={`${m.src}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      <video {...guard} src={`${m.src}#t=0.1`} muted playsInline preload="metadata" disablePictureInPicture className={`h-full w-full object-cover ${noSave}`} onError={() => setFailed(true)} />
+      <Signature small />
       <span className="absolute inset-0 grid place-items-center">
         <span className="grid h-12 w-12 place-items-center rounded-full bg-black/55 text-white">▶</span>
       </span>
     </>
   ) : (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={m.src} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => (m.type === "auto" ? setAsVideo(true) : setFailed(true))} />
+    <img {...guard} src={m.src} alt="" loading="lazy" className={`h-full w-full object-cover ${noSave}`} onError={() => (m.type === "auto" ? setAsVideo(true) : setFailed(true))} />
   );
 }
 
@@ -129,19 +156,45 @@ function Viewer({ m }: { m: CaseMedia }) {
   const [asVideo, setAsVideo] = useState(m.type === "video");
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
   if (failed) return <div className="grid aspect-video place-items-center rounded-xl bg-slate-900 text-sm text-slate-400">Görüntü yüklenemedi.</div>;
-  if (asVideo)
-    return <video key={m.src} src={m.src} controls autoPlay muted loop playsInline className="max-h-[70vh] w-full rounded-xl bg-black" onError={() => setFailed(true)} />;
+  if (asVideo) {
+    // Tarayıcının kendi tam ekranı imzayı gizleyeceği için tam ekran, imzayla birlikte kutunun kendisine uygulanır.
+    const full = () => (document.fullscreenElement ? document.exitFullscreen() : box.current?.requestFullscreen?.())?.catch?.(() => {});
+    return (
+      <div ref={box} {...guard} className={`relative overflow-hidden rounded-xl bg-black ${noSave}`}>
+        <video
+          key={m.src}
+          {...guard}
+          src={m.src}
+          controls
+          controlsList="nodownload nofullscreen noremoteplayback"
+          disablePictureInPicture
+          disableRemotePlayback
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="mx-auto max-h-[70vh] w-full [:fullscreen_&]:max-h-screen [:fullscreen_&]:h-full"
+          onError={() => setFailed(true)}
+        />
+        <Signature />
+        <button type="button" onClick={full} className="absolute left-3 top-3 rounded-md bg-black/55 px-2 py-1 text-xs text-white hover:bg-black/75" aria-label="Tam ekran">
+          ⛶ Tam ekran
+        </button>
+      </div>
+    );
+  }
   return (
     <>
-      <button type="button" onClick={() => setZoom(true)} className="block w-full overflow-hidden rounded-xl bg-black" aria-label="Büyüt">
+      <button type="button" {...guard} onClick={() => setZoom(true)} className={`block w-full overflow-hidden rounded-xl bg-black ${noSave}`} aria-label="Büyüt">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={m.src} alt="Vaka görüntüsü" className="mx-auto max-h-[70vh] w-auto object-contain" onError={() => (m.type === "auto" ? setAsVideo(true) : setFailed(true))} />
+        <img {...guard} src={m.src} alt="Vaka görüntüsü" className={`mx-auto max-h-[70vh] w-auto object-contain ${noSave}`} onError={() => (m.type === "auto" ? setAsVideo(true) : setFailed(true))} />
       </button>
       {zoom && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setZoom(false)} role="dialog" aria-label="Büyük görüntü">
+        <div {...guard} className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 ${noSave}`} onClick={() => setZoom(false)} role="dialog" aria-label="Büyük görüntü">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={m.src} alt="Vaka görüntüsü" className="max-h-full max-w-full object-contain" />
+          <img {...guard} src={m.src} alt="Vaka görüntüsü" className={`max-h-full max-w-full object-contain ${noSave}`} />
         </div>
       )}
     </>

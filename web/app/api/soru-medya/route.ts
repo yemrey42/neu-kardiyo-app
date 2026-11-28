@@ -1,5 +1,6 @@
 import { googleConfigured } from "@/lib/sheets";
 import { driveIndex, driveToken, nameKey, type DriveFile } from "@/lib/driveMedia";
+import { isOwnCaseFolder, watermarkImage } from "@/lib/watermark";
 
 // Soru görsellerini/videolarını Streamlit'in kullandığı Drive klasöründen (ve alt klasörlerinden)
 // servis hesabıyla okuyup tarayıcıya aktarır. Klasörün herkese açık olması gerekmez; jeton tarayıcıya gitmez.
@@ -31,7 +32,30 @@ export async function GET(request: Request) {
     const file = matches[0];
     if (!ALLOWED.has(file.mimeType)) return fail(415, "Desteklenmeyen dosya biçimi.");
 
+    const own = isOwnCaseFolder(file.folder);
+    // Kendi vakalarımız: dosya adresi doğrudan sekmede açılıp kaydedilemesin (yalnızca sayfa içinden gösterilir).
+    if (own && request.headers.get("sec-fetch-dest") === "document") return fail(403, "Bu görüntü yalnızca site içinde görüntülenebilir.");
+
     const token = await driveToken();
+
+    // Kendi vaka görsellerimize "Dr. YEY" filigranı görüntünün kendisine işlenir.
+    if (own && file.mimeType.startsWith("image/")) {
+      const res = await fetch(`${DRIVE}/${file.id}?alt=media&supportsAllDrives=true`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!res.ok) return fail(502, "Dosya Drive'dan alınamadı.");
+      const out = await watermarkImage(await res.arrayBuffer(), file.mimeType);
+      return new Response(new Uint8Array(out.body), {
+        headers: {
+          "Content-Type": out.mimeType,
+          "Content-Disposition": "inline",
+          "Cache-Control": "public, max-age=3600, s-maxage=86400",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
     const range = request.headers.get("range");
     const upstream = await fetch(`${DRIVE}/${file.id}?alt=media&supportsAllDrives=true`, {
       headers: { Authorization: `Bearer ${token}`, ...(range ? { Range: range } : {}) },
@@ -44,6 +68,7 @@ export async function GET(request: Request) {
       "Cache-Control": "public, max-age=3600, s-maxage=86400",
       "Accept-Ranges": "bytes",
       "X-Content-Type-Options": "nosniff",
+      ...(own ? { "Content-Disposition": "inline" } : {}),
     });
     for (const h of ["content-length", "content-range"]) {
       const v = upstream.headers.get(h);
