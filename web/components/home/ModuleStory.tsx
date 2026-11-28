@@ -57,7 +57,7 @@ const items: Item[] = [
   { href: "/egitim", title: "Eğitim", accent: "text-emerald-600 bg-emerald-50",
     text: "Kateterizasyon ve transseptal ponksiyon simülasyonları, hemodinami hesaplayıcısı ve görsel diyastolik fonksiyon modülü.",
     visual: <Monitor /> },
-  { href: "/soru-bankasi", title: "Soru bankası", accent: "text-violet-600 bg-violet-50",
+  { href: "/asistan/soru-bankasi", title: "Soru bankası", accent: "text-violet-600 bg-violet-50",
     text: "Kategorilere ayrılmış sorular, anında geri bildirim ve kaynaklı açıklamalar.",
     visual: <Checklist /> },
   { href: "/calismalar", title: "Klinik çalışmalar", accent: "text-brand bg-red-50",

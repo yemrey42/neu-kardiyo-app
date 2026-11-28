@@ -33,3 +33,20 @@ export type QuestionBankData = {
   /** Yöneticiye yönelik kısa uyarılar (eksik sekme, hatalı satır vb.). */
   notes: string[];
 };
+
+export type CaseMedia = { src: string; type: "image" | "video" | "auto" };
+
+export type ClinicalCase = {
+  id: string;
+  title: string;
+  category: string;
+  history: string;
+  question: string;
+  /** Açık uçlu cevap (şıklı vakalarda boş olabilir). */
+  answer: string;
+  explanation: string;
+  source?: string;
+  media: CaseMedia[];
+  options?: { letter: Letter; text: string }[];
+  correct?: Letter;
+};

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { googleAccessToken, googleConfigured } from "./sheets";
 import { sampleQuestions } from "./sampleQuestions";
 import { atlasRegions, fold } from "./atlasTopics";
-import { LETTERS, type BankQuestion, type Letter, type QuestionBankData, type QuestionKind, type QuestionMedia } from "./questionTypes";
+import { LETTERS, type BankQuestion, type CaseMedia, type ClinicalCase, type Letter, type QuestionBankData, type QuestionKind, type QuestionMedia } from "./questionTypes";
 
 // Soru bankası Streamlit ile aynı Google tablosundan okunur (web_app.py: MEDIA_SHEET_ID).
 //  - Metin soruları: tablonun 3. sekmesi (QUESTION_WS_INDEX = 2)
@@ -195,4 +195,81 @@ function explain(e: unknown): string {
   if (/Sheets 404/.test(m)) return "Google Sheets 404: soru tablosu bulunamadı.";
   if (/Sheets (\d+)/.test(m)) return `Google Sheets hatası (${m.match(/Sheets (\d+)/)![1]}).`;
   return "Google tablosu okunamadı.";
+}
+
+// ============================ Kliniğimizden vakalar ============================
+// Aynı tablonun "Vakalar" sekmesi. Görüntüler Drive'daki soru klasöründe (veya onun "Vakalar" alt klasöründe).
+// Başlıklar: VakaID | Aktif | Baslik | Kategori | Dosyalar | Oyku | Soru | Cevap | Aciklama | Kaynak
+// İsteğe bağlı çoktan seçmeli: A | B | C | D | E | Dogru (doluysa şıklı gösterilir).
+// Dosyalar: dosya adları veya Drive linkleri; virgül, noktalı virgül ya da alt satırla ayrılır.
+
+export const CASES_TAB = "Vakalar";
+export const CASE_HEADERS = ["VakaID", "Aktif", "Baslik", "Kategori", "Dosyalar", "Oyku", "Soru", "Cevap", "Aciklama", "Kaynak"];
+
+export function parseCaseRows(values: string[][]): ClinicalCase[] {
+  if (!values.length) return [];
+  const [header, ...rows] = values;
+  const col = columnFinder(header);
+  const out: ClinicalCase[] = [];
+  rows.forEach((row, i) => {
+    if (!ACTIVE.has(col(row, "Aktif").toLocaleLowerCase("tr"))) return;
+    const question = col(row, "Soru");
+    const media = col(row, "Dosyalar", "Dosya", "GorselDosya", "Görseller", "Gorseller", "Medya")
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(caseMedia)
+      .filter((m): m is CaseMedia => !!m);
+    const options = LETTERS.map((letter) => ({ letter, text: col(row, letter) })).filter((o) => o.text);
+    const correct = options.length >= 2 ? parseCorrect(col(row, "Dogru", "Doğru"), options) : null;
+    const answer = col(row, "Cevap", "Yanit", "Yanıt");
+    if (!question || (!answer && !correct)) return;
+    out.push({
+      id: `V-${col(row, "VakaID") || i + 2}`,
+      title: col(row, "Baslik", "Başlık") || `Vaka ${col(row, "VakaID") || i + 1}`,
+      category: col(row, "Kategori") || "Genel",
+      history: col(row, "Oyku", "Öykü", "Klinik"),
+      question,
+      answer,
+      explanation: col(row, "Aciklama", "Açıklama"),
+      source: col(row, "Kaynak") || undefined,
+      media,
+      options: correct ? options : undefined,
+      correct: correct ?? undefined,
+    });
+  });
+  return out.reverse(); // en yeni vaka üstte
+}
+
+function caseMedia(item: string): CaseMedia | null {
+  if (/^https?:\/\//i.test(item)) {
+    const id = driveId(item);
+    if (id) return { src: `/api/soru-medya?id=${id}`, type: "auto" };
+    return { src: item, type: /\.(mp4|webm|ogg|mov)(\?|$)/i.test(item) ? "video" : "image" };
+  }
+  if (/[\\/]/.test(item)) return null;
+  return { src: `/api/soru-medya?f=${encodeURIComponent(item)}`, type: /\.(mp4|webm|ogg|mov)$/i.test(item) ? "video" : "image" };
+}
+
+export async function loadCases(deps: Deps = {}): Promise<{ cases: ClinicalCase[]; note?: string }> {
+  const fixture = process.env.QUESTION_BANK_FIXTURE;
+  if (!fixture && !deps.token && !googleConfigured()) return { cases: [], note: "Google servis hesabı tanımlı değil." };
+  try {
+    if (fixture) {
+      const data = JSON.parse(await readFile(fixture, "utf8")) as { values: Record<string, string[][]> };
+      const v = data.values[CASES_TAB];
+      return v ? { cases: parseCaseRows(v) } : { cases: [], note: `"${CASES_TAB}" sekmesi bulunamadı.` };
+    }
+    const f = deps.fetch ?? fetch;
+    const token = deps.token ?? (await googleAccessToken(READONLY));
+    const id = process.env.QUESTION_SHEET_ID || DEFAULT_QUESTION_SHEET_ID;
+    const meta = await getJson(`${SHEETS_API}/${id}?fields=sheets.properties(title,index)`, token, f);
+    const has = (meta.sheets ?? []).some((s: { properties: { title: string } }) => s.properties.title === CASES_TAB);
+    if (!has) return { cases: [], note: `Tabloda "${CASES_TAB}" sekmesi henüz yok.` };
+    const data = await getJson(`${SHEETS_API}/${id}/values/${encodeURIComponent(`'${CASES_TAB}'`)}?majorDimension=ROWS`, token, f);
+    return { cases: parseCaseRows(data.values ?? []) };
+  } catch (e) {
+    console.error("[vakalar]", e);
+    return { cases: [], note: explain(e) };
+  }
 }

@@ -49,6 +49,16 @@ tabloya hiçbir şey yazmaz. Sayfa en fazla 5 dakikada bir yenilenir.
   İsteğe bağlı: `QUESTION_SHEET_ID`, `QUESTION_MEDIA_FOLDER_ID`. Yerel deneme için
   `QUESTION_BANK_FIXTURE` (Sheets yanıtı biçiminde JSON dosyası).
 
+## Asistanlar İçin
+
+`/asistan` altında iki bölüm var: soru bankası (`/asistan/soru-bankasi`, eski `/soru-bankasi` yönlenir)
+ve **Kliniğimizden Vakalar** (`/asistan/vakalar`).
+
+Vakalar soru tablosunun **Vakalar** sekmesinden okunur (`loadCases`, `lib/questionBank.ts`):
+`VakaID | Aktif | Baslik | Kategori | Dosyalar | Oyku | Soru | Cevap | Aciklama | Kaynak | A..E | Dogru`.
+`Dosyalar`a Drive'daki `Kardiyoloji_Soru_Medya/Vakalar` klasörüne yüklenen dosyaların adları (virgülle)
+veya Drive linkleri yazılır. A–E ve Dogru doluysa vaka şıklı, boşsa "Cevabı göster" ile açık uçlu çalışır.
+
 ## Klinik çalışma veri girişi (Google Sheets)
 
 Şimdilik veriler veritabanına değil, **Google Sheets**'e yazılır (Streamlit ile aynı mantık).

@@ -1,0 +1,50 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import { PageTitle } from "@/components/PageTitle";
+
+export const metadata: Metadata = { title: "Asistanlar İçin" };
+
+const sections = [
+  {
+    href: "/asistan/soru-bankasi",
+    title: "Soru Bankası",
+    desc: "3B kalp atlası üzerinden pratik, süreli sınav ve seri modları. Sorular kliniğimizin soru tablosundan gelir.",
+    accent: "bg-violet-50 text-violet-700",
+    icon: <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />,
+  },
+  {
+    href: "/asistan/vakalar",
+    title: "Kliniğimizden Vakalar",
+    desc: "Kliniğimizde karşılaştığımız vakaların görüntü ve videoları; önce düşün, sonra cevabı ve açıklamayı aç.",
+    accent: "bg-sky-50 text-sky-700",
+    icon: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <circle cx="9" cy="11" r="2" />
+        <path d="M21 16l-5-5-9 8" />
+      </>
+    ),
+  },
+];
+
+export default function AssistantsPage() {
+  return (
+    <>
+      <PageTitle title="Asistanlar İçin" desc="Kardiyoloji asistanlarımız için çalışma ve vaka tartışma alanı." />
+      <div className="grid gap-5 md:grid-cols-2">
+        {sections.map((s) => (
+          <Link key={s.href} href={s.href} className="group rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-brand hover:shadow-md">
+            <span className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${s.accent}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden>
+                {s.icon}
+              </svg>
+            </span>
+            <h2 className="mt-4 text-xl font-semibold text-slate-900">{s.title}</h2>
+            <p className="mt-1 text-slate-600">{s.desc}</p>
+            <span className="mt-4 inline-block text-sm font-medium text-brand">Aç →</span>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
+}

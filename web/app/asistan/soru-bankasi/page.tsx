@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { PageTitle } from "@/components/PageTitle";
 import { QuestionBank } from "./QuestionBank";
@@ -12,6 +13,7 @@ export default async function QuestionBankPage() {
   const cats = new Set(questions.map((q) => q.category)).size;
   return (
     <>
+      <Link href="/asistan" className="mb-3 inline-block text-sm text-brand">← Asistanlar İçin</Link>
       <PageTitle
         title="Kardiyoloji Soru Bankası"
         desc={`${questions.length} soru, ${cats} konu. Pratikte kalp modelinden yapı seçerek çöz, sınavda süreye karşı yarış, seride rekorunu kır.`}
