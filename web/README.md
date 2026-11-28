@@ -13,9 +13,9 @@ Veritabanı/Giriş: Supabase (EU – Frankfurt).
 |---|---|---|
 | Klinik haberleri | `/haberler` | Örnek içerik |
 | Güncel literatür | `/literatur` | PubMed'den günlük otomatik (konu filtresi + klinik yayınları) |
-| Eğitim | `/egitim` | Streamlit'teki simülasyon/hesaplayıcı listesi, taşınacak |
-| Soru bankası | `/soru-bankasi` | Çalışan örnek test (Streamlit soru şemasıyla uyumlu) |
-| Klinik çalışmalar | `/calismalar` | 5 çalışma + bilgilendirme sayfası |
+| Eğitim | `/egitim` | Simülasyonlar + diyastolik fonksiyon aracı |
+| Soru bankası | `/soru-bankasi` | Google tablosundan (Streamlit ile aynı) pratik / sınav / seri modları |
+| Klinik çalışmalar | `/calismalar` | Yalnızca giriş yapan ekibe görünür (isimler dahil) |
 | Veri girişi | `/calismalar/[slug]/veri-girisi` | Çalışıyor: şifreli giriş, Google Sheets'e yazar |
 | Ekip girişi | `/giris` | E-posta + şifre (Supabase Auth) |
 | KVKK | `/kvkk` | Taslak metin (hukuk onayı gerekli) |
@@ -29,6 +29,39 @@ makalelerini listeler (konu filtresiyle) ve adres alanında "Necmettin Erbakan" 
 yayınları "Kliniğimizden yayınlar" bölümünde gösterir. Yanıtlar 24 saat önbellekte tutulur.
 Dergi listesi, konular ve kurum sorgusu `lib/pubmed.ts` içinde. İsteğe bağlı `NCBI_API_KEY`
 ortam değişkeni (ücretsiz, NCBI hesabından) daha yüksek istek limiti sağlar.
+
+## Soru bankası (Google Sheets'ten okur)
+
+`/soru-bankasi` soruları Streamlit'in kullandığı soru tablosundan okur (`lib/questionBank.ts`),
+tabloya hiçbir şey yazmaz. Sayfa en fazla 5 dakikada bir yenilenir.
+
+- Metin soruları: tablonun **3. sekmesi**. Fotoğraflı: `Fotograflar`, videolu: `Videolar` sekmesi.
+- Başlıklar: `SoruID | Aktif | Kategori | Soru | A | B | C | D | E | Dogru | Aciklama | Kaynak`
+  (+ `GorselDosya` / `VideoDosya`). Yalnızca `Aktif` = TRUE/1/evet satırlar gelir; boş seçenekler gizlenir.
+  `Dogru` harf (B) ya da seçeneğin metni olabilir.
+- Fotoğraf/video dosyaları Streamlit'in Drive klasöründen adıyla bulunur ve `/api/soru-medya`
+  üzerinden servis hesabıyla aktarılır (klasörün herkese açık olması gerekmez).
+- Bağlantı kurulamazsa sayfa çökmez; uyarıyla örnek sorular (`lib/sampleQuestions.ts`) gösterilir.
+- Pratik mod Streamlit'teki 3B kalp atlasıdır (`public/simulasyon/kalp-atlasi.html`). Metin soruları
+  `Anatomi` kolonu, yoksa Kategori + soru metniyle yapılara eşleşir (`lib/atlasTopics.ts`, Streamlit kurallarıyla aynı).
+- Kişisel ilerleme, yanlışlar ve en iyi seri yalnızca kullanıcının tarayıcısında tutulur.
+- Gereken ortam değişkenleri veri girişiyle aynı: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`.
+  İsteğe bağlı: `QUESTION_SHEET_ID`, `QUESTION_MEDIA_FOLDER_ID`. Yerel deneme için
+  `QUESTION_BANK_FIXTURE` (Sheets yanıtı biçiminde JSON dosyası).
+
+## Asistanlar İçin
+
+`/asistan` altında üç bölüm; hepsi aynı soru tablosundan okunur (`lib/questionBank.ts`):
+
+| Bölüm | Yol | Kaynak |
+|---|---|---|
+| Teorik Soru Bankası | `/asistan/soru-bankasi` | `SoruBankasi` (3.) sekmesi, metin soruları |
+| Doppler Hemodinami | `/asistan/doppler` | `Fotograflar` / `Videolar` satırları, dosyası Drive'da **doppler hemodinami** klasöründe |
+| Kliniğimizden Vakalar | `/asistan/vakalar` | `Fotograflar` / `Videolar` satırları, dosyası Drive'da **Neu vakalar** klasöründe |
+
+Görselli sorunun bölümü dosyanın Drive alt klasöründen anlaşılır (`lib/driveMedia.ts`); klasör
+bulunamazsa Kaynak kolonunda kitap adı geçiyorsa Doppler'e, geçmiyorsa Vakalar'a düşer.
+`GorselURL` / `VideoURL` kolonuna dosya adı (ör. `dh_vaka01_lvot_cw.png`) yazılır. Eski `/soru-bankasi` yönlenir.
 
 ## Klinik çalışma veri girişi (Google Sheets)
 

@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kalp atlası · NEÜ Kardiyoloji</title>
+  <style>
+    :root{color-scheme:light;--ink:#173a38;--mute:#526762;--paper:#f5f3eb;--line:#d9dfd4;--green:#176c54;--pink:#b1695a;--serif:"Source Serif 4","STIX Two Text",Georgia,serif;--sans:Inter,"Segoe UI",Arial,sans-serif}
+    *{box-sizing:border-box}
+    html,body{padding:0;margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+    .atlas{max-width:1290px;margin:auto;padding:clamp(14px,3.2vw,46px)}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #c9d1c6;padding-bottom:15px}
+    .brand{font-size:12px;font-weight:700;letter-spacing:.13em;display:flex;align-items:center;gap:9px;color:#274e44}
+    .brand svg{width:29px;height:25px}.header-section{font-size:12px;color:var(--mute);font-weight:550}
+    .intro{display:flex;justify-content:space-between;align-items:end;gap:20px;padding:23px 0 20px}
+    h1,h2,h3,p{margin:0}h1,h2,h3{font-weight:500}
+    h1{font-family:var(--serif);font-size:clamp(37px,4.3vw,60px);letter-spacing:-.058em;line-height:1.04}
+    .intro p{font-size:14px;color:var(--mute);line-height:1.5;margin-top:8px}
+    .course{flex:none;width:155px;text-align:right}
+    #course-label{font-size:12px;color:var(--mute);font-weight:570}
+    .track{height:4px;background:#dce2d7;border-radius:9px;overflow:hidden;margin-top:8px}
+    #course-fill,#q-fill{height:100%;display:block;border-radius:inherit;background:#528875;transition:width .2s}
+    main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.88fr);gap:16px;align-items:start}
+    .model{border-radius:15px;background:#19343b;border:1px solid #1b3b40;color:#edf3e9;overflow:hidden}
+    .panel-head{padding:19px 21px 0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .panel-head h2,.right-kicker,.mini-head{font-size:11px;font-weight:700;letter-spacing:.105em;text-transform:uppercase}
+    .panel-head h2{color:#d0ded6}
+    .phase{display:flex;align-items:center;gap:6px;color:#c3d3cf;font-size:11px}
+    #beat-indicator{width:7px;height:7px;border-radius:50%;background:#99d5b3}
+    .views{display:flex;gap:5px;margin:14px 19px 3px;flex-wrap:wrap;position:relative;z-index:1}
+    button,select{font:inherit}button{cursor:pointer}button:focus-visible,select:focus-visible,[tabindex]:focus-visible,a:focus-visible{outline:3px solid #e69a46;outline-offset:3px}
+    .views button,.tools button{border:1px solid #496169;background:transparent;color:#d4dfdc;border-radius:6px;font-size:12px;font-weight:530;padding:7px 10px}
+    .views button:hover,.tools button:hover{background:#315054}.views button[aria-pressed=true]{background:#d3e8d8;border-color:#d3e8d8;color:#183c32}
+    .valve-views{margin-top:8px;align-items:center}.valve-views span{font-size:11px;color:#c3d3cf;margin-right:3px}
+    .valve-views button{font-size:11px;padding:5px 9px}
+    .viewport{position:relative;isolation:isolate;height:clamp(345px,34vw,430px);overflow:hidden;touch-action:none;cursor:grab;background:radial-gradient(ellipse at 49% 46%,#354a4c 0,#213d42 47%,#19343b 75%)}
+    .viewport::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;background-image:radial-gradient(#8ba6a1 .7px,transparent .85px);background-size:17px 17px;mask-image:radial-gradient(ellipse at 50% 48%,#000 12%,transparent 82%)}
+    .grabbing{cursor:grabbing}.viewport canvas{display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    .tools{border-top:1px solid #385258;display:flex;align-items:center;justify-content:space-between;gap:9px;padding:11px 15px;flex-wrap:wrap}
+    .toolgroup{display:flex;align-items:center;gap:5px}
+    .tools button{min-width:32px;min-height:30px;padding:5px 9px}
+    .tools button[aria-pressed=true]{color:#d6f0de;background:#2f5053;border-color:#5d7e78}
+    .sign{font-size:16px!important;line-height:1}
+    .right{background:#fffef9;border:1px solid var(--line);border-radius:15px;padding:clamp(17px,2.1vw,30px);min-width:0}
+    .right-top{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:12px}
+    .right-kicker{color:#566e63}.source-badge{color:#6c5b44;font-size:11px;background:#f5eee0;border:1px solid #e8decb;border-radius:5px;padding:4px 7px}
+    .source-badge.bank{color:#2e6b57;background:#edf6ed;border-color:#cbded0}
+    .select-wrap{position:relative;display:block;margin:0 0 16px;max-width:100%}
+    .select-wrap:after{content:"⌄";position:absolute;right:9px;top:50%;transform:translateY(-58%);color:#467467;font-size:21px;pointer-events:none}
+    select{appearance:none;width:100%;cursor:pointer;background:transparent;border:0;border-bottom:1px solid #cbd6ca;border-radius:0;color:#214a3c;font-family:var(--serif);font-size:clamp(24px,2.4vw,35px);letter-spacing:-.04em;padding:0 33px 8px 0;line-height:1.2}
+    select option,select optgroup{font:15px var(--sans);color:#173a38}
+    #topic-detail{font-size:12px;color:var(--mute);line-height:1.45;margin:-6px 0 15px}
+    .meter-label{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--mute);font-weight:550;font-variant-numeric:tabular-nums}
+    #qmeter{height:3px;margin:7px 0 17px}
+    .question{font-family:var(--serif);font-size:clamp(19px,1.75vw,24px);letter-spacing:-.02em;line-height:1.32;color:#182e2b;margin:0 0 15px;overflow-wrap:anywhere}
+    .options{display:grid;gap:7px}
+    .opt{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid #d6dfd4;background:#fcfcf6;border-radius:7px;color:#30463e;min-height:39px;padding:7px 10px;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+    .opt:hover:not(:disabled){border-color:#70937f;background:#f3f7ef}
+    .opt[aria-pressed=true]{border-color:#4e8773;background:#eaf3e9}
+    .opt:disabled{cursor:default;opacity:1}.opt.correct{background:#e2f2e4;border-color:#73a985}.opt.wrong{background:#fcf0e9;border-color:#c89177}
+    .letter{border:1px solid #c8d3c8;border-radius:4px;display:grid;place-items:center;flex:none;width:23px;height:23px;font-size:11px;font-weight:700;background:#fffdfa;color:#506457}
+    .correct .letter{background:#267253;color:white;border-color:#267253}.wrong .letter{background:#995b48;color:white;border-color:#995b48}
+    .primary{background:#1e654e;color:#fff;border:1px solid #1e654e;border-radius:7px;font-weight:600;font-size:13px;min-height:40px;width:100%;margin-top:13px;padding:8px 12px}
+    .primary:hover:not(:disabled){background:#15533e}.primary:disabled{background:#dce6dc;color:#50675b;border-color:#d7e1d5;cursor:default}
+    .feedback{border-left:3px solid #669d83;padding:0 0 0 12px;margin-top:15px;font-size:13px;color:#475c51;line-height:1.48;overflow-wrap:anywhere}
+    .feedback.negative{border-left-color:#bc8167}.feedback strong{display:block;color:#254f3c;margin-bottom:4px}.negative strong{color:#8c503d}
+    .feedback a,.reference{display:inline-block;color:#346456;font-size:11px;margin-top:6px}
+    .actions{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:10px}
+    .text-button{background:none;border:none;font-size:11px;color:#4c6c60;text-decoration:underline;text-underline-offset:3px;padding:4px 0}
+    .flag-status,.bank-notice{color:#5d6b63;font-size:12px;line-height:1.45}.flag-status{margin-top:5px}
+    .bank-notice{margin:12px 0 0}.model-foot{display:flex;justify-content:space-between;gap:8px;align-items:start;margin:9px 2px 0;line-height:1.45;font-size:11px;color:var(--mute)}
+    .login-notice{margin:16px 0 6px;padding:18px 16px;border:1px solid #d2dfd1;border-radius:9px;background:#eff5ec;color:#315745;font-size:15px;line-height:1.55}
+    .model-foot strong{font-weight:600;color:#465f51}.mobile-back{display:none}
+    .end{min-height:145px;display:flex;flex-direction:column;justify-content:center;gap:9px}.end h3{font:32px var(--serif);color:#28533f}.end p{color:#50665b}
+    .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    [hidden]{display:none!important}
+    .embed .atlas>header{display:none}.embed .intro{padding-top:0}
+    @media(max-width:740px){
+      .atlas{padding:13px}.intro{padding:17px 0 15px;gap:11px}.course{width:111px}main{grid-template-columns:minmax(0,1fr);gap:13px}
+      .viewport{height:335px}.right{padding:17px}.right-top{margin-bottom:9px}.mobile-back{display:inline-block}.model-foot{font-size:10px}
+      .intro p{font-size:12px;max-width:280px}.brand,.header-section{font-size:10px}.panel-head{padding:14px 15px 0}.views{margin:11px 14px 0}
+      .tools{padding:8px 10px}.right{scroll-margin-top:8px}
+    }
+    @media(max-width:370px){.atlas{padding:8px}.course{width:82px}.views button{padding:6px 8px}.tools{gap:5px}.tools button{font-size:11px;min-width:28px;padding:5px 7px}.viewport{height:305px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<div class="atlas">
+  <header><span class="brand"><svg viewBox="0 0 32 27" fill="none" aria-hidden="true"><path d="M2 15h6l4-10 5 18 4-12 3 4h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>NEÜ KARDİYOLOJİ</span><span class="header-section">Soru bankası</span></header>
+  <div class="intro"><div><h1>Kalp atlası</h1><p id="atlas-instructions">Kalbi sürükleyerek döndürün. Bir yapıya dokunarak inceleyin.</p></div><div class="course" hidden><span id="course-label"></span></div></div>
+  <main>
+    <section aria-label="Etkileşimli anatomik model">
+      <div class="model">
+        <div class="panel-head"><h2>Anatomik görünüm</h2><span class="phase"><i id="beat-indicator"></i><span id="phase">Diyastol</span></span></div>
+        <div class="views" role="group" aria-label="Model görünümü">
+          <button data-view="front" aria-pressed="true">Ön</button><button data-view="back" aria-pressed="false">Arka</button><button data-view="valves" aria-pressed="false">Kapak düzlemi</button><button data-view="inferior" aria-pressed="false">Alt</button>
+        </div>
+        <div id="valve-views" class="views valve-views" role="group" aria-label="Mitral kapak görünümü" hidden>
+          <span>Mitral konum</span><button type="button" data-valve="valves" aria-pressed="true">Doğal kapak</button><button type="button" data-valve="prosthetic" aria-pressed="false">Mekanik protez</button>
+        </div>
+        <div id="viewport" class="viewport" tabindex="0" role="group" aria-label="Döndürülebilen kalp modeli. Ok tuşlarıyla döndürün veya sorular için yapı listesini kullanın."><canvas id="heart"></canvas><canvas id="overlay" aria-hidden="true"></canvas></div>
+        <div class="tools"><div class="toolgroup"><button id="motion" type="button">Durdur</button><button id="guides" type="button" aria-pressed="true">Etiketler</button></div><div class="toolgroup"><button class="sign" id="zoom-out" aria-label="Uzaklaştır">−</button><button class="sign" id="zoom-in" aria-label="Yakınlaştır">+</button><button id="home" title="Geçerli görünümün başlangıç açısına dön">Açıyı sıfırla</button></div></div>
+      </div>
+      <div class="model-foot"><span><strong>3B + zaman</strong> · Şematik kalp döngüsü</span><span id="region-count"></span></div>
+    </section>
+    <section class="right" id="quiz" aria-label="Seçilen yapının soruları">
+      <div class="right-top"><span class="right-kicker">Seçilen yapı</span><span class="source-badge" id="source" hidden></span></div>
+      <label class="select-wrap"><span class="sr">Anatomik yapı seç</span><select id="region"></select></label>
+      <p id="topic-detail" hidden></p>
+      <p class="login-notice" id="login-notice" role="status">Sorular yükleniyor…</p>
+      <div id="question-content" hidden>
+      <div class="meter-label"><span id="q-index"></span><span id="score"></span></div>
+      <div id="exercise"><h2 class="question" id="stem"></h2><div class="options" id="choices" role="group" aria-labelledby="stem"></div><div id="feedback" class="feedback" role="status" hidden></div></div>
+      <div class="end" id="complete" hidden><h3>Bu yapı tamamlandı.</h3><p id="result"></p></div>
+      <button class="primary" id="submit" type="button">Yanıtı kontrol et</button>
+      <div class="actions"><button class="text-button mobile-back" id="to-model">↑ Modele dön</button><button class="text-button" id="flag" hidden>Soruyu düzeltme için bildir</button></div><p class="flag-status" role="status" id="flag-status"></p>
+      </div>
+    </section>
+  </main>
+  <p class="bank-notice" id="bank-note"></p>
+</div>
+<script>
+'use strict';
+const CATALOG={"regions": [{"id": "aorta", "name": "Aorta", "short": "Aorta", "group": "Büyük damarlar", "view": "front"}, {"id": "mitral", "name": "Mitral kapak", "short": "Mitral kapak", "group": "Kapaklar", "view": "valves"}, {"id": "laa", "name": "Sol atriyal apendiks", "short": "Sol atriyal apendiks", "group": "Kalp boşlukları", "view": "front"}, {"id": "hepatic", "name": "Hepatik venler", "short": "Hepatik venler", "group": "Büyük damarlar", "view": "inferior"}, {"id": "aortic_valve", "name": "Aort kapağı", "short": "Aort kapağı", "group": "Kapaklar", "view": "valves"}, {"id": "tricuspid", "name": "Triküspit kapak", "short": "Triküspit", "group": "Kapaklar", "view": "valves"}, {"id": "pulmonary_valve", "name": "Pulmoner kapak", "short": "Pulmoner kapak", "group": "Kapaklar", "view": "valves"}, {"id": "lv", "name": "Sol ventrikül", "short": "Sol ventrikül", "group": "Kalp boşlukları", "view": "front"}, {"id": "rv", "name": "Sağ ventrikül", "short": "Sağ ventrikül", "group": "Kalp boşlukları", "view": "front"}, {"id": "la", "name": "Sol atriyum", "short": "Sol atriyum", "group": "Kalp boşlukları", "view": "back"}, {"id": "ra", "name": "Sağ atriyum", "short": "Sağ atriyum", "group": "Kalp boşlukları", "view": "front"}, {"id": "pa", "name": "Pulmoner arter", "short": "Pulmoner arter", "group": "Büyük damarlar", "view": "front"}, {"id": "pv", "name": "Pulmoner venler", "short": "Pulmoner venler", "group": "Büyük damarlar", "view": "back"}, {"id": "svc", "name": "Vena kava superior", "short": "V. kava superior", "group": "Büyük damarlar", "view": "front"}, {"id": "ivc", "name": "Vena kava inferior", "short": "V. kava inferior", "group": "Büyük damarlar", "view": "inferior"}]};
+CATALOG.regions.push(
+  {id:'apex',name:'Sol ventrikül apeksi',short:'Apeks',group:'Kalp duvarı',view:'front'},
+  {id:'cardiomyopathy',name:'Kardiyomiyopatiler',short:'Kardiyomiyopatiler',group:'Kalp duvarı',view:'valves'},
+  {id:'myocardium',name:'Kalp kası (miyokart)',short:'Miyokart',group:'Kalp duvarı',view:'front',detail:'Bu bölümde endokardit, miyokardit ve perikardit vakalarını tutulan yapıya göre ayırt edebilirsiniz.'},
+  {id:'prosthesis',name:'Protez kapak',short:'Protez kapak',group:'Kapaklar',view:'prosthetic',detail:'Modelde mitral konumda çift diskli mekanik protez görülüyor. Sorular aort ve mitral protezlerini kapsar.'},
+  {id:'valve_mass',name:'Kapak üzerindeki kitle',short:'Kapak kitlesi',group:'Kapaklar',view:'valves',detail:'Triküspit yaprakçığına bağlı kitle şematiktir. Her vakada kitleyi soruda verilen bulgularla değerlendirin.'}
+);
+
+// Patient coordinates: +x left, +y superior, +z anterior. Dimensions are schematic.
+const TAU = 2 * Math.PI;
+const add = (a,b) => a.map((x,i) => x+b[i]);
+const sub = (a,b) => a.map((x,i) => x-b[i]);
+const scale = (a,k) => a.map(x => x*k);
+const mix = (a,b,t) => a.map((x,i) => x+(b[i]-x)*t);
+const unit = a => scale(a, 1/(Math.hypot(...a)||1));
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const clamp = (x,lo,hi) => Math.max(lo,Math.min(hi,x));
+const pi = Math.PI;
+
+// Catmull–Rom interpolation for a continuous vessel lumen and ventricular outline.
+function spline(nodes,t){
+  const f=clamp(t,0,1)*(nodes.length-1), i=Math.min(nodes.length-2,Math.floor(f)), s=f-i;
+  const a=nodes[Math.max(i-1,0)], b=nodes[i], c=nodes[i+1], d=nodes[Math.min(i+2,nodes.length-1)];
+  return b.map((v,k)=>0.5*(2*v+(-a[k]+c[k])*s+(2*a[k]-5*v+4*c[k]-d[k])*s*s+(-a[k]+3*v-3*c[k]+d[k])*s*s*s));
+}
+const regionIndex = Object.fromEntries(CATALOG.regions.map((r,i)=>[r.id,i+1]));
+function beatPoint(p,id,phase){
+  const [x,y,z]=p;
+  if (['lv','rv','apex','myocardium'].includes(id)){
+    const h=clamp((y+1.68)/2.35,0,1), cx=0.50*(1-h), cz=0.28*(1-h);
+    const twist=phase*(0.085-0.13*h), shrink=1-phase*(0.025+0.074*Math.sin(pi*h));
+    const dx=(x-cx)*shrink, dz=(z-cz)*shrink;
+    return [cx+dx*Math.cos(twist)-dz*Math.sin(twist), y-phase*.13*h, cz+dz*Math.cos(twist)+dx*Math.sin(twist)];
+  }
+  if (['ra','la','laa'].includes(id)){
+    const amount=phase*.023;
+    return [x*(1+amount),y+amount*(y-.55)-.055*phase,z*(1+amount)];
+  }
+  if (['aorta','pa'].includes(id)){
+    const near=Math.exp(-Math.pow((y-1.05)/.66,2));
+    return [x*(1+.018*near*phase),y-.065*near*phase,z*(1+.027*near*phase)];
+  }
+  return p;
+}
+const palette={
+  lv:'#bf6258',rv:'#b67167',ra:'#976879',la:'#ad6a72',laa:'#d98578',aorta:'#da735b',
+  pa:'#5a92aa',pv:'#ce807b',ivc:'#7299ab',svc:'#7199b2',hepatic:'#79a8b6',
+  mitral:'#e1b892',tricuspid:'#bdcdbc',aortic_valve:'#e1a078',pulmonary_valve:'#a8cbd4',
+  apex:'#d89176',myocardium:'#ad4f4f',prosthesis:'#bcc9c9',valve_mass:'#e2b660'
+};
+const rgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
+
+function buildHeart(){
+  const vertices=[], indices=[], landmarks={};
+  function surface(id,layer,nu,nv,point,base=palette[id],wrap=true,customBeat=false,skipCell=null){
+    const start=vertices.length/16, color=typeof base==='string'?rgb(base):base;
+    for(let j=0;j<=nv;j++){
+      const v=j/nv, row=[];
+      for(let i=0;i<=nu;i++){
+        const u=i/nu;
+        row.push(point(u,v,0));
+      }
+      for(let i=0;i<=nu;i++){
+        const u=i/nu, actualId=typeof id==='function'?id(u,v):id;
+        const p=row[i], p1=customBeat?point(u,v,1):beatPoint(p,actualId,1);
+        const u1=wrap?u-.001:Math.max(0,u-.001), u2=wrap?u+.001:Math.min(1,u+.001);
+        const v1=Math.max(0,v-.001),v2=Math.min(1,v+.001);
+        const normal=unit(cross(sub(point(u,v2,0),point(u,v1,0)),sub(point(u2,v,0),point(u1,v,0))));
+        const n1=customBeat?unit(cross(sub(point(u,v2,1),point(u,v1,1)),sub(point(u2,v,1),point(u1,v,1)))):normal;
+        vertices.push(...p,...p1,...normal,...n1,...color,regionIndex[actualId]+layer*32);
+      }
+    }
+    for(let j=0;j<nv;j++) for(let i=0;i<nu;i++){
+      if(skipCell&&skipCell((i+.5)/nu,(j+.5)/nv))continue;
+      const k=start+j*(nu+1)+i;
+      indices.push(k,k+nu+1,k+1, k+1,k+nu+1,k+nu+2);
+    }
+  }
+  function chamber(id,center,radii,skew,color=palette[id]){
+    surface(id,1,40,23,(u,v)=>{
+      const a=u*TAU, b=(v-.5)*pi*.9998, h=Math.sin(b), ring=Math.cos(b);
+      const relief=1+.032*Math.cos(3*a+.7)*ring+.023*Math.sin(2*b-a);
+      return [center[0]+radii[0]*ring*Math.cos(a)*relief+skew*h,
+        center[1]+radii[1]*h+.07*ring*Math.cos(a),
+        center[2]+radii[2]*ring*Math.sin(a)*relief+.06*h];
+    },color);
+  }
+  // A moving orthogonal frame gives each curved vessel a round section.
+  function tube(id,layer,nodes,opts={}){
+    const seg=opts.seg||Math.max(14,(nodes.length-1)*6), around=opts.around||18;
+    const ringCache=new Map();
+    function frame(t){
+      if(ringCache.has(t)) return ringCache.get(t);
+      const p=spline(nodes,t), tangent=unit(sub(spline(nodes,Math.min(1,t+.001)).slice(0,3),spline(nodes,Math.max(0,t-.001)).slice(0,3)));
+      const ref=opts.ref||[0,0,1];
+      const n=unit(cross(tangent,Math.abs(tangent[0]*ref[0]+tangent[1]*ref[1]+tangent[2]*ref[2])>.97?[0,1,0]:ref)), b=cross(n,tangent);
+      const out={p,n,b}; ringCache.set(t,out); return out;
+    }
+    function ring(u,t,ratio=1){
+      const {p,n,b}=frame(t), angle=u*TAU, radius=Math.max(.003,p[3])*ratio;
+      return add(p.slice(0,3),add(scale(n,radius*Math.cos(angle)),scale(b,radius*Math.sin(angle))));
+    }
+    surface(id,layer,around,seg,(u,v)=>ring(u,v),opts.color||palette[id]);
+    for(const end of opts.open||[]){
+      const tint=rgb(opts.color||palette[id]), inward=end===1?-1:1;
+      surface(id,layer,around,2,(u,v)=>ring(u,end,1-v*.25),mix(tint,[1,.84,.76],.35));
+      surface(id,layer,around,3,(u,v)=>ring(u,end+inward*.075*v,.75-.12*v),scale(tint,.48));
+      surface(id,layer,around,2,(u,v)=>ring(u,end+inward*.075,.63*(1-v)+.001),scale(tint,.25));
+    }
+  }
+  const rings=[
+    [.61,-1.64,.34,.026,.027], [.50,-1.48,.34,.27,.22], [.34,-1.20,.29,.53,.40],
+    [.15,-.82,.21,.81,.59], [-.01,-.39,.12,1.03,.75], [-.05,.03,.075,1.15,.84],
+    [-.045,.37,.035,1.15,.82], [-.025,.59,.005,1.04,.71], [-.01,.68,-.025,.91,.62]
+  ];
+  const vent=(t,a,offset=0)=>{
+    const [x,y,z,rx,rz]=spline(rings,t), aFront=1.24+.08*Math.sin(pi*t), aBack=4.27+.13*t;
+    const groove=(aa)=>Math.exp(-Math.pow(Math.atan2(Math.sin(a-aa),Math.cos(a-aa))/.12,2));
+    const s=1-(.040*groove(aFront)+.036*groove(aBack))*Math.sin(pi*t);
+    return [x+(rx+offset)*Math.cos(a)*s, y+.13*t*Math.cos(a)-.08*t*Math.sin(a),
+            z+(rz+offset)*Math.sin(a)*(1+.025*Math.cos(3*a))*s];
+  };
+  const front=t=>1.24+.08*Math.sin(pi*t), back=t=>4.27+.13*t;
+  // All adjacent patches share the original ventricular surface and the same motion.
+  // Each triangle has one selectable structure, including at the edge of the apex.
+  const tip=.22, muscleLow=.31, muscleHigh=.71;
+  function ventricularPoint(side,t,u,offset=0){
+    const a=front(t), b=back(t);
+    return vent(t,side==='rv'?a+(b-a)*u:b+(a+TAU-b)*u,offset);
+  }
+  function wallBand(id,side,start,end,rows,columns){
+    surface(id,0,columns,rows,(u,v)=>ventricularPoint(side,start+(end-start)*v,u),palette[id],false);
+  }
+  for(const [side,columns] of [['rv',40],['lv',46]])wallBand('apex',side,0,tip,10,columns);
+  wallBand('lv','lv',tip,1,27,46);
+  wallBand('rv','rv',tip,muscleLow,4,40);
+  wallBand('rv','rv',muscleHigh,1,11,40);
+  function muscleEdges(v){
+    const center=.19+.06*v, width=.153*Math.pow(Math.max(0,Math.sin(pi*v)),.7);
+    return [0,center-width,center+width,1];
+  }
+  for(const [i,id,columns] of [[0,'rv',12],[1,'myocardium',16],[2,'rv',31]]){
+    surface(id,0,columns,20,(u,v)=>{
+      const edges=muscleEdges(v), t=muscleLow+(muscleHigh-muscleLow)*v;
+      return ventricularPoint('rv',t,edges[i]+(edges[i+1]-edges[i])*u);
+    },palette[id],false);
+  }
+  // Parallel fascicles mark the schematic window onto the ventricular muscle.
+  for(const f of [.15,.32,.49,.66,.83]){
+    surface('myocardium',0,2,18,(u,v)=>{
+      const h=.11+.77*v, t=muscleLow+(muscleHigh-muscleLow)*h;
+      const [,left,right]=muscleEdges(h), along=f+.12*(v-.5)+.010*(u-.5);
+      return ventricularPoint('rv',t,left+(right-left)*along,.005);
+    },'#d68473',false);
+  }
+  for(const [id,p] of [['apex',ventricularPoint('lv',.115,.85)],['myocardium',ventricularPoint('rv',.50,.222)]]){
+    landmarks[id]=[p,beatPoint(p,id,1)];
+  }
+  // Infundibulum continuous with the anterior RV free wall.
+  tube('rv',1,[[-.36,-.02,.10,.11],[-.27,.18,.22,.27],[-.17,.36,.35,.335],[-.04,.51,.44,.34],[.07,.62,.51,.322],[.13,.74,.53,.28]],{color:'#b97166',around:25});
+  chamber('ra',[-.79,.69,.015],[.57,.58,.52],-.05);
+  chamber('ra',[-.62,.98,.34],[.37,.205,.24],.15,'#ac7988');
+  chamber('la',[.14,.91,-.45],[.72,.49,.47],.06);
+  tube('laa',1,[[.45,1.02,-.40,.25],[.72,1.12,-.27,.28],[.91,1.15,-.04,.24],[1.02,1.13,.17,.17],[.97,1.02,.35,.11],[.82,.98,.43,.008]],{around:22,color:'#da8978'});
+  tube('laa',1,[[.88,1.09,-.10,.15],[1.07,1.13,.01,.14],[1.16,1.13,.13,.035]]);
+  tube('aorta',1,[[-.07,.65,.02,.30],[-.13,.99,.10,.29],[-.22,1.42,.10,.26],[-.18,1.77,.05,.25],[.02,1.94,-.10,.235],[.34,1.91,-.30,.219],[.51,1.69,-.53,.201],[.54,1.19,-.75,.186],[.51,.62,-.90,.17],[.43,-.35,-.94,.15],[.38,-.86,-.94,.14]],{open:[1],around:26});
+  tube('aorta',1,[[-.14,1.79,.025,.14],[-.22,2.04,.075,.128],[-.28,2.18,.07,.116],[-.32,2.37,.07,.098]],{open:[1]});
+  tube('aorta',1,[[-.27,2.15,.07,.088],[-.42,2.21,.03,.085],[-.58,2.27,0,.077]],{open:[1]});
+  tube('aorta',1,[[.046,1.9,-.11,.105],[.08,2.13,-.13,.096],[.08,2.38,-.14,.080]],{open:[1]});
+  tube('aorta',1,[[.29,1.89,-.27,.114],[.43,2.09,-.30,.102],[.56,2.22,-.35,.086]],{open:[1]});
+  tube('pa',1,[[.105,.60,.51,.23],[.17,.82,.56,.283],[.25,1.14,.46,.265],[.34,1.37,.25,.25],[.36,1.44,-.04,.21]],{around:24});
+  tube('pa',1,[[.34,1.42,.02,.208],[.57,1.45,-.10,.20],[.86,1.48,-.23,.18],[1.22,1.54,-.30,.15]],{open:[1]});
+  tube('pa',1,[[.32,1.43,.01,.202],[-.04,1.40,-.27,.194],[-.48,1.39,-.38,.174],[-.95,1.42,-.36,.154],[-1.3,1.43,-.28,.13]],{open:[1]});
+  tube('svc',1,[[-.88,.88,-.10,.235],[-.95,1.24,-.10,.225],[-.98,1.62,-.16,.205],[-.98,1.94,-.18,.186]],{open:[1]});
+  tube('ivc',1,[[-.88,.51,-.22,.242],[-.93,.20,-.27,.238],[-.91,-.19,-.34,.222],[-.92,-.58,-.38,.210],[-.93,-1.04,-.4,.182],[-.98,-1.55,-.43,.144]],{open:[1]});
+  tube('hepatic',1,[[-.91,-.61,-.38,.13],[-1.12,-.72,-.37,.126],[-1.36,-.86,-.31,.102],[-1.57,-1.02,-.25,.075]],{open:[1]});
+  tube('hepatic',1,[[-.91,-.71,-.40,.116],[-1.00,-.87,-.23,.108],[-1.10,-1.05,-.08,.09],[-1.16,-1.22,.06,.065]],{open:[1]});
+  tube('hepatic',1,[[-.94,-.75,-.38,.103],[-.74,-.90,-.32,.10],[-.57,-1.07,-.23,.081],[-.45,-1.17,-.13,.058]],{open:[1]});
+  for(const side of [-1,1]) for(const top of [0,1]){
+    const h=top?.98:.63;
+    tube('pv',1,[[.14+side*.31,h,-.56,.16],[.14+side*.58,h+.03,-.66,.155],
+      [.14+side*.86,h+(top?.10:-.06),-.75,.14],[.14+side*1.08,h+(top?.17:-.10),-.80,.122]],{open:[1]});
+  }
+
+  // Atrial view. AV free edges meet during systole; semilunar cusps retract.
+  const valves=[
+    ['mitral',.525,.69,-.35,.438,.323,2,-.16], ['tricuspid',-.555,.66,.00,.438,.36,3,.16],
+    ['aortic_valve',-.01,.72,.075,.220,.203,3,.06], ['pulmonary_valve',.235,.73,.563,.227,.207,3,-.10]
+  ];
+  function section(u,v,beat){
+    const a=u*TAU, radius=v*(1+.04*Math.cos(3*a-.5));
+    return [.025+1.14*radius*Math.cos(a),.615+.032*radius*Math.cos(a)-.10*beat,.035+.89*radius*Math.sin(a)];
+  }
+  function inOrifice(u,v){
+    const [px,,pz]=section(u,v,0);
+    return valves.some(([,x,,z,rx,rz,,turn])=>{
+      const dx=px-x, dz=pz-z, co=Math.cos(turn),si=Math.sin(turn);
+      return ((co*dx+si*dz)/rx)**2+((-si*dx+co*dz)/rz)**2<1.015;
+    });
+  }
+  // The section has a true opening under each annulus; its tissue never spans an orifice.
+  landmarks.cardiomyopathy=[section(.10,.86,0),section(.10,.86,1)];
+  surface('cardiomyopathy',2,144,52,section,'#b16c64',true,true,inOrifice);
+  surface('rv',2,96,10,(u,v,b)=>{
+    const p=section(u,1,b),r=1-.10*v;
+    return [p[0]*r,p[1]-.35*v,p[2]*r];
+  },'#99615b',true,true);
+
+  for(const [id,x,y,z,rx,rz,n,turn] of valves){
+    const av=id==='mitral'||id==='tricuspid';
+    // Layer 2 is shared. Layers 3 and 4 occupy the same mitral orifice in alternative views.
+    const layer=id==='mitral'?3:2;
+    function place(xx,yy,zz,beat){
+      return [x+xx*Math.cos(turn)-zz*Math.sin(turn),y+yy-.10*beat,z+zz*Math.cos(turn)+xx*Math.sin(turn)];
+    }
+    surface(id,layer,48,10,(u,v,b)=>{
+      const a=u*TAU, t=v*TAU, ridge=av?.023:.019;
+      return place((rx+ridge*Math.cos(t))*Math.cos(a),ridge*Math.sin(t)+.028*Math.cos(2*a),(rz+ridge*Math.cos(t))*Math.sin(a),b);
+    },palette[id],true,true);
+    surface(id,layer,40,9,(u,v,b)=>{
+      const a=u*TAU, r=1-.987*v;
+      return place(rx*r*Math.cos(a),-.049-.56*Math.pow(v,.62),rz*r*Math.sin(a),b);
+    },av?'#642f41':'#603e49',true,true);
+    function leaflet(l,u,v,b){
+      const theta=(l+u)*TAU/n+(av?0:pi/6), scallop=Math.sin(pi*u);
+      const open=av?1-b:b, radius=1-v*((1-open)*.985+open*(.16+.22*scallop));
+      let xx=rx*radius*Math.cos(theta), zz=rz*radius*Math.sin(theta);
+      if(n===2){
+        xx=rx*Math.cos(theta)*(1-.12*v);
+        zz=rz*Math.sin(theta)*(1-v*(.992-open*.54));
+      }
+      const deep=av?-.17*open:.085*open;
+      const yy=.027*Math.cos(2*theta)*(1-v)+v*(deep*scallop-.037)+.058*Math.sin(pi*v)*scallop;
+      return place(xx,yy,zz,b);
+    }
+    for(let l=0;l<n;l++){
+      surface(id,layer,20,9,(u,v,b)=>leaflet(l,u,v,b),mix(rgb(palette[id]),[1,.87,.76],l%2?.08:.20),false,true);
+    }
+    if(id==='tricuspid'){
+      // The pedicle stays attached to the atrial face of this moving leaflet.
+      function massCenter(v,b){
+        const root=leaflet(0,.77,.32,b);
+        return add(root,[-v*(.125+.09*b),.25*v,v*(.045-.04*b)]);
+      }
+      surface('valve_mass',2,30,18,(u,v,b)=>{
+        const a=TAU*u, body=Math.pow(Math.max(0,Math.sin(pi*v)),.70);
+        const radius=.019*(1-v)+(.067+.109*v)*body;
+        const lobe=1+.17*Math.cos(3*a+2*v)+.08*Math.sin(5*a-4*v);
+        return add(massCenter(v,b),[radius*lobe*Math.cos(a),.022*body*Math.cos(2*a+v),radius*lobe*Math.sin(a)]);
+      },palette.valve_mass,true,true);
+      landmarks.valve_mass=[massCenter(.63,0),massCenter(.63,1)];
+    }
+    if(id==='mitral'){
+      const prostheticLayer=4, radius=.354;
+      // A circular sewing cuff sits inside the native annular footprint.
+      function rim(major,minor,height,color){
+        surface('prosthesis',prostheticLayer,64,12,(u,v,b)=>{
+          const angle=u*TAU, crossSection=v*TAU, r=major+minor*Math.cos(crossSection);
+          return place(r*Math.cos(angle),height+minor*Math.sin(crossSection),r*Math.sin(angle),b);
+        },color,true,true);
+      }
+      // The outer cuff bridges the native annulus to the circular mechanical housing.
+      surface('prosthesis',prostheticLayer,64,5,(u,v,b)=>{
+        const a=u*TAU, cuff=.020*Math.sin(pi*v);
+        return place(((1-v)*(rx+.022)+v*radius)*Math.cos(a),.020+cuff,
+                     ((1-v)*(rz+.020)+v*radius)*Math.sin(a),b);
+      },'#aabdc0',true,true);
+      rim(radius,.029,.042,'#dbe1d9');rim(radius-.027,.015,.033,'#647d87');
+      // A dark recess gives the openings depth when the occluders swing into the ventricle.
+      surface('prosthesis',prostheticLayer,48,8,(u,v,b)=>{
+        const a=u*TAU, r=(radius-.022)*(1-v);
+        return place(r*Math.cos(a),-.40-.08*v,r*Math.sin(a),b);
+      },'#423a46',true,true);
+      for(const sign of [-1,1]){
+        const disk=(u,v,b)=>{
+          const a=pi*u, r=radius-.045, hinge=.102, d=r*Math.sin(a)*v-hinge;
+          const angle=(76-72*b)*pi/180;
+          return place(r*Math.cos(a),.034-d*Math.sin(angle),sign*(.007+hinge+d*Math.cos(angle)),b);
+        };
+        surface('prosthesis',prostheticLayer,38,8,disk,'#465560',false,true);
+        surface('prosthesis',prostheticLayer,38,2,(u,v,b)=>{
+          const p=disk(u,.96+.04*v,b);p[1]+=.004;return p;
+        },'#a6b9b9',false,true);
+      }
+      landmarks.prosthesis=[0,1].map(b=>place(radius,.063,0,b));
+    }
+  }
+  return {vertices:new Float32Array(vertices), indices:new Uint16Array(indices), landmarks};
+}
+
+const PRESETS={
+  front:{yaw:-.16,tilt:.19,center:[-.08,.33,0],zoom:1},
+  back:{yaw:pi-.11,tilt:.13,center:[-.07,.31,-.05],zoom:1},
+  valves:{yaw:-.075,tilt:1.32,center:[0,.56,.11],zoom:1.62},
+  inferior:{yaw:-.79,tilt:-.25,center:[-.30,-.27,-.22],zoom:1.18}
+};
+PRESETS.prosthetic=PRESETS.valves;
+const sectionLayer=view=>view==='valves'?3:view==='prosthetic'?4:0;
+const ANCHORS={
+  aorta:[-.17,1.72,.27],mitral:[.54,.69,-.40],laa:[1.04,1.12,.11],hepatic:[-1.35,-.87,-.27],
+  tricuspid:[-.58,.67,-.02],aortic_valve:[-.037,.79,.07],pulmonary_valve:[.28,.82,.58],
+  lv:[.69,-.72,.58],rv:[-.47,-.11,.79],la:[.27,1.12,-.82],ra:[-1.13,.72,.35],
+  pa:[.29,1.18,.60],pv:[.95,1.06,-.72],svc:[-.98,1.67,-.08],
+  ivc:[-.96,-1.27,-.37]
+};
+// The overlay only shows landmarks in a preset orientation. Free rotation uses surface picking.
+const GUIDE={
+  front:[['aorta',-1,-24],['laa',1,-4],['myocardium',-1,-7],['hepatic',-1,18],['lv',1,4],['apex',1,11]],
+  back:[['pv',-1,-21],['la',1,-19],['ivc',1,20]],
+  valves:[['mitral',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35],['cardiomyopathy',1,20]],
+  prosthetic:[['prosthesis',1,-16],['tricuspid',-1,-8],['valve_mass',-1,24],['aortic_valve',-1,-60],['pulmonary_valve',1,35],['cardiomyopathy',1,20]],
+  inferior:[['hepatic',-1,-14],['ivc',1,28],['ra',-1,-36],['apex',1,15]]
+};
+
+function createGL(canvas,mesh){
+  const gl=canvas.getContext('webgl',{alpha:true,antialias:true,premultipliedAlpha:false,preserveDrawingBuffer:false});
+  if(!gl) return null;
+  const vs=`
+    attribute vec3 p0,p1,n0,n1,base;
+    attribute float item;
+    uniform vec4 cam; uniform vec3 center; uniform vec2 extent; uniform float phase,cut;
+    varying vec3 normal,col,modelPos; varying float depth,id,visible;
+    vec3 rot(vec3 p){
+      float x=cam.x*p.x-cam.y*p.z, z=cam.y*p.x+cam.x*p.z;
+      return vec3(x,cam.z*p.y-cam.w*z,cam.w*p.y+cam.z*z);
+    }
+    void main(){
+      vec3 pos=mix(p0,p1,phase), r=rot(pos-center); float layer=floor(item/32.0);
+      id=mod(item,32.0); visible=1.0;
+      if(cut<0.5 ? layer>1.5 : (abs(layer-2.0)>.25 && abs(layer-cut)>.25)) visible=0.0;
+      normal=rot(mix(n0,n1,phase)); col=base; modelPos=p0; depth=r.z;
+      gl_Position=vec4(r.x*extent.x,r.y*extent.y,-r.z*.16,1.);
+    }`;
+  const fs=`
+    precision mediump float;
+    uniform float selected,picking;
+    varying vec3 normal,col,modelPos; varying float depth,id,visible;
+    void main(){
+      if(visible<.5) discard;
+      if(picking>.5){gl_FragColor=vec4(id/255.,0.,0.,1.);return;}
+      vec3 n=normalize(normal); if(n.z<0.) n=-n;
+      float key=max(0.,dot(n,normalize(vec3(-.43,.67,.75))));
+      float fill=max(0.,dot(n,normalize(vec3(.78,.02,.42))));
+      float spec=pow(max(0.,dot(n,normalize(vec3(-.29,.41,.866)))),24.);
+      float rim=pow(1.-max(0.,n.z),3.);
+      float fiber=.013*sin(58.*modelPos.y+14.*modelPos.x+4.*sin(6.*modelPos.z));
+      float dither=.011*sin(dot(modelPos,vec3(87.,79.,57.)))*sin(98.*modelPos.z-15.*modelPos.x);
+      float light=.43+.53*key+.15*fill+clamp(depth*.038,-.045,.075)+fiber+dither;
+      vec3 c=col*light+vec3(.19,.145,.12)*spec+vec3(.085,.135,.146)*rim;
+      if(abs(id-selected)<.4) c=mix(c,vec3(1.,.76,.49),.18)+.046*rim;
+      gl_FragColor=vec4(c,1.);
+    }`;
+  function shader(type,src){
+    const sh=gl.createShader(type); gl.shaderSource(sh,src); gl.compileShader(sh);
+    if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  const prog=gl.createProgram();
+  gl.attachShader(prog,shader(gl.VERTEX_SHADER,vs)); gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,mesh.vertices,gl.STATIC_DRAW);
+  const ib=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,mesh.indices,gl.STATIC_DRAW);
+  for(const [name,num,offset] of [['p0',3,0],['p1',3,3],['n0',3,6],['n1',3,9],['base',3,12],['item',1,15]]){
+    const a=gl.getAttribLocation(prog,name);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,num,gl.FLOAT,false,64,4*offset);
+  }
+  const u=Object.fromEntries(['cam','center','extent','phase','cut','selected','picking'].map(s=>[s,gl.getUniformLocation(prog,s)]));
+  const fb=gl.createFramebuffer(), tex=gl.createTexture(), depth=gl.createRenderbuffer();
+  let fw=0,fh=0;
+  function resizeTarget(){
+    if(fw===canvas.width&&fh===canvas.height) return;
+    fw=canvas.width; fh=canvas.height;
+    gl.bindTexture(gl.TEXTURE_2D,tex); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,fw,fh,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+    gl.bindRenderbuffer(gl.RENDERBUFFER,depth);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,fw,fh);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depth);
+  }
+  function draw(s,pick=false){
+    gl.bindFramebuffer(gl.FRAMEBUFFER,pick?fb:null); if(pick) resizeTarget();
+    gl.viewport(0,0,canvas.width,canvas.height); gl.enable(gl.DEPTH_TEST); gl.disable(gl.DITHER);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    gl.uniform4f(u.cam,Math.cos(s.yaw),Math.sin(s.yaw),Math.cos(s.tilt),Math.sin(s.tilt));
+    gl.uniform3fv(u.center,s.center);gl.uniform2f(u.extent,2*s.scale/s.w,2*s.scale/s.h);
+    gl.uniform1f(u.phase,s.phase);gl.uniform1f(u.cut,sectionLayer(s.view));
+    gl.uniform1f(u.selected,regionIndex[s.selected]||0);gl.uniform1f(u.picking,pick?1:0);
+    gl.drawElements(gl.TRIANGLES,mesh.indices.length,gl.UNSIGNED_SHORT,0);
+  }
+  return {limit:1.75,draw,pick(x,y,s){
+    draw(s,true); const px=new Uint8Array(4);
+    gl.readPixels(clamp(Math.floor(x*fw/s.w),0,fw-1),clamp(fh-1-Math.floor(y*fh/s.h),0,fh-1),1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);return px[0];
+  }};
+}
+
+// Depth-buffered software rendering keeps the same 3D surfaces selectable without WebGL.
+function createSoftware(canvas,mesh){
+  const ctx=canvas.getContext('2d'), v=mesh.vertices, ix=mesh.indices, n=v.length/16;
+  const screen=new Float32Array(n*6);
+  let depths,ids,img;
+  function draw(s){
+    const w=canvas.width,h=canvas.height;
+    if(!img||img.width!==w||img.height!==h){img=ctx.createImageData(w,h);depths=new Float32Array(w*h);ids=new Uint8Array(w*h);}
+    depths.fill(-Infinity);ids.fill(0);img.data.fill(0);
+    const cy=Math.cos(s.yaw),sy=Math.sin(s.yaw),ct=Math.cos(s.tilt),st=Math.sin(s.tilt),factor=s.scale*w/s.w, ph=s.phase;
+    for(let i=0;i<n;i++){
+      const k=i*16,j=i*6;
+      let x=v[k]+(v[k+3]-v[k])*ph-s.center[0],y=v[k+1]+(v[k+4]-v[k+1])*ph-s.center[1],z=v[k+2]+(v[k+5]-v[k+2])*ph-s.center[2];
+      const zr=sy*x+cy*z;
+      screen[j]=w*.5+factor*(cy*x-sy*z);screen[j+1]=h*.5-factor*(ct*y-st*zr);screen[j+2]=st*y+ct*zr;
+      x=v[k+6]+(v[k+9]-v[k+6])*ph;y=v[k+7]+(v[k+10]-v[k+7])*ph;z=v[k+8]+(v[k+11]-v[k+8])*ph;
+      const zt=sy*x+cy*z, sign=(st*y+ct*zt)<0?-1:1, nx=(cy*x-sy*z)*sign,ny=(ct*y-st*zt)*sign,nz=(st*y+ct*zt)*sign;
+      const fiber=.014*Math.sin(54*v[k+1]+12*v[k]+3*Math.sin(7*v[k+2]));
+      const light=.43+fiber+.53*Math.max(0,-.43*nx+.67*ny+.75*nz)+.15*Math.max(0,.88*nx+.02*ny+.47*nz)+clamp(screen[j+2]*.038,-.045,.075);
+      const spec=.15*Math.pow(Math.max(0,-.29*nx+.41*ny+.866*nz),24), rim=.10*Math.pow(1-Math.max(0,nz),3);
+      const sel=(Math.round(v[k+15])%32===regionIndex[s.selected]) ? .18 : 0;
+      for(let c=0;c<3;c++)screen[j+3+c]=255*((v[k+12+c]*light+spec+rim)*(1-sel)+[1,.76,.49][c]*sel);
+    }
+    const pix=img.data, cut=sectionLayer(s.view);
+    for(let t=0;t<ix.length;t+=3){
+      const info=v[16*ix[t]+15],layer=Math.floor(info/32);
+      if(cut ? layer!==2&&layer!==cut : layer>1) continue;
+      const a=6*ix[t],b=6*ix[t+1],c=6*ix[t+2];
+      const ax=screen[a],ay=screen[a+1],bx=screen[b],by=screen[b+1],cx=screen[c],cyy=screen[c+1];
+      const den=(by-cyy)*(ax-cx)+(cx-bx)*(ay-cyy);
+      if(Math.abs(den)<1e-7) continue;
+      const x0=Math.max(0,Math.floor(Math.min(ax,bx,cx))),x1=Math.min(w-1,Math.ceil(Math.max(ax,bx,cx)));
+      const y0=Math.max(0,Math.floor(Math.min(ay,by,cyy))),y1=Math.min(h-1,Math.ceil(Math.max(ay,by,cyy)));
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const f=((by-cyy)*(x+.5-cx)+(cx-bx)*(y+.5-cyy))/den, g=((cyy-ay)*(x+.5-cx)+(ax-cx)*(y+.5-cyy))/den, l=1-f-g;
+        if(f<0||g<0||l<0)continue;
+        const pos=y*w+x,zz=f*screen[a+2]+g*screen[b+2]+l*screen[c+2];
+        if(zz<depths[pos])continue;
+        depths[pos]=zz;ids[pos]=info%32;
+        for(let ch=0;ch<3;ch++)pix[pos*4+ch]=f*screen[a+3+ch]+g*screen[b+3+ch]+l*screen[c+3+ch];
+        pix[pos*4+3]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+  }
+  return {limit:.9,software:true,draw,pick(x,y,s){return ids?.[clamp(Math.floor(y*canvas.height/s.h),0,canvas.height-1)*canvas.width+clamp(Math.floor(x*canvas.width/s.w),0,canvas.width-1)]||0;}};
+}
+
+function mountHeart(onPick){
+  let canvas=document.getElementById('heart'),overlay=document.getElementById('overlay');
+  const box=document.getElementById('viewport'),ctx=overlay.getContext('2d');
+  const mesh=buildHeart();
+  let engine;
+  function useSoftware(){
+    const replacement=canvas.cloneNode(false);canvas.replaceWith(replacement);canvas=replacement;
+    engine=createSoftware(canvas,mesh);
+  }
+  try{engine=createGL(canvas,mesh);}catch(e){console.info('3B yazılım görünümü',e.message);}
+  if(!engine) useSoftware();
+  const s={view:'front',selected:'aorta',...PRESETS.front,playing:!matchMedia('(prefers-reduced-motion: reduce)').matches,
+    guides:true,clock:.58,phase:0,w:1,h:1,scale:1,zoomExtra:1};
+  let tags=[],dirty=true,inView=true,last=0,tick=null,drag=null,lastValveView='valves';
+  function resize(){
+    const rect=box.getBoundingClientRect(); s.w=Math.max(1,rect.width);s.h=Math.max(1,rect.height);
+    const dpr=window.devicePixelRatio||1, ratio=Math.min(dpr,engine.limit), od=Math.min(dpr,2);
+    canvas.width=Math.max(1,Math.round(s.w*ratio));canvas.height=Math.max(1,Math.round(s.h*ratio));
+    overlay.width=Math.round(s.w*od);overlay.height=Math.round(s.h*od);
+    ctx.setTransform(od,0,0,od,0,0); dirty=true; schedule();
+  }
+  function project(p){
+    const [x,y,z]=sub(p,s.center),cy=Math.cos(s.yaw),sy=Math.sin(s.yaw),ct=Math.cos(s.tilt),st=Math.sin(s.tilt),zr=sy*x+cy*z;
+    return [s.w/2+s.scale*(cy*x-sy*z),s.h/2-s.scale*(ct*y-st*zr)];
+  }
+  function guides(){
+    ctx.clearRect(0,0,s.w,s.h);tags=[];
+    const base=PRESETS[s.view],turn=Math.atan2(Math.sin(s.yaw-base.yaw),Math.cos(s.yaw-base.yaw));
+    if(!s.guides||Math.abs(turn)>.47||Math.abs(s.tilt-base.tilt)>.34)return;
+    const compact=s.w<450;
+    const list=GUIDE[s.view],h=compact?23:25, margin=compact?6:12;
+    ctx.font=(compact?'500 10px':'500 11px')+' system-ui,sans-serif';
+    const proposed=list.map(([id,side,shift])=>{
+      const endpoints=mesh.landmarks[id];
+      let p=endpoints?mix(endpoints[0],endpoints[1],s.phase):beatPoint(ANCHORS[id],id,s.phase);
+      if(!endpoints&&sectionLayer(s.view))p=[p[0],p[1]-.10*s.phase,p[2]];
+      const [x,y]=project(p),r=CATALOG.regions[regionIndex[id]-1],label=r.short;
+      const w=Math.ceil(ctx.measureText(label).width)+16;
+      return {id,x,y,w,h,side,label,tx:side===1?s.w-margin-w:margin,ty:clamp(y+shift,15,s.h-16)};
+    }).filter(o=>o.x>=0&&o.x<=s.w&&o.y>=8&&o.y<=s.h-8);
+    for(const side of [-1,1]){
+      const group=proposed.filter(o=>o.side===side).sort((a,b)=>a.ty-b.ty);
+      group.forEach((o,i)=>{if(i)o.ty=Math.max(o.ty,group[i-1].ty+h+5);});
+      for(let i=group.length-1;i>=0;i--){group[i].ty=Math.min(group[i].ty,i===group.length-1?s.h-h/2-4:group[i+1].ty-h-5);}
+    }
+    for(const o of proposed){
+      const {id,x,y,w,side,tx,ty,label}=o, edge=side===1?tx:tx+w, focus=id===s.selected;
+      ctx.lineWidth=focus?1.35:1;ctx.strokeStyle=focus?'#c0e8d6':'#89a8ad';
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(edge+(side===1?-8:8),ty);ctx.lineTo(edge,ty);ctx.stroke();
+      ctx.fillStyle=focus?'#c4f1d6':'#d2dddc';ctx.beginPath();ctx.arc(x,y,focus?3.6:2.9,0,TAU);ctx.fill();
+      ctx.fillStyle=focus?'#c4e9d4':'#203b43';ctx.strokeStyle=focus?'#c4e9d4':'#455f65';
+      ctx.beginPath();ctx.roundRect(tx,ty-h/2,w,h,5);ctx.fill();ctx.stroke();
+      ctx.fillStyle=focus?'#173d32':'#ecf3ed';ctx.textBaseline='middle';ctx.fillText(label,tx+8,ty+.5);
+      tags.push({id,x:tx,y:ty-h/2,w,h});
+    }
+  }
+  function redraw(){
+    s.scale=Math.min(s.w/3.66,s.h/4.67)*s.zoom*s.zoomExtra;
+    const u=s.clock;
+    s.phase=u<.39?Math.pow(Math.sin(pi*u/.39),.74):0;
+    engine.draw(s);guides();dirty=false;
+    document.getElementById('phase').textContent=u<.39?'Sistol':'Diyastol';
+    document.getElementById('beat-indicator').style.opacity=String(.48+.50*s.phase);
+  }
+  function frame(ts){
+    tick=null;
+    if(!inView||document.hidden){last=0;return;}
+    if(dirty||s.playing){
+      const interval=engine.software?88:32;
+      if(dirty||ts-last>=interval){
+        if(s.playing&&last)s.clock=(s.clock+Math.min(ts-last,170)/940)%1;
+        last=ts;redraw();
+      }
+      if(s.playing)schedule();
+    }
+  }
+  function schedule(){if(tick===null&&inView&&!document.hidden)tick=requestAnimationFrame(frame);}
+  function refresh(){dirty=true;schedule();}
+  function view(id){
+    s.view=id;Object.assign(s,PRESETS[id]);s.zoomExtra=1;
+    const onPlane=Boolean(sectionLayer(id));
+    if(onPlane)lastValveView=id;
+    document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===(onPlane?'valves':id))));
+    document.getElementById('valve-views').hidden=!onPlane;
+    document.querySelectorAll('[data-valve]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.valve===id)));
+    refresh();
+  }
+  function zoom(step){s.zoomExtra=clamp(s.zoomExtra*step,.72,1.85);refresh();}
+  function motion(){
+    const b=document.getElementById('motion');b.textContent=s.playing?'Durdur':'Oynat';
+    b.setAttribute('aria-label',s.playing?'Kalp hareketini durdur':'Kalp hareketini oynat');b.setAttribute('aria-pressed',String(!s.playing));
+  }
+  function toggle(){s.playing=!s.playing;last=0;motion();refresh();}
+  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view==='valves'?lastValveView:b.dataset.view)));
+  document.querySelectorAll('[data-valve]').forEach(b=>b.addEventListener('click',()=>{
+    view(b.dataset.valve);onPick(b.dataset.valve==='prosthetic'?'prosthesis':'mitral',false);
+  }));
+  document.getElementById('zoom-in').onclick=()=>zoom(1.14);document.getElementById('zoom-out').onclick=()=>zoom(1/1.14);
+  document.getElementById('motion').onclick=toggle;
+  document.getElementById('guides').onclick=e=>{s.guides=!s.guides;e.currentTarget.setAttribute('aria-pressed',String(s.guides));refresh();};
+  document.getElementById('home').onclick=()=>view(s.view);
+  box.addEventListener('pointerdown',e=>{
+    if(e.button!==0||drag)return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,oy:s.yaw,ot:s.tilt,moved:false};box.setPointerCapture(e.pointerId);
+  });
+  box.addEventListener('pointermove',e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+    if(Math.hypot(dx,dy)>5)drag.moved=true;
+    if(drag.moved){s.yaw=drag.oy-dx*.009;s.tilt=clamp(drag.ot+dy*.008,-1.53,1.53);box.classList.add('grabbing');refresh();}
+  });
+  box.addEventListener('pointerup',e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    const moved=drag.moved;drag=null;box.classList.remove('grabbing');
+    if(moved)return;
+    const rect=box.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
+    const label=tags.find(t=>x>=t.x-2&&x<=t.x+t.w+2&&y>=t.y-3&&y<=t.y+t.h+3);
+    if(label){onPick(label.id);return;}
+    const picked=engine.pick(x,y,s),r=CATALOG.regions[picked-1];
+    if(r)onPick(r.id);
+  });
+  box.addEventListener('pointercancel',()=>{drag=null;box.classList.remove('grabbing');});
+  box.addEventListener('keydown',e=>{
+    const d={ArrowLeft:[.13,0],ArrowRight:[-.13,0],ArrowUp:[0,.12],ArrowDown:[0,-.12]}[e.key];
+    if(d){e.preventDefault();s.yaw+=d[0];s.tilt=clamp(s.tilt+d[1],-1.53,1.53);refresh();}
+  });
+  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();useSoftware();resize();});
+  if(window.IntersectionObserver)new IntersectionObserver(([e])=>{inView=e.isIntersecting;last=0;if(inView)refresh();}).observe(box);
+  document.addEventListener('visibilitychange',()=>{last=0;refresh();});
+  new ResizeObserver(resize).observe(box);
+  motion();view('front');resize();
+  return {setRegion(id,fromList=false){
+    s.selected=id;const r=CATALOG.regions[regionIndex[id]-1];
+    if(fromList){
+      const sharedValve=r.view==='valves'&&id!=='mitral';
+      view(sharedValve?lastValveView:r.view);
+    }else refresh();
+  },getView:()=>s.view};
+}
+
+const byId = id=>document.getElementById(id);
+const allRegions=CATALOG.regions;
+byId('region-count').textContent=allRegions.length+' seçilebilir yapı';
+const regions=Object.fromEntries(allRegions.map(r=>[r.id,r]));
+const select=byId('region'), optionLetters='ABCDE';
+const state={scope:'neu-kalp-atlasi-site',banks:{},records:{},region:'aorta',questionsEnabled:false,bankStatus:'locked',flags:new Set(),pendingFlag:null};
+let model,frameOrigin=null,lastHeight=0;
+
+function shuffle(items){
+  const out=items.slice();
+  for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}
+  return out;
+}
+function storeState(){
+  try{sessionStorage.setItem(state.scope,JSON.stringify({region:state.region,records:state.records,flags:[...state.flags]}));}catch{}
+}
+function loadState(){
+  let raw={};try{raw=JSON.parse(sessionStorage.getItem(state.scope)||'{}')||{};}catch{}
+  state.records=raw.records&&typeof raw.records==='object'?raw.records:{};
+  state.flags=new Set(Array.isArray(raw.flags)?raw.flags:[]);
+  state.region=Object.hasOwn(regions,raw.region)?raw.region:'aorta';
+}
+function bankFor(id){return state.banks[id] || [];}
+function recordFor(id){
+  const bank=bankFor(id),ids=bank.map(q=>q.id),old=state.records[id];
+  if(old?.order?.length===ids.length&&new Set(old.order).size===ids.length&&ids.every(q=>old.order.includes(q))&&old.answers&&Number.isInteger(old.index)&&old.index>=0&&old.index<ids.length)return old;
+  return state.records[id]={order:shuffle(ids),index:0,answers:{},pick:null,done:false};
+}
+function current(){
+  const bank=bankFor(state.region),rec=recordFor(state.region);
+  return {q:bank.find(x=>x.id===rec.order[rec.index]),rec,bank};
+}
+function make(tag,cls,text){
+  const el=document.createElement(tag);
+  if(cls)el.className=cls;if(text!==undefined)el.textContent=text;
+  return el;
+}
+function safeSource(feedback,q){
+  const source=q.source;if(!source||!source[0])return;
+  if(/^https?:\/\//i.test(source[1]||'')){
+    const a=make('a','',source[0]+' ↗');a.href=source[1];a.target='_blank';a.rel='noopener noreferrer';feedback.append(a);
+  }else feedback.append(make('span','reference',source[0]));
+}
+function scoreOf(rec,bank){return bank.reduce((sum,q)=>sum+(rec.answers[q.id]===q.key?1:0),0);}
+function render(){
+  const id=state.region,enabled=state.questionsEnabled;
+  select.value=id;
+  byId('question-content').hidden=!enabled;
+  byId('login-notice').hidden=enabled;
+  byId('source').hidden=!enabled;
+  byId('course-label').parentElement.hidden=!enabled;
+  byId('atlas-instructions').textContent=enabled?'Kalbi sürükleyerek döndürün. Bir yapıya dokunup sorusunu çözün.':'Kalbi sürükleyerek döndürün. Bir yapıya dokunarak inceleyin.';
+  if(!enabled || !bankFor(id).length){
+    byId("question-content").hidden=true;
+    byId("source").hidden=true;
+    byId("course-label").parentElement.hidden=true;
+    for(const field of ['stem','choices','feedback','q-index','score','result','flag-status','bank-note','topic-detail','course-label'])byId(field).replaceChildren();
+    byId('topic-detail').hidden=true;
+    byId('bank-note').hidden=!enabled;
+    if(enabled) byId('bank-note').textContent=state.bankStatus==='ready'?'Bu bölge için henüz aktif soru yok.':'Soru bankası şu anda okunamıyor.';
+    byId('submit').disabled=true;
+    return;
+  }
+  const {q,rec,bank}=current();
+  const answered=Object.hasOwn(rec.answers,q.id),selection=answered?rec.answers[q.id]:rec.pick;
+  const totalAnswered=Object.keys(rec.answers).length,score=scoreOf(rec,bank),fromSheet=true;
+  select.value=id;
+  const detail=byId('topic-detail');
+  detail.textContent=regions[id].detail||'';detail.hidden=!detail.textContent;
+  byId('source').textContent='Kurum bankası';
+  byId('source').classList.toggle('bank',fromSheet);
+  byId('q-index').textContent=rec.done?'Tur tamamlandı':'Soru '+(rec.index+1)+' / '+bank.length;
+  byId('score').textContent=score+' doğru · '+(totalAnswered-score)+' yanlış';
+  byId('exercise').hidden=rec.done;byId('complete').hidden=!rec.done;
+  byId('stem').textContent=q.stem;
+  const choices=byId('choices');choices.replaceChildren();
+  q.options.forEach(([letter,text])=>{
+    const button=make('button','opt');button.type='button';button.disabled=answered;
+    button.setAttribute('aria-pressed',String(selection===letter));button.append(make('span','letter',letter),document.createTextNode(text));
+    if(answered&&letter===q.key)button.classList.add('correct');
+    if(answered&&letter===selection&&letter!==q.key)button.classList.add('wrong');
+    button.onclick=()=>{
+      if(!state.questionsEnabled||rec.done||Object.hasOwn(rec.answers,q.id))return;
+      rec.pick=letter;storeState();
+      [...choices.children].forEach((b,i)=>b.setAttribute('aria-pressed',String(q.options[i][0]===letter)));
+      byId('submit').disabled=false;
+    };
+    choices.append(button);
+  });
+  const feedback=byId('feedback');feedback.replaceChildren();feedback.hidden=!answered||rec.done;
+  feedback.classList.toggle('negative',answered&&selection!==q.key);
+  if(answered){
+    const answer=q.options.find(([l])=>l===q.key);
+    feedback.append(make('strong','',(selection===q.key?'Doğru. ':'Doğru yanıt '+q.key+' · ')+answer[1]));
+    if(q.why)feedback.append(make('div','',q.why));
+    safeSource(feedback,q);
+  }
+  byId('submit').disabled=!rec.done&&!answered&&!selection;
+  byId('submit').textContent=rec.done?'Bu yapıyı yeniden çöz':answered?(rec.index+1===bank.length?'Sonucu gör':'Sonraki soru  →'):'Yanıtı kontrol et';
+  byId('result').textContent=bank.length+' soruda '+score+' doğru, '+(totalAnswered-score)+' yanlış. Başka bir yapı seçerek devam edebilirsiniz.';
+  byId('flag').hidden=true;
+  byId('flag-status').textContent=state.flags.has(q.id)?'Düzeltme isteği kaydedildi.':state.pendingFlag?.qid===q.id?'Kaydediliyor…':'';
+  const available=allRegions.filter(r=>bankFor(r.id).length);
+  const done=available.reduce((n,r)=>n+(recordFor(r.id).done?1:0),0);
+  byId('course-label').textContent=done+' / '+available.length+' yapı tamamlandı';
+  const note=byId('bank-note');
+  note.hidden=true;
+}
+function choose(id,fromList=false,move=false){
+  if(!Object.hasOwn(regions,id))return;
+  state.region=id;model?.setRegion(id,fromList);render();storeState();
+  if(move&&state.questionsEnabled&&window.matchMedia('(max-width:740px)').matches)byId('quiz').scrollIntoView({block:'start',behavior:'instant'});
+}
+for(const group of [...new Set(allRegions.map(r=>r.group))]){
+  const og=make('optgroup');og.label=group;
+  for(const r of allRegions.filter(r=>r.group===group)){const opt=make('option','',r.name);opt.value=r.id;og.append(opt);}
+  select.append(og);
+}
+select.onchange=()=>choose(select.value,true);
+byId('to-model').onclick=()=>byId('viewport').scrollIntoView({block:'center'});
+let atlasStreak=0;
+byId('submit').onclick=()=>{
+  if(!state.questionsEnabled || !bankFor(state.region).length)return;
+  const {rec,q,bank}=current();
+  if(rec.done){atlasStreak=0;delete state.records[state.region];recordFor(state.region);}
+  else if(Object.hasOwn(rec.answers,q.id)){
+    rec.pick=null;
+    if(rec.index+1>=bank.length)rec.done=true;else rec.index++;
+  }else if(q.options.some(([letter])=>letter===rec.pick)){rec.answers[q.id]=rec.pick;
+    atlasStreak=rec.pick===q.key ? atlasStreak+1 : 0;
+    send({type:'neu-atlas:answer',qid:q.id,correct:rec.pick===q.key});
+  }
+  storeState();render();
+};
+// Site içinde iframe olarak çalışır: sorular üst sayfadan gelir, cevaplar ve yükseklik üst sayfaya bildirilir.
+function send(msg){if(window.parent!==window)window.parent.postMessage(msg,location.origin);}
+function frameHeight(){
+  const height=Math.ceil(document.querySelector('.atlas').getBoundingClientRect().height)+2;
+  if(height!==lastHeight){lastHeight=height;send({type:'neu-atlas:height',height});}
+}
+window.addEventListener('message',e=>{
+  if(e.source!==window.parent||e.origin!==location.origin||e.data?.type!=='neu-atlas:init')return;
+  state.questionsEnabled=true;
+  state.banks=e.data.banks||{};state.bankStatus=e.data.status||'ready';
+  render();frameHeight();
+});
+if(new URLSearchParams(location.search).has('embed'))document.documentElement.classList.add('embed');
+loadState();render();
+model=mountHeart((id,move=true)=>choose(id,false,move));model.setRegion(state.region,true);
+new ResizeObserver(frameHeight).observe(document.querySelector('.atlas'));
+send({type:'neu-atlas:ready'});
+
+</script>
+</body>
+</html>

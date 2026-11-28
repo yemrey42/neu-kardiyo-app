@@ -25,14 +25,36 @@ function config() {
   return { creds, sheetId };
 }
 
-async function authHeader() {
+/** Yapıştırırken eklenen tırnakları, \\n kaçışlarını ve Windows satır sonlarını düzeltir. */
+function cleanKey(raw: string) {
+  return raw.trim().replace(/^["']|["'],?$/g, "").replace(/\\n/g, "\n").replace(/\r/g, "");
+}
+
+/** Servis hesabı ortam değişkenleri girilmiş mi? (Hata fırlatmadan kontrol.) */
+export function googleConfigured() {
+  try {
+    config();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Servis hesabıyla verilen kapsamlar için erişim jetonu (Sheets okuma/yazma, Drive okuma). */
+export async function googleAccessToken(scopes: string[]) {
   const { creds } = config();
   const client = new JWT({
-    email: creds.client_email,
-    key: creds.private_key.replace(/\\n/g, "\n"),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    email: creds.client_email.trim().replace(/^["']|["']$/g, ""),
+    key: cleanKey(creds.private_key),
+    scopes,
   });
   const { token } = await client.getAccessToken();
+  if (!token) throw new Error("Google erişim jetonu alınamadı.");
+  return token;
+}
+
+async function authHeader() {
+  const token = await googleAccessToken(["https://www.googleapis.com/auth/spreadsheets"]);
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
 
